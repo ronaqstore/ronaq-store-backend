@@ -755,7 +755,7 @@ export class ReportsService {
       },
     });
 
-    const rows: InventoryReportRowDTO[] = products.map((product) => {
+    let rows: InventoryReportRowDTO[] = products.map((product) => {
       const serialized = product.trackingType === TrackingType.SERIALIZED;
       const inStock = serialized
         ? product.inventoryUnits.length
@@ -778,11 +778,24 @@ export class ReportsService {
       };
     });
 
+    if (query.trackingType?.trim()) {
+      const types = query.trackingType
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (types.length > 0) {
+        rows = rows.filter((row) => types.includes(row.trackingType));
+      }
+    }
+    if (typeof query.lowStock === 'boolean') {
+      rows = rows.filter((row) => row.lowStock === query.lowStock);
+    }
+
     return this.pageSnapshot(
       rows,
       query,
       'name',
-      ['name', 'inStock', 'stockValue'],
+      ['name', 'inStock', 'stockValue', 'trackingType', 'lowStock'],
       {
         countProducts: rows.length,
         countLowStock: rows.filter((r) => r.lowStock).length,

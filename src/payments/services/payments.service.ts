@@ -563,12 +563,17 @@ export class PaymentsService {
       ];
     }
 
+    const orderBy =
+      sortBy === 'customerName'
+        ? ({ customer: { name: sortOrder } } as const)
+        : ({ [sortBy]: sortOrder } as const);
+
     const [rows, total] = await Promise.all([
       this.prisma.payment.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy,
         include: PAYMENT_INCLUDE,
       }),
       this.prisma.payment.count({ where }),

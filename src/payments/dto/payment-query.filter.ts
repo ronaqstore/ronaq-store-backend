@@ -91,11 +91,24 @@ export class PaymentQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'paymentDate',
-    description: 'paymentDate | amount | createdAt | updatedAt.',
+    description: 'paymentDate | amount | createdAt | updatedAt | customerName | method.',
   })
   @IsOptional()
-  @IsIn(['paymentDate', 'amount', 'createdAt', 'updatedAt'])
-  sortBy?: 'paymentDate' | 'amount' | 'createdAt' | 'updatedAt' = 'paymentDate';
+  @IsIn([
+    'paymentDate',
+    'amount',
+    'createdAt',
+    'updatedAt',
+    'customerName',
+    'method',
+  ])
+  sortBy?:
+    | 'paymentDate'
+    | 'amount'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'customerName'
+    | 'method' = 'paymentDate';
 
   @ApiPropertyOptional({ example: 'desc', description: 'asc or desc' })
   @IsOptional()

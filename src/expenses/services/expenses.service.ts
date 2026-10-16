@@ -257,18 +257,24 @@ export class ExpensesService {
     if (dateFilters.length > 0) where.AND = dateFilters;
 
     if (query.search?.trim()) {
-      where.description = {
-        contains: query.search.trim(),
-        mode: 'insensitive',
-      };
+      const term = query.search.trim();
+      where.OR = [
+        { description: { contains: term, mode: 'insensitive' } },
+        { category: { name: { contains: term, mode: 'insensitive' } } },
+      ];
     }
+
+    const orderBy =
+      sortBy === 'categoryName'
+        ? ({ category: { name: sortOrder } } as const)
+        : ({ [sortBy]: sortOrder } as const);
 
     const [rows, total] = await Promise.all([
       this.prisma.expense.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy,
         include: EXPENSE_INCLUDE,
       }),
       this.prisma.expense.count({ where }),

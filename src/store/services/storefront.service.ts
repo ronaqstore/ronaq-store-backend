@@ -290,7 +290,7 @@ export class StorefrontService {
    */
   private catalogWhere(
     shopId: string,
-    query?: Pick<StoreProductsQueryDto, 'q' | 'category' | 'brand'>,
+    query?: Pick<StoreProductsQueryDto, 'q' | 'category' | 'brand' | 'inStock'>,
   ): Prisma.ProductWhereInput {
     const where: Prisma.ProductWhereInput = {
       shopId,
@@ -299,7 +299,12 @@ export class StorefrontService {
       publishedAt: { not: null },
     };
     if (query?.q) {
-      where.name = { contains: query.q, mode: 'insensitive' };
+      const term = query.q;
+      where.OR = [
+        { name: { contains: term, mode: 'insensitive' } },
+        { sku: { contains: term, mode: 'insensitive' } },
+        { brand: { name: { contains: term, mode: 'insensitive' } } },
+      ];
     }
     if (query?.category) {
       where.category = UUID_RE.test(query.category)
@@ -310,6 +315,23 @@ export class StorefrontService {
       where.brand = UUID_RE.test(query.brand)
         ? { id: query.brand }
         : { name: { equals: query.brand, mode: 'insensitive' } };
+    }
+    if (query?.inStock === true) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [
+            {
+              trackingType: 'QUANTITY',
+              stockLevel: { quantityOnHand: { gt: 0 } },
+            },
+            {
+              trackingType: 'SERIALIZED',
+              inventoryUnits: { some: { status: SELLABLE_STATUS } },
+            },
+          ],
+        },
+      ];
     }
     return where;
   }

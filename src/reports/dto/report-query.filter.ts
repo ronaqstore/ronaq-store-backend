@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { BadRequestException } from '@nestjs/common';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -93,4 +95,28 @@ export class ReportQueryFilterDto {
   @IsOptional()
   @IsIn(['csv', 'pdf'])
   format?: 'csv' | 'pdf';
+
+  @ApiPropertyOptional({
+    example: 'SERIALIZED',
+    description:
+      'Inventory report only. QUANTITY | SERIALIZED. Comma-separated allowed.',
+  })
+  @IsOptional()
+  @IsString()
+  trackingType?: string;
+
+  @ApiPropertyOptional({
+    example: 'true',
+    description: 'Inventory report only. Filter to low-stock rows.',
+  })
+  @IsOptional()
+  @Type(() => String)
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    throw new BadRequestException('lowStock must be true or false');
+  })
+  @IsBoolean()
+  lowStock?: boolean;
 }

@@ -35,10 +35,9 @@ import {
   nextFreeStoreSlug,
 } from '../helpers/store-slug.helper.js';
 
-/** Max photos per product — enforced here because the DB has no count cap. */
 const MAX_PRODUCT_IMAGES = 5;
-/** Longest side a processed photo may have (WF21 "about 1600 px wide"). */
 const MAX_IMAGE_EDGE = 1600;
+const MAX_LOGO_EDGE = 512;
 const SUPPORTED_IMAGE_FORMATS = new Set(['jpeg', 'png', 'webp']);
 
 @Injectable()
@@ -276,7 +275,7 @@ export class StoreService {
     }
 
     const processed = await this.processImage(file);
-    const key = `shops/${shopId}/products/${productId}/${randomUUID()}.${processed.ext}`;
+    const key = `products-images/${shopId}/${productId}/${randomUUID()}.${processed.ext}`;
     const url = await this.r2.put(key, processed.buffer, processed.contentType);
 
     try {
@@ -382,18 +381,71 @@ export class StoreService {
     );
   }
 
-  /**
-   * Validates the upload by content (WF21: "checked by content, not by
-   * name"), auto-rotates, caps the longest side and re-encodes — dropping
-   * EXIF/GPS metadata with it.
-   */
-  private async processImage(file: UploadedImageFile): Promise<{
+  async uploadShopLogo(
+    file: UploadedImageFile,
+    shopId: string,
+  ): Promise<StatusBaseResponseDTO> {
+    const settings = await this.prisma.shopStoreSettings.findUnique({
+      where: { shopId },
+      select: { logoUrl: true },
+    });
+    if (!settings) {
+      throw new NotFoundException(resourceNotFound('Store settings'));
+    }
+
+    const processed = await this.processImage(file, MAX_LOGO_EDGE);
+    const key = `shops-logos/${shopId}/${randomUUID()}.${processed.ext}`;
+    const url = await this.r2.put(key, processed.buffer, processed.contentType);
+    const previousUrl = settings.logoUrl;
+
+    try {
+      await this.prisma.shopStoreSettings.update({
+        where: { shopId },
+        data: { logoUrl: url },
+      });
+    } catch (error) {
+      await this.r2.deleteByUrl(url);
+      throw error;
+    }
+
+    if (previousUrl) {
+      await this.r2.deleteByUrl(previousUrl);
+    }
+
+    this.cache.clear();
+    return new StatusBaseResponseDTO(true, 'Shop logo uploaded successfully');
+  }
+
+  async removeShopLogo(shopId: string): Promise<StatusBaseResponseDTO> {
+    const settings = await this.prisma.shopStoreSettings.findUnique({
+      where: { shopId },
+      select: { logoUrl: true },
+    });
+    if (!settings) {
+      throw new NotFoundException(resourceNotFound('Store settings'));
+    }
+
+    await this.prisma.shopStoreSettings.update({
+      where: { shopId },
+      data: { logoUrl: null },
+    });
+
+    if (settings.logoUrl) {
+      await this.r2.deleteByUrl(settings.logoUrl);
+    }
+
+    this.cache.clear();
+    return new StatusBaseResponseDTO(true, 'Shop logo removed successfully');
+  }
+
+  private async processImage(
+    file: UploadedImageFile,
+    maxEdge = MAX_IMAGE_EDGE,
+  ): Promise<{
     buffer: Buffer;
     ext: string;
     contentType: string;
   }> {
-    // Inputs notably larger than a phone photo are refused before decode so a
-    // decompression bomb cannot eat server memory.
     const sharpOptions = { limitInputPixels: 50_000_000 };
 
     let format: string | undefined;
@@ -412,8 +464,8 @@ export class StoreService {
       buffer = await sharp(file.buffer, sharpOptions)
         .rotate()
         .resize({
-          width: MAX_IMAGE_EDGE,
-          height: MAX_IMAGE_EDGE,
+          width: maxEdge,
+          height: maxEdge,
           fit: 'inside',
           withoutEnlargement: true,
         })

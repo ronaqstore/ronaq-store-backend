@@ -420,12 +420,19 @@ export class SupplierPaymentsService {
       ];
     }
 
+    const orderBy =
+      sortBy === 'supplierName'
+        ? ({ supplier: { name: sortOrder } } as const)
+        : sortBy === 'purchaseNo'
+          ? ({ purchase: { purchaseNo: sortOrder } } as const)
+          : ({ [sortBy]: sortOrder } as const);
+
     const [rows, total] = await Promise.all([
       this.prisma.supplierPayment.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy,
         include: SUPPLIER_PAYMENT_INCLUDE,
       }),
       this.prisma.supplierPayment.count({ where }),
