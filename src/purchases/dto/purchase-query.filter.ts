@@ -92,13 +92,24 @@ export class PurchaseQueryFilterDto {
   @ApiPropertyOptional({
     example: 'purchaseDate',
     description:
-      'purchaseDate | purchaseNo | totalAmount | createdAt | updatedAt.',
+      'purchaseDate | purchaseNo | totalAmount | status | createdAt | updatedAt.',
   })
   @IsOptional()
-  @IsIn(['purchaseDate', 'purchaseNo', 'totalAmount', 'createdAt', 'updatedAt'])
+  @IsIn([
+    'purchaseDate',
+    'purchaseNo',
+    'totalAmount',
+    'status',
+    'createdAt',
+    'updatedAt',
+  ])
   sortBy?:
-    'purchaseDate' | 'purchaseNo' | 'totalAmount' | 'createdAt' | 'updatedAt' =
-    'purchaseDate';
+    | 'purchaseDate'
+    | 'purchaseNo'
+    | 'totalAmount'
+    | 'status'
+    | 'createdAt'
+    | 'updatedAt' = 'purchaseDate';
 
   @ApiPropertyOptional({ example: 'desc', description: 'asc or desc' })
   @IsOptional()

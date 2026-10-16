@@ -30,7 +30,8 @@ export class ExpenseQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'electricity',
-    description: 'Case-insensitive contains search on description.',
+    description:
+      'Case-insensitive contains search on description or category name.',
   })
   @IsOptional()
   @IsString()
@@ -72,11 +73,24 @@ export class ExpenseQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'expenseDate',
-    description: 'expenseDate | amount | createdAt.',
+    description: 'expenseDate | amount | createdAt | categoryName | status | description.',
   })
   @IsOptional()
-  @IsIn(['expenseDate', 'amount', 'createdAt'])
-  sortBy?: 'expenseDate' | 'amount' | 'createdAt' = 'expenseDate';
+  @IsIn([
+    'expenseDate',
+    'amount',
+    'createdAt',
+    'categoryName',
+    'status',
+    'description',
+  ])
+  sortBy?:
+    | 'expenseDate'
+    | 'amount'
+    | 'createdAt'
+    | 'categoryName'
+    | 'status'
+    | 'description' = 'expenseDate';
 
   @ApiPropertyOptional({ example: 'desc', description: 'asc or desc.' })
   @IsOptional()
