@@ -57,7 +57,7 @@ export class CreateSupplierDto {
 
   @ApiPropertyOptional({
     description:
-      'What you already owed this supplier before Dukaan Pro — Day-0 data. In PAISA (Rs 50,000 = 5000000). Integer, cannot be negative.',
+      'What you already owed this supplier before Ronaq Store — Day-0 data. In PAISA (Rs 50,000 = 5000000). Integer, cannot be negative.',
     example: 5000000,
     default: 0,
   })

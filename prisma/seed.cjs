@@ -41,7 +41,7 @@ const ADMIN_NAME = process.env.SEED_ADMIN_NAME || 'Super Admin';
 const OWNER_RAW_PHONE = process.env.SEED_OWNER_PHONE || '03115514151';
 const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD || 'admin@123';
 const OWNER_NAME = process.env.SEED_OWNER_NAME || 'Shop Owner';
-const SHOP_NAME = process.env.SEED_SHOP_NAME || 'Dukan Pro Store';
+const SHOP_NAME = process.env.SEED_SHOP_NAME || 'Ronaq Store';
 
 async function seedPlatformAdmin() {
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD.trim(), BCRYPT_ROUNDS);

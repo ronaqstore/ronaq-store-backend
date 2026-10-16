@@ -8,7 +8,7 @@ import { IsNotEmpty, IsString, Length } from 'class-validator';
  */
 export class PlatformAdminLoginDto {
   @ApiProperty({
-    description: 'Dukaan Pro staff mobile number.',
+    description: 'Ronaq Store staff mobile number or email.',
     example: '03001234567',
   })
   @IsString()

@@ -36,7 +36,7 @@ export class ResponseSupplierDto {
 
   @ApiProperty({
     description:
-      'What you already owed this supplier before Dukaan Pro, in PAISA (Rs 1 = 100 paisa).',
+      'What you already owed this supplier before Ronaq Store, in PAISA (Rs 1 = 100 paisa).',
     example: 5000000,
   })
   openingBalance: number;

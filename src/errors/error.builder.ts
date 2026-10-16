@@ -33,7 +33,7 @@ export const ownerPhoneAlreadyRegistered = (
   phone: string,
 ): ErrorResponseDTO => {
   return new ErrorResponseDTO(
-    'This phone number already has a Dukaan Pro account',
+    'This phone number already has a Ronaq Store account',
     [
       `${phone} is already linked to another shop. A phone number can only own one shop, so find that shop and reissue its setup link instead of creating a duplicate.`,
     ],
@@ -85,7 +85,7 @@ export const adminAccountDisabled = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'Platform admin account is disabled',
     [
-      'This Dukaan Pro staff account has been deactivated. Ask another administrator to re-enable it.',
+      'This Ronaq Store staff account has been deactivated. Ask another administrator to re-enable it.',
     ],
     HttpStatus.FORBIDDEN,
   );
@@ -95,7 +95,7 @@ export const shopSuspended = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'Shop is suspended',
     [
-      'Your shop subscription has ended or been suspended. Contact Dukaan Pro support to renew.',
+      'Your shop subscription has ended or been suspended. Contact Ronaq Store support to renew.',
     ],
     HttpStatus.FORBIDDEN,
   );
@@ -105,7 +105,7 @@ export const userSuspended = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'User account is disabled',
     [
-      'This user has been suspended. Only the shop owner or Dukaan Pro support can re-enable it.',
+      'This user has been suspended. Only the shop owner or Ronaq Store support can re-enable it.',
     ],
     HttpStatus.FORBIDDEN,
   );

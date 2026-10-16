@@ -68,7 +68,7 @@ export class PlatformAdminSummaryDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
   id: string;
 
-  @ApiProperty({ example: 'Dukaan Pro Support' })
+  @ApiProperty({ example: 'Ronaq Store Support' })
   name: string;
 
   @ApiProperty({ example: '923001234567' })

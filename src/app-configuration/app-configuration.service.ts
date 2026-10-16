@@ -89,11 +89,11 @@ export class AppConfigurationService {
   }
 
   get serverName(): string {
-    return 'dukan-pro-backend';
+    return 'ronaq-store-backend';
   }
 
   get serverDescription(): string {
-    return 'Dukan Pro API';
+    return 'Ronaq Store API';
   }
 
   get serverVersion(): string {

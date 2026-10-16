@@ -13,7 +13,7 @@ export class ResponseStoreSettingsDto {
   shopId: string;
 
   @ApiProperty({
-    description: 'Store address, unique across all of Dukaan Pro.',
+    description: 'Store address, unique across all of Ronaq Store.',
     example: 'khalid-mobile',
   })
   slug: string;

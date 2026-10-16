@@ -47,7 +47,7 @@ export class PlatformAdminAuthController {
   @ApiOperation({
     summary: 'Issue a one-time password setup link for a shop owner',
     description:
-      'Dukaan Pro sends no email and no SMS. This response contains the complete URL to forward to the owner on WhatsApp. The token is stored only as a SHA-256 hash, so the URL cannot be recovered later — issue a new link instead. Issuing a link also resets the password, and invalidates any previous unused link.',
+      'Ronaq Store sends no email and no SMS. This response contains the complete URL to forward to the owner on WhatsApp. The token is stored only as a SHA-256 hash, so the URL cannot be recovered later — issue a new link instead. Issuing a link also resets the password, and invalidates any previous unused link.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(

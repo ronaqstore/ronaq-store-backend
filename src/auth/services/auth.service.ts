@@ -347,7 +347,7 @@ export class AuthService {
   /**
    * WF1 step 3 / password reset — mint a one-time setup link for an owner.
    *
-   * Dukaan Pro deliberately sends no email and no SMS. The admin copies the URL
+   * Ronaq Store deliberately sends no email and no SMS. The admin copies the URL
    * from this response and forwards it to the owner on WhatsApp, which is how
    * the target user actually communicates.
    *

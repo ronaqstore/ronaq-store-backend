@@ -106,7 +106,7 @@ export class AuthController {
 
   @Post('platform-admin/login')
   @ApiOperation({
-    summary: 'Log in as a Dukaan Pro platform admin',
+    summary: 'Log in as a Ronaq Store platform admin',
     description:
       'Separate from owner login because platform admins live outside the tenant tables and have no shop_id. The returned token cannot open shop endpoints.',
   })

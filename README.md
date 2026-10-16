@@ -1,6 +1,6 @@
-# Dukan Pro Backend
+# Ronaq Store Backend
 
-NestJS + Prisma + PostgreSQL API for Dukan Pro — a PWA shop-management app for small business owners in Pakistan.
+NestJS + Prisma + PostgreSQL API for Ronaq Store — a PWA shop-management app for small business owners in Pakistan.
 
 ## Status
 

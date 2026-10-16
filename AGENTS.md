@@ -1,4 +1,4 @@
-# DUKAAN PRO BACKEND — AGENTS.md (single source of truth)
+# RONAQ STORE BACKEND — AGENTS.md (single source of truth)
 
 > This is the **only** project guide. It merges the former `CLAUDE.md`,
 > `AI_CODING_RULES.md` and `HANDOFF.md` into one file so knowledge lives in the
@@ -16,7 +16,7 @@
 
 | Field | Value |
 |---|---|
-| **Project** | Dukaan Pro backend — SaaS multi-tenant PWA shop-management tool for small shop owners in Pakistan |
+| **Project** | Ronaq Store backend — SaaS multi-tenant PWA shop-management tool for small shop owners in Pakistan |
 | **Stack** | NestJS 12 + Prisma 7 + PostgreSQL + JWT + Swagger + Jest |
 | **Current state** | Infrastructure ✓ Schema ✓ Constraints ✓ Auth ✓ Platform-admin ✓ **20 modules built**: categories, brands, products, suppliers, customers, expense-categories, expenses, purchases, supplier-payments, inventory, sales, payments, dashboard, cash, store, **returns**, **cash-reconciliations**, **reports** — including cancel flows (WF12), ledgers (WF11), the WF14 dashboard, WF1 opening cash, WF16 owner investment/withdrawal, **WF17 cash count/reconciliation**, the **Release 1.2 Online Store** (`store/` settings + preview, publish/unpublish, product images, `public/stores/` catalog with rate limiting & 60s cache, admin-only slug rename), **WF15 returns & refunds** and **WF18 reports + CSV export**. **Release 1 endpoints (WF1–WF14), Release 1.1 (WF15–WF18) and Release 1.2 Online Store (WF19–WF22) complete — all 22 workflows in the spec are built** (see §11 and the Requirements-alignment gaps in the Online Store section). |
 | **Node** | >= 24.15.0 (see `package.json`) |

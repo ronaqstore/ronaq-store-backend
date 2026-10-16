@@ -1,9 +1,9 @@
 {
-  "name": "dukan-pro-backend",
+  "name": "ronaq-store-backend",
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "Dukan Pro API — NestJS + Prisma + PostgreSQL backend",
+  "description": "Ronaq Store API — NestJS + Prisma + PostgreSQL backend",
   "license": "UNLICENSED",
   "engines": {
     "node": "24.x"

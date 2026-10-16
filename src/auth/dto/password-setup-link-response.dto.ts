@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 /**
  * Returned ONCE, immediately after the platform admin asks for a setup link.
  *
- * Dukaan Pro sends no email and no SMS: the admin copies this URL out of the
+ * Ronaq Store sends no email and no SMS: the admin copies this URL out of the
  * panel and forwards it to the shop owner on WhatsApp. The plaintext token
  * exists only in this response — the database keeps a SHA-256 hash, so a lost
  * link can never be recovered. Re-issue a new link instead.

@@ -41,7 +41,7 @@ const prisma = new PrismaClient({
 });
 
 const phone = normalizePhone((process.env.SEED_ADMIN_PHONE || '03009999999').trim());
-const name = (process.env.SEED_ADMIN_NAME || 'Dukaan Pro Support').trim();
+const name = (process.env.SEED_ADMIN_NAME || 'Ronaq Store Support').trim();
 const password = (process.env.SEED_ADMIN_PASSWORD || 'AdminOwner1').trim();
 
 /**

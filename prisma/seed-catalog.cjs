@@ -1,5 +1,5 @@
 /**
- * Seeds the complete end-to-end business flow for Dukan Pro:
+ * Seeds the complete end-to-end business flow for Ronaq Store:
  *  1. Shop & Owner (Multi-tenant root + Store settings)
  *  2. Categories & Brands
  *  3. Products (Serialized Phone + Quantity Accessory)
