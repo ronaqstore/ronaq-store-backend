@@ -250,6 +250,7 @@ export class StorefrontService {
   }
 
   private toProfile(settings: {
+    id?: string;
     slug: string;
     displayName: string;
     about: string | null;
@@ -265,6 +266,7 @@ export class StorefrontService {
     instagramUrl: string | null;
   }): ResponseStoreDto {
     return {
+      id: settings.id,
       slug: settings.slug,
       displayName: settings.displayName,
       about: settings.about,

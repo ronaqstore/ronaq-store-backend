@@ -103,6 +103,9 @@ export class ResponseStoreProductDto {
  * Deliberately carries no shopId and no showExactStock switch.
  */
 export class ResponseStoreDto {
+  @ApiPropertyOptional({ description: 'Store settings identifier.' })
+  id?: string;
+
   @ApiProperty({ description: 'Store address.', example: 'khalid-mobile' })
   slug: string;
 
