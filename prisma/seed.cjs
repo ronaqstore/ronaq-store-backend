@@ -215,8 +215,26 @@ async function seedShopAndOwner() {
   return { shop, owner };
 }
 
+function databaseLooksShared() {
+  const url = process.env.DATABASE_URL || '';
+  if (!url) return true;
+  return !/@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(url);
+}
+
 async function main() {
-  console.log('🌱 Starting database seed on live Neon DB...');
+  const allowRemote =
+    process.env.ALLOW_REMOTE_SEED === 'true' || process.argv.includes('--force');
+
+  if (databaseLooksShared() && !allowRemote) {
+    throw new Error(
+      'Refusing to seed: DATABASE_URL does not point at localhost.\n' +
+        'If you intend to seed a live/remote database, set ALLOW_REMOTE_SEED=true or pass --force:\n' +
+        '  ALLOW_REMOTE_SEED=true npm run seed\n' +
+        '  or: npm run seed -- --force'
+    );
+  }
+
+  console.log('🌱 Starting database seed...');
   console.log('');
 
   await seedPlatformAdmin();
