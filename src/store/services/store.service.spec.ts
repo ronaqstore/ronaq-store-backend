@@ -372,7 +372,7 @@ describe('StoreService (owner surface)', () => {
 
       expect(r2.put).toHaveBeenCalledWith(
         expect.stringMatching(
-          /^shops\/shop-1\/products\/prod-1\/[0-9a-f-]+\.jpg$/,
+          /^products-images\/shop-1\/prod-1\/[0-9a-f-]+\.jpg$/,
         ),
         expect.any(Buffer),
         'image/jpeg',

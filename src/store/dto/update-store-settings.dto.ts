@@ -48,12 +48,13 @@ export class UpdateStoreSettingsDto {
 
   @ApiPropertyOptional({
     description:
-      'Logo image URL. http(s) only — javascript: links are blocked.',
+      'Logo image URL. Prefer POST /store/settings/logo for uploads. http(s) only when set; null clears.',
     example: 'https://cdn.example.com/logo.png',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
-  @Matches(/^https?:\/\//i)
+  @Matches(/^https?:\/\//i, { message: 'logoUrl must be an http(s) URL' })
   logoUrl?: string | null;
 
   @ApiPropertyOptional({

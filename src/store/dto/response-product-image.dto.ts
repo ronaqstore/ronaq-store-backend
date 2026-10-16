@@ -10,7 +10,7 @@ export class ResponseProductImageDto {
 
   @ApiProperty({
     description: 'Public https URL of the stored photo.',
-    example: 'https://pub-xxxx.r2.dev/shops/…/products/…/a15-front.jpg',
+    example: 'https://pub-xxxx.r2.dev/products-images/…/…/a15-front.jpg',
   })
   url: string;
 
