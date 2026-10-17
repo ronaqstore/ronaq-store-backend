@@ -12,7 +12,7 @@ import { Observable } from 'rxjs';
 export class TraceIdInterceptor implements NestInterceptor {
   constructor(private readonly cls: ClsService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const response = context.switchToHttp().getResponse<Response>();
     const traceId = this.cls.getId();
     if (traceId) {

@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ReportsService } from './reports.service.js';
+import { ReportsLedgerService } from './reports-ledger.service.js';
+import { ReportsAnalyticsService } from './reports-analytics.service.js';
+import { ReportsQueryHelper } from './reports-query.helper.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { businessToday } from '../../helpers/date.helper.js';
 
@@ -35,6 +38,9 @@ describe('ReportsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportsService,
+        ReportsLedgerService,
+        ReportsAnalyticsService,
+        ReportsQueryHelper,
         { provide: PrismaService, useValue: prismaStub },
       ],
     }).compile();

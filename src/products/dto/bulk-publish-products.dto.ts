@@ -7,10 +7,6 @@ import {
   IsUUID,
 } from 'class-validator';
 
-/**
- * WF20 step 5 — publish or unpublish many products in one transaction.
- * The id list is deduplicated so the same product cannot be sent twice.
- */
 export class BulkPublishProductsDto {
   @ApiProperty({
     description: 'Product ids (1–100). Duplicates are ignored.',

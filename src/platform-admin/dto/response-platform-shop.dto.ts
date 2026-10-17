@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ShopStatus } from '../../generated/prisma/enums.js';
 import type { PlatformShopAccessStatus } from './list-shops-query.dto.js';
 
-/** One row on the platform-admin shop directory. */
 export class ResponsePlatformShopDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
   id: string;

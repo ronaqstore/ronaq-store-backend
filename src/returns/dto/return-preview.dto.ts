@@ -12,11 +12,6 @@ import {
 } from 'class-validator';
 import { ReturnItemDto } from './return-item.dto.js';
 
-/**
- * Step 4 of WF15 — the owner sees how the value settles BEFORE saving.
- * Same line rules as CreateReturnDto (it is a dry run of the same save),
- * but reason/returnDate are not needed yet.
- */
 export class ReturnPreviewDto {
   @ApiProperty({
     description:
@@ -43,7 +38,6 @@ export class ReturnPreviewDto {
   refundAmount?: number;
 }
 
-/** One line of the preview, as the settlement sees it. */
 export class ReturnPreviewLineDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000201' })
   saleItemId: string;

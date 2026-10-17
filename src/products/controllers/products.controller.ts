@@ -3,40 +3,37 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
+  InternalServerErrorException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
-  HttpException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  PaginatedResponseDTO,
+  logError,
+} from '../../helpers/crud-controller.imports.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { ProductsService } from '../services/products.service.js';
 import { CreateProductDto } from '../dto/create-product.dto.js';
 import { UpdateProductDto } from '../dto/update-product.dto.js';
 import { BulkPublishProductsDto } from '../dto/bulk-publish-products.dto.js';
 import { ProductQueryFilterDto } from '../dto/product-query.filter.js';
 import { ResponseProductDto } from '../dto/response-product.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
 
 @ApiTags('products')
 @Controller('products')
@@ -60,7 +57,7 @@ export class ProductsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async createProduct(
     @Body() createProductDto: CreateProductDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.productsService.createProduct(
@@ -93,7 +90,7 @@ export class ProductsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getProducts(
     @Query() query: ProductQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseProductDto>>> {
     try {
       const res = await this.productsService.getProducts(
@@ -126,7 +123,7 @@ export class ProductsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getProductById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseProductDto>> {
     try {
       const res = await this.productsService.getProductById(
@@ -144,8 +141,6 @@ export class ProductsController {
     }
   }
 
-  // Declared BEFORE PATCH /:id on purpose — otherwise "publish" would be
-  // captured as a product id.
   @Patch('/publish')
   @ApiOperation({
     summary: 'Bulk publish or unpublish products (WF20)',
@@ -161,7 +156,7 @@ export class ProductsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async publishProducts(
     @Body() bulkPublishProductsDto: BulkPublishProductsDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.productsService.publishProducts(
@@ -195,7 +190,7 @@ export class ProductsController {
   async updateProduct(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.productsService.updateProduct(
@@ -233,7 +228,7 @@ export class ProductsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteProduct(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.productsService.deleteProduct(

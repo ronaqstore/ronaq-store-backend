@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/** Matches the cash_reconciliations row, paisa BIGINTs as numbers. */
 export class ResponseCashReconciliationDto {
   @ApiProperty()
   id: string;

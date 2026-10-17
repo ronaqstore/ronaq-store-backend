@@ -1,11 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * One line of a customer or supplier ledger (WF11). There is no ledger table —
- * the timeline is built from the real sale / purchase / payment rows — so a
- * cancelled record stays visible as a line with delta 0 and does not move the
- * running balance.
- */
 export class LedgerEntryDto {
   @ApiProperty({
     description: 'The sale / purchase / payment row this line came from.',

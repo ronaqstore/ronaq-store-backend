@@ -1,17 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { StorePublicProfileFieldsDto } from './store-public-profile-fields.dto.js';
 
-/**
- * Release 1.2 public store DTOs (WF22).
- *
- * These are an ALLOWLIST: only the fields a browsing customer may see. Cost,
- * supplier, IMEI, SKU, barcode, the private `description` and `shopId` must
- * never appear here — tests assert their absence from every public response.
- */
-
-/** The three stock labels the store shows (WF22 example: "LOW_STOCK"). */
 export type StoreAvailability = 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
 
-/** Public spec sheet. null = the owner never filled it in. */
 export class StoreSpecsDto {
   @ApiPropertyOptional({ example: 'SM-A155F' })
   model: string | null;
@@ -26,11 +17,6 @@ export class StoreSpecsDto {
   storage: string | null;
 }
 
-/**
- * One published product exactly as the customer sees it. Price is in paisa
- * (divide by 100) and is null when the owner chose contactForPrice;
- * stockCount is null unless the owner opted into showExactStock.
- */
 export class ResponseStoreProductDto {
   @ApiProperty({
     description: 'Product id.',
@@ -98,11 +84,7 @@ export class ResponseStoreProductDto {
   specs: StoreSpecsDto;
 }
 
-/**
- * The public store profile — the allowlisted face of shop_store_settings.
- * Deliberately carries no shopId and no showExactStock switch.
- */
-export class ResponseStoreDto {
+export class ResponseStoreDto extends StorePublicProfileFieldsDto {
   @ApiPropertyOptional({ description: 'Store settings identifier.' })
   id?: string;
 
@@ -111,44 +93,8 @@ export class ResponseStoreDto {
 
   @ApiProperty({ description: 'Store name.', example: 'Khalid Mobile Center' })
   displayName: string;
-
-  @ApiPropertyOptional({ description: 'Short intro story.' })
-  about?: string | null;
-
-  @ApiPropertyOptional({ description: 'Logo image URL.' })
-  logoUrl?: string | null;
-
-  @ApiPropertyOptional({ description: 'Banner image URL.' })
-  bannerUrl?: string | null;
-
-  @ApiPropertyOptional({
-    description: 'WhatsApp number (international digits).',
-  })
-  whatsappNumber?: string | null;
-
-  @ApiPropertyOptional({ description: 'Display phone number.' })
-  phoneNumber?: string | null;
-
-  @ApiPropertyOptional({ description: 'Street address.' })
-  address?: string | null;
-
-  @ApiPropertyOptional({ description: 'City.' })
-  city?: string | null;
-
-  @ApiPropertyOptional({ description: 'Google Maps link.' })
-  googleMapsUrl?: string | null;
-
-  @ApiPropertyOptional({ description: 'Opening hours text.' })
-  openingHours?: string | null;
-
-  @ApiPropertyOptional({ description: 'Facebook page URL.' })
-  facebookUrl?: string | null;
-
-  @ApiPropertyOptional({ description: 'Instagram profile URL.' })
-  instagramUrl?: string | null;
 }
 
-/** One filter chip on the store (a category or a brand). */
 export class StoreFilterOptionDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000010' })
   id: string;
@@ -157,7 +103,6 @@ export class StoreFilterOptionDto {
   name: string;
 }
 
-/** Categories and brands that have at least one published product. */
 export class ResponseStoreCategoriesDto {
   @ApiProperty({ type: [StoreFilterOptionDto] })
   categories: StoreFilterOptionDto[];
@@ -173,4 +118,3 @@ export class ResponseStoreListItemDto extends ResponseStoreDto {
   })
   totalProducts?: number;
 }
-

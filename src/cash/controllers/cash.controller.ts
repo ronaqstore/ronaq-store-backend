@@ -39,6 +39,7 @@ import { CreateOwnerWithdrawalDto } from '../dto/create-owner-withdrawal.dto.js'
 import { CashMovementQueryFilterDto } from '../dto/cash-movement-query.filter.js';
 import { ResponseCashMovementDto } from '../dto/response-cash-movement.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('cash')
 @Controller('cash')
@@ -67,7 +68,7 @@ export class CashController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createOpeningCash(
     @Body() createOpeningCashDto: CreateOpeningCashDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.cashService.createOpeningCash(
@@ -104,7 +105,7 @@ export class CashController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createOwnerInvestment(
     @Body() createOwnerInvestmentDto: CreateOwnerInvestmentDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.cashService.createOwnerInvestment(
@@ -145,7 +146,7 @@ export class CashController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createOwnerWithdrawal(
     @Body() createOwnerWithdrawalDto: CreateOwnerWithdrawalDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<OwnerWithdrawalResult>> {
     try {
@@ -154,7 +155,6 @@ export class CashController {
         req.user.shopId,
         req.user.userId,
       );
-      // Overdraft prompt writes nothing — must not claim 201.
       res.status('confirmOverdraft' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
@@ -188,7 +188,7 @@ export class CashController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCashMovements(
     @Query() query: CashMovementQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<
     ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseCashMovementDto>>
   > {

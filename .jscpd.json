@@ -1,0 +1,20 @@
+{
+  "path": ["src"],
+  "pattern": "**/*.ts",
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/src/generated/**",
+    "**/*.spec.ts",
+    "**/*.module.ts"
+  ],
+  "minLines": 8,
+  "minTokens": 75,
+  "threshold": 1.2,
+  "format": ["typescript"],
+  "reporters": ["console"],
+  "skipLocal": false,
+  "absolute": false,
+  "silent": false
+}

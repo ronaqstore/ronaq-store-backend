@@ -23,6 +23,7 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
+import { probeCashOverdraft } from '../../helpers/cash-balance.helper.js';
 import {
   cancelledRowMutationForbidden,
   resourceNotFound,
@@ -39,23 +40,9 @@ type ExpenseWithCategory = Prisma.ExpenseGetPayload<{
 export type CreateExpenseResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
 
-type Tx = Prisma.TransactionClient;
-
 const CREATED = 'Expense recorded successfully';
 const CANCELLED = 'Expense cancelled successfully';
 
-/**
- * WF13 — Add & Cancel an Expense.
- *
- * Create: one $transaction — lock shop row → overdraft check → insert expense
- * (ACTIVE) → insert cash_movements (EXPENSE, OUT). Cash below zero is a soft
- * warning (200 prompt) not a hard block; retry with confirmOverdraft: true
- * saves with isOverdraft: true.
- *
- * Cancel: one $transaction — lock shop row → assert ACTIVE → set CANCELLED
- * with reason/time/user → insert cash_movements REVERSAL (IN) pointing back
- * to the original movement via reversesMovementId.
- */
 @Injectable()
 export class ExpensesService {
   private readonly logger = new Logger(ExpensesService.name);
@@ -80,11 +67,6 @@ export class ExpensesService {
     const amount = BigInt(dto.amount);
 
     const outcome = await this.prisma.$transaction(async (tx) => {
-      // Lock the shop row first so the currentCash aggregate below is
-      // serialised against every other concurrent cash writer in this shop
-      // (purchases, supplier payments, other expenses). Without this lock two
-      // concurrent expenses would each snapshot the same drawer balance and
-      // both pass the soft overdraft check on the same stale number.
       const shop = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
       `;
@@ -92,14 +74,19 @@ export class ExpensesService {
         throw new NotFoundException(resourceNotFound('Shop', shopId));
       }
 
-      let overdraft = false;
-      const after = (await this.currentCash(tx, shopId)) - Number(amount);
-      if (after < 0) {
-        if (!dto.confirmOverdraft) {
-          return { kind: 'overdraft' as const, shortfall: -after };
-        }
-        overdraft = true;
+      const overdraftProbe = await probeCashOverdraft(
+        tx,
+        shopId,
+        amount,
+        dto.confirmOverdraft,
+      );
+      if (overdraftProbe.kind === 'overdraft') {
+        return {
+          kind: 'overdraft' as const,
+          shortfall: overdraftProbe.shortfall,
+        };
       }
+      const overdraft = overdraftProbe.overdraft;
 
       const expense = await tx.expense.create({
         data: {
@@ -142,8 +129,6 @@ export class ExpensesService {
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // Pre-transaction tenant + existence check so we 404 fast without
-    // acquiring any lock.
     const expense = await this.prisma.expense.findFirst({
       where: { id, shopId },
       select: { id: true, status: true, amount: true },
@@ -158,17 +143,10 @@ export class ExpensesService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      // Lock shop row before touching cash — same reason as createExpense.
-      // A reversal adds cash (IN) so it cannot cause an overdraft, but the
-      // lock still serialises the ledger so the running balance stays correct.
       await tx.$queryRaw`
         SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
       `;
 
-      // Re-check under the expense row lock: two cancels racing the same
-      // expense must not both pass the pre-check above — the loser gets 400
-      // here instead of a duplicate REVERSAL hitting the unique
-      // reverses_movement_id index with a 500 (same pattern as WF12).
       const locked = await tx.$queryRaw<Array<{ status: string }>>`
         SELECT status FROM expenses
         WHERE id = ${id} AND shop_id = ${shopId}
@@ -195,10 +173,6 @@ export class ExpensesService {
         },
       });
 
-      // Find the original EXPENSE cash movement so the REVERSAL row can
-      // point back to it via reversesMovementId (append-only ledger rule).
-      // Missing here means the ledger is inconsistent — roll back rather
-      // than let cash_movements_reversal_chk reject with a cryptic 500.
       const original = await tx.cashMovement.findFirst({
         where: {
           shopId,
@@ -298,18 +272,6 @@ export class ExpensesService {
     });
     if (!row) throw new NotFoundException(resourceNotFound('Expense', id));
     return this.toResponse(row);
-  }
-
-  private async currentCash(tx: Tx, shopId: string): Promise<number> {
-    const inbound = await tx.cashMovement.aggregate({
-      where: { shopId, direction: CashDirection.IN },
-      _sum: { amount: true },
-    });
-    const outbound = await tx.cashMovement.aggregate({
-      where: { shopId, direction: CashDirection.OUT },
-      _sum: { amount: true },
-    });
-    return Number(inbound._sum.amount ?? 0) - Number(outbound._sum.amount ?? 0);
   }
 
   private toResponse(row: ExpenseWithCategory): ResponseExpenseDto {

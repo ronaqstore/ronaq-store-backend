@@ -212,7 +212,15 @@ describe('StorefrontService (public catalog)', () => {
             brand: {
               name: { equals: 'Samsung', mode: 'insensitive' },
             },
-            name: { contains: 'a15', mode: 'insensitive' },
+            OR: [
+              { name: { contains: 'a15', mode: 'insensitive' } },
+              { sku: { contains: 'a15', mode: 'insensitive' } },
+              {
+                brand: {
+                  name: { contains: 'a15', mode: 'insensitive' },
+                },
+              },
+            ],
           }),
         }),
       );

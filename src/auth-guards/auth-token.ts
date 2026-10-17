@@ -3,14 +3,6 @@ import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '../generated/prisma/enums.js';
 import { invalidToken } from '../errors/error.builder.js';
 
-/**
- * Which door the token opens.
- *
- * A platform admin is NOT a shop owner and has no `shop_id` (see
- * `platform_admins` — it deliberately lives outside the tenant tables). Both
- * identities sign with the same secret, so without this claim an admin token
- * would pass AuthGuard and every service would read `shopId: null`.
- */
 export enum AuthTokenType {
   OWNER = 'OWNER',
   PLATFORM_ADMIN = 'PLATFORM_ADMIN',
@@ -19,15 +11,11 @@ export enum AuthTokenType {
 export interface JwtPayloadClaims {
   sub: string;
   typ: AuthTokenType;
-  /** Present for OWNER tokens only. */
+
   shopId?: string | null;
   role?: UserRole;
 }
 
-/**
- * What AuthGuard attaches to the request. Every downstream service reads
- * `request.user.shopId` — this is the multi-tenancy boundary.
- */
 export interface AuthenticatedOwner {
   userId: string;
   shopId: string;
@@ -39,9 +27,6 @@ export interface AuthenticatedPlatformAdmin {
   name: string;
 }
 
-/**
- * Pull the raw token out of `Authorization: Bearer <token>`.
- */
 export const extractBearerToken = (header: string | undefined): string => {
   if (!header || !header.startsWith('Bearer ')) {
     throw new UnauthorizedException(invalidToken());
@@ -56,11 +41,6 @@ export const extractBearerToken = (header: string | undefined): string => {
   return token;
 };
 
-/**
- * Verify signature + expiry and assert the token was minted for `expectedType`.
- * A platform-admin token presented to a shop route is rejected here, before any
- * service runs.
- */
 export const verifyTokenOfType = async (
   jwtService: JwtService,
   secret: string,

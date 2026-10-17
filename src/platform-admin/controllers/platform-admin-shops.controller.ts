@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -30,6 +31,7 @@ import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-res
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { PlatformAdminGuard } from '../../auth-guards/platform-admin.guard.js';
+import type { PlatformAdminRequest } from '../../auth-guards/authenticated-request.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { PlatformAdminService } from '../services/platform-admin.service.js';
 import { CreateShopDto } from '../dto/create-shop.dto.js';
@@ -42,12 +44,6 @@ import { ListShopsQueryDto } from '../dto/list-shops-query.dto.js';
 import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
 import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
 
-/**
- * SaaS admin panel API: onboard shops and manage subscriptions.
- *
- * Every route is behind PlatformAdminGuard, so an owner token cannot reach any
- * of them — an owner has no business creating shops or extending subscriptions.
- */
 @ApiTags('platform-admin-shops')
 @Controller('platform-admin/shops')
 @ApiBearerAuth()
@@ -82,7 +78,9 @@ export class PlatformAdminShopsController {
     } catch (error) {
       logError('platform-admin.controller.ts', 'getOverview', error);
       if (error instanceof HttpException) throw error;
-      throw new InternalServerErrorException('Failed to fetch platform overview');
+      throw new InternalServerErrorException(
+        'Failed to fetch platform overview',
+      );
     }
   }
 
@@ -101,6 +99,7 @@ export class PlatformAdminShopsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async listShops(
     @Query() query: ListShopsQueryDto,
+    @Req() req: PlatformAdminRequest,
   ): Promise<
     ApiSuccessResponseDTO<PaginatedResponseDTO<ResponsePlatformShopDto>>
   > {
@@ -108,7 +107,10 @@ export class PlatformAdminShopsController {
       const res = await this.platformAdminService.listShops(query);
       return new ApiSuccessResponseDTO('Shops fetched successfully', res);
     } catch (error) {
-      logError('platform-admin.controller.ts', 'listShops', error, { query });
+      logError('platform-admin.controller.ts', 'listShops', error, {
+        query,
+        adminId: req.user?.adminId,
+      });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to fetch shops');
     }

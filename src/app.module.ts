@@ -45,8 +45,7 @@ import { ReportsModule } from './reports/reports.module.js';
     }),
     JwtModule.registerAsync({
       global: true,
-      // registerAsync builds its own module scope, so it does not inherit
-      // AppModule's imports — AppConfigurationModule must be listed here too.
+
       imports: [AppConfigurationModule],
       inject: [AppConfigurationService],
       useFactory: (configService: AppConfigurationService) => ({

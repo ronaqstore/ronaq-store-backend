@@ -9,35 +9,34 @@ import {
   Req,
   Res,
   UseGuards,
-} from '@nestjs/common';
-import type { Response } from 'express';
-import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  PaginatedResponseDTO,
+  logError,
+} from '../../helpers/document-controller.imports.js';
+import type { Response } from 'express';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import {
   InventoryService,
   InventoryAdjustmentOutcome,
 } from '../services/inventory.service.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
-import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
-
+import {
+  PaginatedInventoryMovementDto,
+  ResponseInventoryMovementDto,
+} from '../dto/response-inventory-movement.dto.js';
 @ApiTags('inventory')
 @Controller('inventory')
 @ApiBearerAuth()
@@ -68,10 +67,8 @@ export class InventoryController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createAdjustment(
     @Body() dto: CreateInventoryAdjustmentDto,
-    @Req() req: any,
-    // passthrough: we still return the body ourselves, but 201 only belongs to
-    // an adjustment that actually wrote a row. A "matches the count" response
-    // did nothing, so it is 200.
+    @Req() req: OwnerRequest,
+
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<InventoryAdjustmentOutcome>> {
     try {
@@ -104,7 +101,7 @@ export class InventoryController {
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
-      PaginatedResponseDTO,
+      PaginatedInventoryMovementDto,
       'Inventory adjustments fetched successfully',
     ),
   )
@@ -114,7 +111,7 @@ export class InventoryController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getAdjustments(
     @Query() query: InventoryAdjustmentQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<
     ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseInventoryMovementDto>>
   > {

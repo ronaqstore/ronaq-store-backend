@@ -1,13 +1,20 @@
 import { Module } from '@nestjs/common';
 import { PurchasesController } from './controllers/purchases.controller.js';
 import { PurchasesService } from './services/purchases.service.js';
+import { PurchasesWriteService } from './services/purchases-write.service.js';
+import { PurchasesCancelService } from './services/purchases-cancel.service.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 
 @Module({
   imports: [PrismaModule],
   controllers: [PurchasesController],
-  providers: [PurchasesService, AppConfigurationService],
+  providers: [
+    PurchasesService,
+    PurchasesWriteService,
+    PurchasesCancelService,
+    AppConfigurationService,
+  ],
   exports: [PurchasesService],
 })
 export class PurchasesModule {}

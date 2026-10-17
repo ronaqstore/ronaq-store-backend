@@ -6,22 +6,15 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUrl,
   IsUUID,
   Length,
   Max,
   MaxLength,
   Min,
 } from 'class-validator';
+import { ProductOptionalSpecFieldsDto } from '../../common-dto/product/product-optional-spec-fields.dto.js';
 
-/**
- * Every updatable field is explicitly listed as optional. We deliberately do NOT
- * use PartialType so each field stays a strict opt-in for edit endpoints.
- *
- * trackingType IS listed here on purpose: it may change before the product has
- * any purchase or sale. The service rejects the change once history exists.
- */
-export class UpdateProductDto {
+export class UpdateProductDto extends ProductOptionalSpecFieldsDto {
   @ApiPropertyOptional({
     description: 'Must stay unique inside the shop.',
     example: 'Galaxy A15',
@@ -58,64 +51,6 @@ export class UpdateProductDto {
   @IsIn(['QUANTITY', 'SERIALIZED'])
   trackingType?: 'QUANTITY' | 'SERIALIZED';
 
-  @ApiPropertyOptional({ example: 'SM-A155F' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  model?: string;
-
-  @ApiPropertyOptional({ example: 'Blue' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  color?: string;
-
-  @ApiPropertyOptional({ example: '8GB' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  ram?: string;
-
-  @ApiPropertyOptional({ example: '128GB' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  storage?: string;
-
-  @ApiPropertyOptional({ example: 'A15-BLU-128' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  sku?: string;
-
-  @ApiPropertyOptional({ example: '356938035643809' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  barcode?: string;
-
-  @ApiPropertyOptional({ maxLength: 1000 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  description?: string;
-
-  @ApiPropertyOptional({
-    example: 'https://cdn.example.com/a15.jpg',
-    maxLength: 500,
-  })
-  @IsOptional()
-  @IsString()
-  @IsUrl({ require_tld: false }, { message: 'imageUrl must be a valid URL' })
-  @MaxLength(500)
-  imageUrl?: string;
-
   @ApiPropertyOptional({
     description: 'Suggested cost in PAISA (Rs 1 = 100 paisa). Integer only.',
     example: 4500000,
@@ -151,7 +86,6 @@ export class UpdateProductDto {
   @IsBoolean()
   isActive?: boolean;
 
-  // ---- Release 1.2: Online Store (WF20) ----
   @ApiPropertyOptional({
     description:
       'Publish / unpublish on the public store. Only an ACTIVE product can be published; the DB trigger maintains publishedAt.',

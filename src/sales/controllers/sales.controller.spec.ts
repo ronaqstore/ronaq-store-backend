@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { SalesController } from './sales.controller.js';
 import { SalesService } from '../services/sales.service.js';
+import { SalesLineWriterService } from '../services/sales-line-writer.service.js';
+import { SalesCancelService } from '../services/sales-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -31,6 +33,8 @@ describe('SalesController', () => {
       controllers: [SalesController],
       providers: [
         SalesService,
+        SalesLineWriterService,
+        SalesCancelService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: AuthGuard,

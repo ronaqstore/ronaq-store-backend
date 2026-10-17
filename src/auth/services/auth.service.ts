@@ -21,7 +21,9 @@ import {
   shopSuspended,
   userSuspended,
   adminAccountDisabled,
+  loginPhoneAlreadyTaken,
 } from '../../errors/error.builder.js';
+import { buildOwnerAuthResponseBody } from '../../helpers/owner-auth-response.helper.js';
 import { normalizePhone } from '../../helpers/phone.helper.js';
 import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import {
@@ -31,6 +33,7 @@ import {
 } from '../../helpers/token.helper.js';
 import { logInfo } from '../../helpers/logger-helper.js';
 import { AuthTokenType } from '../../auth-guards/auth-token.js';
+import type { SignTokenClaims } from './auth.service.types.js';
 import { OwnerLoginDto } from '../dto/owner-login.dto.js';
 import { PlatformAdminLoginDto } from '../dto/platform-admin-login.dto.js';
 import { SetupPasswordDto } from '../dto/setup-password.dto.js';
@@ -52,12 +55,6 @@ import {
   storeSlugBase,
 } from '../../store/helpers/store-slug.helper.js';
 
-/**
- * A real bcrypt hash of a value nobody can guess, used only to keep the
- * "user does not exist" path as slow as the "wrong password" path. Without it,
- * login is a timing oracle that tells an attacker which phone numbers are
- * registered.
- */
 const TIMING_EQUALISER_HASH =
   '$2b$12$C6UzMDM.H6dfI/f/IKcEe.7QGK2M4Yw1nBqzYlJ0Z7iVfZ1zUq7r2K';
 
@@ -73,10 +70,6 @@ export class AuthService {
     private readonly configService: AppConfigurationService,
   ) {}
 
-  /**
-   * Self-serve shop owner registration.
-   * Creates owner account + new shop + starter categories & default settings.
-   */
   async registerOwner(dto: RegisterOwnerDto): Promise<OwnerLoginResponseDto> {
     const ownerPhone = normalizePhone(dto.phone);
     if (!ownerPhone) {
@@ -85,19 +78,19 @@ export class AuthService {
       );
     }
 
-    const phoneConflict = await findLoginPhoneConflict(
-      this.prisma,
-      ownerPhone,
-    );
+    const phoneConflict = await findLoginPhoneConflict(this.prisma, ownerPhone);
     if (phoneConflict) {
       throw new BadRequestException(
         phoneConflict === 'PLATFORM_ADMIN'
           ? 'This mobile number is already registered as a platform admin. Use a different number.'
-          : 'This mobile number is already registered. Please log in.',
+          : loginPhoneAlreadyTaken(ownerPhone),
       );
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(
+      dto.password,
+      this.configService.bcryptRounds,
+    );
     const subscriptionEndsAt = new Date();
     subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + 30);
 
@@ -115,7 +108,7 @@ export class AuthService {
         data: {
           name: shopName,
           phone: dto.shopPhone
-            ? normalizePhone(dto.shopPhone) ?? dto.shopPhone
+            ? (normalizePhone(dto.shopPhone) ?? dto.shopPhone)
             : ownerPhone,
           address: resolvedAddress,
           status: ShopStatus.ACTIVE,
@@ -200,33 +193,14 @@ export class AuthService {
       role: user.role,
     });
 
-    return {
+    return buildOwnerAuthResponseBody(
       accessToken,
-      tokenType: 'Bearer',
-      expiresIn: this.configService.jwtExpiresIn,
-      user: {
-        id: user.id,
-        name: user.name,
-        phone: user.phone,
-        role: user.role,
-      },
-      shopId: user.shopId,
-      shop: {
-        name: shop.name,
-        subscriptionEndsAt: shop.subscriptionEndsAt,
-      },
-    };
+      this.configService.jwtExpiresIn,
+      user,
+      shop,
+    );
   }
 
-  /**
-   * WF2 — owner login. Phone + password, then JWT carrying shopId.
-   *
-   * Two separate rejections on purpose:
-   *  - suspended / expired shop -> 403 shopSuspended, so the owner sees
-   *    "your subscription ended" instead of a generic auth error (WF3).
-   *  - wrong phone or password -> 401 with one identical message for both, so
-   *    the endpoint cannot be used to discover which phones exist.
-   */
   async ownerLogin(dto: OwnerLoginDto): Promise<OwnerLoginResponseDto> {
     const phone = normalizePhone(dto.phone);
 
@@ -245,10 +219,6 @@ export class AuthService {
     }
 
     if (!user.passwordHash) {
-      // WF2: an un-setup account must not answer differently from an
-      // unknown phone — otherwise login is an account-enumeration oracle.
-      // Consume the timing equaliser so this path costs one bcrypt compare
-      // like every other rejection, then give the same generic 401.
       await bcrypt.compare(dto.password, TIMING_EQUALISER_HASH);
       throw new UnauthorizedException(invalidCredentials());
     }
@@ -280,28 +250,14 @@ export class AuthService {
       role: user.role,
     });
 
-    return {
+    return buildOwnerAuthResponseBody(
       accessToken,
-      tokenType: 'Bearer',
-      expiresIn: this.configService.jwtExpiresIn,
-      user: {
-        id: user.id,
-        name: user.name,
-        phone: user.phone,
-        role: user.role,
-      },
-      shopId: user.shopId,
-      shop: {
-        name: user.shop.name,
-        subscriptionEndsAt: user.shop.subscriptionEndsAt,
-      },
-    };
+      this.configService.jwtExpiresIn,
+      user,
+      user.shop,
+    );
   }
 
-  /**
-   * WF1 step 2 — SaaS admin login. Separate from owner login because
-   * `platform_admins` has no shop_id (CLAUDE.md section 7).
-   */
   async platformAdminLogin(
     dto: PlatformAdminLoginDto,
   ): Promise<PlatformAdminLoginResponseDto> {
@@ -347,11 +303,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * Mint a one-time setup token for platform onboarding (createShop).
-   * Owners who self-register already set a password; they change it later via
-   * POST /auth/change-password. There is no admin "reissue setup link" path.
-   */
   async buildSetupLink(
     userId: string,
     client: PrismaService | Prisma.TransactionClient = this.prisma,
@@ -375,10 +326,6 @@ export class AuthService {
     return { setupUrl, expiresAt };
   }
 
-  /**
-   * Consume a setup link. The token is single use: the hash is cleared in the
-   * same update that stores the password, so a replayed link fails.
-   */
   async setupPassword(dto: SetupPasswordDto): Promise<StatusBaseResponseDTO> {
     if (!isWellFormedToken(dto.token)) {
       throw new BadRequestException(invalidSetupToken());
@@ -430,14 +377,6 @@ export class AuthService {
     return new StatusBaseResponseDTO(true, 'Password set successfully');
   }
 
-  /**
-   * Owner changes their own password. Requires the current one so a stolen
-   * token alone cannot lock the real owner out.
-   *
-   * Existing access tokens keep working until they expire (up to 24h). There is
-   * no refresh-token table to revoke against — see the token strategy note in
-   * CLAUDE.md if that becomes a problem.
-   */
   async changePassword(
     userId: string,
     dto: ChangePasswordDto,
@@ -470,10 +409,6 @@ export class AuthService {
     return new StatusBaseResponseDTO(true, 'Password changed successfully');
   }
 
-  /**
-   * GET /auth/me — the PWA calls this on cold start to decide whether to show
-   * the app or the "subscription ended" screen.
-   */
   async getMe(userId: string): Promise<MeResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -499,16 +434,7 @@ export class AuthService {
     };
   }
 
-  private async signToken(claims: {
-    sub: string;
-    typ: AuthTokenType;
-    shopId?: string;
-    role?: string;
-  }): Promise<string> {
-    // The module-level signOptions already carry the secret and expiry from the
-    // same config, but they are repeated here so this call is correct even if
-    // the service is instantiated outside the global JwtModule (tests, future
-    // non-default contexts).
+  private async signToken(claims: SignTokenClaims): Promise<string> {
     return this.jwtService.signAsync(claims, {
       secret: this.configService.jwtSecret,
       expiresIn: this.configService.jwtExpiresIn as StringValue,

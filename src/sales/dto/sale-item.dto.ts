@@ -1,10 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
-/**
- * One line of a sale. Nested inside CreateSaleDto with
- * @Type(() => SaleItemDto) so class-validator actually walks the children.
- */
 export class SaleItemDto {
   @ApiProperty({
     description:

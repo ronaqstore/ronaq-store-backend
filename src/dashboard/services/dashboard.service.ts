@@ -10,15 +10,6 @@ import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
 import { DashboardQueryFilterDto } from '../dto/dashboard-query.filter.js';
 import { DashboardDto } from '../dto/response-dashboard.dto.js';
 
-/**
- * WF14 — the seven dashboard numbers.
- *
- * Pure reads: no transaction, no writes. Every query filters `shopId` first
- * and excludes CANCELLED rows (WF12 rule). The numbers are deliberately
- * independent — revenue ≠ cash ≠ Udhar — and each is derived here, never
- * stored. Reads run in parallel; a number may straddle another request's
- * commit by a few milliseconds, which is acceptable for a summary screen.
- */
 @Injectable()
 export class DashboardService {
   private readonly logger = new Logger(DashboardService.name);
@@ -31,7 +22,7 @@ export class DashboardService {
   ): Promise<DashboardDto> {
     const date = businessToday();
     const { start, end } = businessDayRange(date);
-    // `date` columns hold the owner's business date at UTC midnight.
+
     const businessDate = new Date(`${date}T00:00:00.000Z`);
 
     const [
@@ -58,7 +49,7 @@ export class DashboardService {
         },
         _sum: { totalAmount: true },
       }),
-      // unitCost × quantity per line; Prisma cannot multiply inside aggregate().
+
       this.prisma.saleItem.findMany({
         where: {
           shopId,
@@ -93,8 +84,7 @@ export class DashboardService {
         where: { shopId, status: RecordStatus.ACTIVE },
         _sum: { returnAmount: true },
       }),
-      // Refunds carry no status of their own — only those against an ACTIVE
-      // return count (WF15).
+
       this.prisma.refund.aggregate({
         where: { shopId, saleReturn: { status: RecordStatus.ACTIVE } },
         _sum: { amount: true },
@@ -155,11 +145,6 @@ export class DashboardService {
     );
     const todayExpenses = Number(todayExpenseAgg._sum.amount ?? 0n);
 
-    // Walk-in cash sales cancel out: their ACTIVE sale (+) has an ACTIVE
-    // payment row with customerId null (−) for the same amount, so the
-    // shop-wide sums equal the per-customer outstanding from WF10.
-    // WF15 joined the derivation: returns hand goods back (Udhar falls),
-    // refunds hand cash back (Udhar rises).
     const customerUdhar =
       Number(customerOpenings._sum.openingBalance ?? 0n) +
       Number(shopSales._sum.totalAmount ?? 0n) -

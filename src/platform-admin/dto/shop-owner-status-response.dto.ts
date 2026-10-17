@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/** GET /platform-admin/shops/:id — enough to decide the admin's next action. */
 export class ShopOwnerStatusResponseDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
   shopId: string;

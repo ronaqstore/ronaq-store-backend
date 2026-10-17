@@ -1,10 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * Output DTO returned by GET endpoints. Shape mirrors the Prisma row plus the
- * joined category/brand names and the live on-hand quantity, so the list screen
- * needs exactly one request.
- */
 export class ResponseProductDto {
   @ApiProperty({
     description: 'UUID v7 of this product row.',

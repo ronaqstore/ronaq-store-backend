@@ -1,11 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Length } from 'class-validator';
 
-/**
- * Platform admins sign in separately from shop owners. They live in
- * `platform_admins`, which has no `shop_id`, so there is no risk of an admin
- * token being mistaken for an owner token (see AuthTokenType).
- */
 export class PlatformAdminLoginDto {
   @ApiProperty({
     description: 'Ronaq Store staff mobile number or email.',

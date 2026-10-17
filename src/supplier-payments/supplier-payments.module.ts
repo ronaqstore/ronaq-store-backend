@@ -1,13 +1,18 @@
 import { Module } from '@nestjs/common';
 import { SupplierPaymentsController } from './controllers/supplier-payments.controller.js';
 import { SupplierPaymentsService } from './services/supplier-payments.service.js';
+import { SupplierPaymentsCancelService } from './services/supplier-payments-cancel.service.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 
 @Module({
   imports: [PrismaModule],
   controllers: [SupplierPaymentsController],
-  providers: [SupplierPaymentsService, AppConfigurationService],
+  providers: [
+    SupplierPaymentsService,
+    SupplierPaymentsCancelService,
+    AppConfigurationService,
+  ],
   exports: [SupplierPaymentsService],
 })
 export class SupplierPaymentsModule {}

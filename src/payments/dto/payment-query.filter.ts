@@ -1,40 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
-  IsDateString,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  Max,
-  Min,
-} from 'class-validator';
+  InclusiveDateFromQueryProperty,
+  InclusiveDateToQueryProperty,
+  OptionalSearchQueryProperty,
+  SortOrderPeriodQueryProperty,
+} from '../../helpers/query-filter.decorators.js';
 
-export class PaymentQueryFilterDto {
-  @ApiPropertyOptional({ example: 1, description: '1-based page number.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ example: 10, description: 'Rows per page, max 100.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  pageSize?: number = 10;
-
-  @ApiPropertyOptional({
-    example: 'ali',
-    description:
-      'Case-insensitive contains search across the customer name and the payment notes.',
-  })
-  @IsOptional()
-  @IsString()
+export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
+  @OptionalSearchQueryProperty(
+    'ali',
+    'Case-insensitive contains search across the customer name and the payment notes.',
+  )
   search?: string;
 
   @ApiPropertyOptional({
@@ -71,27 +49,20 @@ export class PaymentQueryFilterDto {
   @IsIn(['ACTIVE', 'CANCELLED'])
   status?: 'ACTIVE' | 'CANCELLED';
 
-  @ApiPropertyOptional({
-    example: '2026-10-01',
-    description: 'Inclusive lower bound on paymentDate, YYYY-MM-DD.',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString()
+  @InclusiveDateFromQueryProperty(
+    'Inclusive lower bound on paymentDate, YYYY-MM-DD.',
+  )
   from?: string;
 
-  @ApiPropertyOptional({
-    example: '2026-10-31',
-    description: 'Inclusive upper bound on paymentDate, YYYY-MM-DD.',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString()
+  @InclusiveDateToQueryProperty(
+    'Inclusive upper bound on paymentDate, YYYY-MM-DD.',
+  )
   to?: string;
 
   @ApiPropertyOptional({
     example: 'paymentDate',
-    description: 'paymentDate | amount | createdAt | updatedAt | customerName | method.',
+    description:
+      'paymentDate | amount | createdAt | updatedAt | customerName | method.',
   })
   @IsOptional()
   @IsIn([
@@ -110,8 +81,6 @@ export class PaymentQueryFilterDto {
     | 'customerName'
     | 'method' = 'paymentDate';
 
-  @ApiPropertyOptional({ example: 'desc', description: 'asc or desc' })
-  @IsOptional()
-  @IsIn(['asc', 'desc'])
+  @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }

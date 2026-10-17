@@ -3,34 +3,32 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
+  InternalServerErrorException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
-  HttpException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   FORBIDDEN_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  PaginatedResponseDTO,
+  logError,
+} from '../../helpers/crud-controller.imports.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { SuppliersService } from '../services/suppliers.service.js';
 import { CreateSupplierDto } from '../dto/create-supplier.dto.js';
 import { UpdateSupplierDto } from '../dto/update-supplier.dto.js';
@@ -38,7 +36,6 @@ import { SupplierQueryFilterDto } from '../dto/supplier-query.filter.js';
 import { LedgerQueryFilterDto } from '../dto/ledger-query.filter.js';
 import { ResponseSupplierDto } from '../dto/response-supplier.dto.js';
 import { SupplierLedgerDto } from '../dto/response-supplier-ledger.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
 
 @ApiTags('suppliers')
 @Controller('suppliers')
@@ -62,7 +59,7 @@ export class SuppliersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async createSupplier(
     @Body() createSupplierDto: CreateSupplierDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.suppliersService.createSupplier(
@@ -95,7 +92,7 @@ export class SuppliersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getSuppliers(
     @Query() query: SupplierQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseSupplierDto>>> {
     try {
       const res = await this.suppliersService.getSuppliers(
@@ -128,7 +125,7 @@ export class SuppliersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getSupplierById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseSupplierDto>> {
     try {
       const res = await this.suppliersService.getSupplierById(
@@ -165,7 +162,7 @@ export class SuppliersController {
   async getSupplierLedger(
     @Param('id') id: string,
     @Query() query: LedgerQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<SupplierLedgerDto>> {
     try {
       const res = await this.suppliersService.getSupplierLedger(
@@ -204,7 +201,7 @@ export class SuppliersController {
   async updateSupplier(
     @Param('id') id: string,
     @Body() updateSupplierDto: UpdateSupplierDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.suppliersService.updateSupplier(
@@ -243,7 +240,7 @@ export class SuppliersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteSupplier(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.suppliersService.deleteSupplier(

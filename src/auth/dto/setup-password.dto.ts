@@ -1,17 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
 
-/**
- * Password policy for shop owners.
- *
- * Owners are not tech users, so this is deliberately light: 8+ characters with
- * at least one letter and one digit. No forced symbols, no uppercase rule,
- * no expiry — a weak-but-memorable password the owner actually remembers is
- * far better than a strong one written on a sticky note.
- *
- * Every field is validated here rather than in the service, so the ValidationPipe
- * rejects it before any database work happens.
- */
 export class SetupPasswordDto {
   @ApiProperty({
     description:

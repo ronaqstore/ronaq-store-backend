@@ -1,11 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ArrayMinSize, IsArray, IsUUID } from 'class-validator';
 
-/**
- * Reorder a product's photos. Send the FULL ordered list of image ids —
- * the first entry becomes the cover (lowest sortOrder), the rest follow.
- * The service rejects any list that is not exactly the product's images.
- */
 export class ReorderProductImagesDto {
   @ApiProperty({
     description:

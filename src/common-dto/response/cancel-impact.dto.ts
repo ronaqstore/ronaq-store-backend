@@ -1,9 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * One stock line a cancel will change (WF12 step 3 — the impact preview).
- * Positive quantityChange puts stock back, negative takes it off the shelf.
- */
 export class CancelImpactStockItemDto {
   @ApiProperty({
     description: 'Product the stock line belongs to.',
@@ -25,11 +21,6 @@ export class CancelImpactStockItemDto {
   quantityChange: number;
 }
 
-/**
- * What a cancel will do BEFORE it is saved (WF12 step 3). Read-only: the
- * endpoint behind this DTO writes nothing — the owner sees stock, cash and
- * Udhar/payable impact, then confirms through POST .../cancel.
- */
 export class CancelImpactResponseDto {
   @ApiProperty({
     description: 'Which kind of record is being previewed.',

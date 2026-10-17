@@ -16,7 +16,9 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import { resourceNotFound, duplicateName } from '../../errors/error.builder.js';
+import { buildShopNamedEntityWhere } from '../../helpers/catalog-list.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class CategoriesService {
@@ -27,7 +29,7 @@ export class CategoriesService {
   async createCategory(
     dto: CreateCategoryDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
@@ -45,7 +47,7 @@ export class CategoriesService {
       }
       throw error;
     }
-    // TODO(ai): append audit log once audit-log module is added
+
     return new StatusBaseResponseDTO(true, 'Category created successfully');
   }
 
@@ -61,13 +63,11 @@ export class CategoriesService {
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: any = { shopId };
-    if (query.search) {
-      where.name = { contains: query.search.trim(), mode: 'insensitive' };
-    }
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
-    }
+    const where: Prisma.CategoryWhereInput = buildShopNamedEntityWhere(
+      shopId,
+      query.search,
+      query.isActive,
+    );
 
     const [items, total] = await Promise.all([
       this.prisma.category.findMany({
@@ -104,11 +104,11 @@ export class CategoriesService {
     id: string,
     dto: UpdateCategoryDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const newName = dto.name?.trim();
-    const data: any = {};
+    const data: Prisma.CategoryUpdateManyMutationInput = {};
     if (newName !== undefined) data.name = newName;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     try {
@@ -125,14 +125,14 @@ export class CategoriesService {
       }
       throw error;
     }
-    // TODO(ai): append audit log
+
     return new StatusBaseResponseDTO(true, 'Category updated successfully');
   }
 
   async deleteCategory(
     id: string,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const result = await this.prisma.category.updateMany({
@@ -142,7 +142,7 @@ export class CategoriesService {
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Category', id));
     }
-    // TODO(ai): append audit log
+
     return new StatusBaseResponseDTO(true, 'Category deactivated successfully');
   }
 }

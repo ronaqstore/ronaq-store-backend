@@ -6,10 +6,6 @@ import { ErrorResponseDTO } from '../common-dto/response/error-response.dto.js';
 import { ApiSuccessResponseDTO } from '../common-dto/response/api-success-response.dto.js';
 import { ERROR_DESCRIPTIONS } from './error-description.constant.js';
 
-/**
- * The 4 canned ApiResponse() blocks used on EVERY controller endpoint,
- * in addition to the 200 success shape returned by OK_RESPONSE_STATUS(...).
- */
 export const BAD_REQUEST_RESPONSE: ApiResponseOptions = {
   status: HttpStatus.BAD_REQUEST,
   description: ERROR_DESCRIPTIONS.BAD_REQUEST,
@@ -40,11 +36,6 @@ export const INTERNAL_SERVER_ERROR_RESPONSE: ApiResponseOptions = {
   type: ErrorResponseDTO,
 };
 
-/**
- * Shorthand for @ApiSuccessResponseDecorator argument.
- * Produces a 200 response where the ApiSuccessResponseDTO.data field is of
- * type T, described with the passed human text.
- */
 export const OK_RESPONSE_STATUS = <TModel extends Type<unknown>>(
   type: TModel,
   description: string,

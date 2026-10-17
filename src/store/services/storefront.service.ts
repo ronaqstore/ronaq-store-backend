@@ -12,6 +12,10 @@ import {
 } from '../dto/response-storefront.dto.js';
 import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
 import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
+import type {
+  StorefrontCatalogSettings,
+  StorefrontSettingsProfile,
+} from './storefront.service.types.js';
 import { StoreCacheService } from './store-cache.service.js';
 import {
   resourceNotFound,
@@ -23,7 +27,6 @@ import {
 } from '../../helpers/paginate-helper.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 
-/** Only IN_STOCK phones can be sold or counted as available. */
 const SELLABLE_STATUS = 'IN_STOCK';
 
 const UUID_RE =
@@ -41,7 +44,6 @@ type StorefrontProductRow = Prisma.ProductGetPayload<{
   };
 }>;
 
-/** Everything a public product row needs, in one query. */
 const PRODUCT_INCLUDE = {
   category: { select: { id: true, name: true } },
   brand: { select: { id: true, name: true } },
@@ -55,7 +57,6 @@ const PRODUCT_INCLUDE = {
   },
 } as const;
 
-/** Pick one of the three public stock labels from the real number on hand. */
 function availability(
   quantityOnHand: number,
   lowStockThreshold: number,
@@ -65,14 +66,6 @@ function availability(
   return 'IN_STOCK';
 }
 
-/**
- * The PUBLIC storefront (WF22): read-only, unauthenticated, addressed by
- * slug, and an explicit allowlist — purchases, suppliers, sales, customers,
- * cash, users, cost, IMEI and SKU are never read here.
- *
- * The owner preview routes reuse the same builders so what he sees while the
- * store is OFF is byte-for-byte what customers will get once it is ON.
- */
 @Injectable()
 export class StorefrontService {
   private readonly logger = new Logger(StorefrontService.name);
@@ -82,11 +75,6 @@ export class StorefrontService {
     private readonly cache: StoreCacheService,
   ) {}
 
-  // -------------------------------------------------------------------------
-  // Public routes — by slug (no login)
-  // -------------------------------------------------------------------------
-
-  /** GET /public/stores — search & discover all public active stores. */
   async getStores(
     query: StoreListQueryDto,
   ): Promise<PaginatedResponseDTO<ResponseStoreListItemDto>> {
@@ -146,19 +134,16 @@ export class StorefrontService {
     return new PaginatedResponseDTO(items, total, page, limit);
   }
 
-  /** GET /public/stores/:slug — the public profile (allowlist). */
   async getStore(slug: string): Promise<ResponseStoreDto> {
     const settings = await this.resolvePublicStore(slug);
     return this.toProfile(settings);
   }
 
-  /** GET /public/stores/:slug/categories — filter chips for the store. */
   async getCategories(slug: string): Promise<ResponseStoreCategoriesDto> {
     const settings = await this.resolvePublicStore(slug);
     return this.buildCategories(settings.shopId);
   }
 
-  /** GET /public/stores/:slug/products — one page of the catalog. */
   async getProducts(
     slug: string,
     query: StoreProductsQueryDto,
@@ -167,7 +152,6 @@ export class StorefrontService {
     return this.buildProducts(settings, query);
   }
 
-  /** GET /public/stores/:slug/products/:productId — one product. 404 otherwise. */
   async getProduct(
     slug: string,
     productId: string,
@@ -175,10 +159,6 @@ export class StorefrontService {
     const settings = await this.resolvePublicStore(slug);
     return this.buildProduct(settings, productId);
   }
-
-  // -------------------------------------------------------------------------
-  // Owner preview routes — by shopId, work while the store is OFF
-  // -------------------------------------------------------------------------
 
   async getPreviewStore(shopId: string): Promise<ResponseStoreDto> {
     const settings = await this.resolvePreviewStore(shopId);
@@ -208,15 +188,6 @@ export class StorefrontService {
     return this.buildProduct(settings, productId);
   }
 
-  // -------------------------------------------------------------------------
-  // Internals
-  // -------------------------------------------------------------------------
-
-  /**
-   * WF22 step 3 — missing slug, store OFF and shop SUSPENDED all fail with
-   * the SAME error body, so nobody can tell the cases apart. The slug → row
-   * lookup is cached ~60s (step 2); shops.status is read fresh every time.
-   */
   private async resolvePublicStore(slug: string) {
     let settings = this.cache.get(slug);
     if (!settings) {
@@ -249,22 +220,7 @@ export class StorefrontService {
     return settings;
   }
 
-  private toProfile(settings: {
-    id?: string;
-    slug: string;
-    displayName: string;
-    about: string | null;
-    logoUrl: string | null;
-    bannerUrl: string | null;
-    whatsappNumber: string | null;
-    phoneNumber: string | null;
-    address: string | null;
-    city: string | null;
-    googleMapsUrl: string | null;
-    openingHours: string | null;
-    facebookUrl: string | null;
-    instagramUrl: string | null;
-  }): ResponseStoreDto {
+  private toProfile(settings: StorefrontSettingsProfile): ResponseStoreDto {
     return {
       id: settings.id,
       slug: settings.slug,
@@ -283,11 +239,6 @@ export class StorefrontService {
     };
   }
 
-  /**
-   * The catalog WHERE clause: published + active for this shop, narrowed by
-   * the optional filters. Kept in one place so the list, the count and the
-   * categories endpoint can never drift apart.
-   */
   private catalogWhere(
     shopId: string,
     query?: Pick<StoreProductsQueryDto, 'q' | 'category' | 'brand' | 'inStock'>,
@@ -318,7 +269,11 @@ export class StorefrontService {
     }
     if (query?.inStock === true) {
       where.AND = [
-        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        ...(Array.isArray(where.AND)
+          ? where.AND
+          : where.AND
+            ? [where.AND]
+            : []),
         {
           OR: [
             {
@@ -337,7 +292,7 @@ export class StorefrontService {
   }
 
   private async buildProducts(
-    settings: { shopId: string; showExactStock: boolean },
+    settings: StorefrontCatalogSettings,
     query: StoreProductsQueryDto,
   ): Promise<PaginatedResponseDTO<ResponseStoreProductDto>> {
     const { page, pageSize } = normalizePagination(query.page, query.limit, 50);
@@ -361,11 +316,10 @@ export class StorefrontService {
   }
 
   private async buildProduct(
-    settings: { shopId: string; showExactStock: boolean },
+    settings: StorefrontCatalogSettings,
     productId: string,
   ): Promise<ResponseStoreProductDto> {
     const row = await this.prisma.product.findFirst({
-      // Cross-shop, unpublished and inactive all answer the same 404.
       where: { ...this.catalogWhere(settings.shopId), id: productId },
       include: PRODUCT_INCLUDE,
     });
@@ -400,7 +354,6 @@ export class StorefrontService {
     return { categories, brands };
   }
 
-  /** The only place a product becomes a public response. */
   private toProduct(
     row: StorefrontProductRow,
     showExactStock: boolean,

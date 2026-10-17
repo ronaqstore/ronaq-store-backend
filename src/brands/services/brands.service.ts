@@ -16,7 +16,9 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import { resourceNotFound, duplicateName } from '../../errors/error.builder.js';
+import { buildShopNamedEntityWhere } from '../../helpers/catalog-list.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 @Injectable()
 export class BrandsService {
@@ -27,7 +29,6 @@ export class BrandsService {
   async createBrand(
     dto: CreateBrandDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
@@ -45,7 +46,6 @@ export class BrandsService {
       }
       throw error;
     }
-    // TODO(ai): append audit log once audit-log module is added
     return new StatusBaseResponseDTO(true, 'Brand created successfully');
   }
 
@@ -61,13 +61,11 @@ export class BrandsService {
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: any = { shopId };
-    if (query.search) {
-      where.name = { contains: query.search.trim(), mode: 'insensitive' };
-    }
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
-    }
+    const where: Prisma.BrandWhereInput = buildShopNamedEntityWhere(
+      shopId,
+      query.search,
+      query.isActive,
+    );
 
     const [items, total] = await Promise.all([
       this.prisma.brand.findMany({
@@ -101,11 +99,10 @@ export class BrandsService {
     id: string,
     dto: UpdateBrandDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const newName = dto.name?.trim();
-    const data: any = {};
+    const data: Prisma.BrandUpdateManyMutationInput = {};
     if (newName !== undefined) data.name = newName;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
@@ -123,14 +120,12 @@ export class BrandsService {
       }
       throw error;
     }
-    // TODO(ai): append audit log
     return new StatusBaseResponseDTO(true, 'Brand updated successfully');
   }
 
   async deleteBrand(
     id: string,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const result = await this.prisma.brand.updateMany({
@@ -140,7 +135,6 @@ export class BrandsService {
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Brand', id));
     }
-    // TODO(ai): append audit log
     return new StatusBaseResponseDTO(true, 'Brand deactivated successfully');
   }
 }

@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * KPI strip for the platform dashboard.
- *
- * No MRR / plan revenue — the backend has no billing ledger yet. Counts are
- * derived from Shop.status + subscriptionEndsAt only.
- */
 export class PlatformOverviewResponseDto {
   @ApiProperty({ example: 42 })
   totalShops: number;

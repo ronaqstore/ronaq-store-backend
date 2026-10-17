@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResponseReturnDto } from '../../returns/dto/response-return.dto.js';
 
-/** One line of a sale, as stored. */
 export class ResponseSaleItemDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000201' })
   id: string;
@@ -48,7 +47,6 @@ export class ResponseSaleItemDto {
   total: number;
 }
 
-/** One customer payment against a sale. */
 export class ResponsePaymentDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000401' })
   id: string;

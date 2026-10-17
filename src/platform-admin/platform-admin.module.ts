@@ -7,7 +7,6 @@ import { AuthModule } from '../auth/auth.module.js';
 import { StoreModule } from '../store/store.module.js';
 
 @Module({
-  // StoreModule so a platform admin can change a shop's store slug (WF19).
   imports: [PrismaModule, AppConfigurationModule, AuthModule, StoreModule],
   controllers: [PlatformAdminShopsController],
   providers: [PlatformAdminService],

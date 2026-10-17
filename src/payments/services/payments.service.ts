@@ -25,8 +25,8 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
+import { lockShopForUpdate } from '../../helpers/shop-lock.helper.js';
 import {
-  cancelledRowMutationForbidden,
   duplicateFieldValue,
   paymentExceedsOutstanding,
   resourceNotFound,
@@ -35,6 +35,8 @@ import {
   isUniqueConstraintViolation,
   uniqueViolationColumns,
 } from '../../helpers/prisma-error-helper.js';
+import { PaymentsAllocationService } from './payments-allocation.service.js';
+import { PaymentsCancelService } from './payments-cancel.service.js';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { name: true } },
@@ -45,42 +47,25 @@ type PaymentWithRefs = Prisma.PaymentGetPayload<{
   include: typeof PAYMENT_INCLUDE;
 }>;
 
-type Tx = Prisma.TransactionClient;
-
 const CREATED = 'Payment recorded successfully';
 const ALREADY_SAVED = 'Payment already saved';
-const CANCELLED = 'Payment cancelled successfully';
 
 export type CancelPaymentResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
 
-/** A candidate sale for allocation: id and its stored total, both BigInt-safe. */
-type CandidateSale = { id: string; totalAmount: bigint };
-
-/**
- * WF10 — Customer Pays Udhar.
- *
- * Outstanding is always derived, never stored (AGENTS rule 4): opening
- * balance + Σ active sales − Σ active payments − Σ returns + Σ refunds
- * (WF15 joined the derivation). The amount is applied
- * oldest-first (opening balance, then sales by date) unless the owner names
- * the sales. One payments row per portion, all sharing one receiptGroupId.
- *
- * Lock order is shop → customer → sale rows (sorted): the customer row is the
- * serialiser for opening-balance-only payments, which touch no sale rows, and
- * sorted sale locks stop two overlapping payments from deadlocking.
- */
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly allocation: PaymentsAllocationService,
+    private readonly cancelService: PaymentsCancelService,
+  ) {}
 
   async createPayment(
     dto: CreatePaymentDto,
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // Idempotency first: a replayed request answers "already saved" even if
-    // master data changed since (AGENTS rule 6), same as WF6/WF9.
     const existing = await this.prisma.payment.findFirst({
       where: { shopId, clientRequestId: dto.clientRequestId },
       select: { id: true },
@@ -108,8 +93,7 @@ export class PaymentsService {
         }
         seen.add(id);
       }
-      // "Not in this customer's profile" is answered the same as not found —
-      // the sale must be an ACTIVE sale of THIS customer in THIS shop.
+
       const sales = await this.prisma.sale.findMany({
         where: {
           id: { in: dto.salesIds },
@@ -121,8 +105,10 @@ export class PaymentsService {
       });
       if (sales.length !== dto.salesIds.length) {
         const found = new Set(sales.map((sale) => sale.id));
-        const missing = dto.salesIds.find((id) => !found.has(id))!;
-        throw new NotFoundException(resourceNotFound('Sale', missing));
+        const missing = dto.salesIds.find((id) => !found.has(id));
+        if (missing) {
+          throw new NotFoundException(resourceNotFound('Sale', missing));
+        }
       }
       explicitIds = dto.salesIds;
     }
@@ -132,12 +118,7 @@ export class PaymentsService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const shop = await tx.$queryRaw<Array<{ id: string }>>`
-          SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
-        `;
-        if (!shop?.length) {
-          throw new NotFoundException(resourceNotFound('Shop', shopId));
-        }
+        await lockShopForUpdate(tx, shopId);
 
         const lockedCustomer = await tx.$queryRaw<
           Array<{ name: string; opening_balance: bigint | string }>
@@ -154,11 +135,6 @@ export class PaymentsService {
         const customerName = lockedCustomer[0].name;
         const openingBalance = BigInt(lockedCustomer[0].opening_balance);
 
-        // Replay checked AGAIN under the locks: the expression index
-        // payments_idempotency_uq cannot catch a racing duplicate — the same
-        // clientRequestId landing on a different sale_id would not collide,
-        // and violatedColumn('client_request_id') fails because the index
-        // name carries no column token.
         const replayed = await tx.payment.findFirst({
           where: { shopId, clientRequestId: dto.clientRequestId },
           select: { id: true },
@@ -168,13 +144,13 @@ export class PaymentsService {
         }
 
         const candidates = explicitIds
-          ? await this.lockExplicitSales(
+          ? await this.allocation.lockExplicitSales(
               tx,
               explicitIds,
               shopId,
               dto.customerId,
             )
-          : await this.lockOpenSales(tx, shopId, dto.customerId);
+          : await this.allocation.lockOpenSales(tx, shopId, dto.customerId);
 
         const paidRows = await tx.$queryRaw<
           Array<{ sale_id: string | null; total: bigint | string }>
@@ -194,10 +170,6 @@ export class PaymentsService {
         const openingRemaining =
           openingBalance > paidOpening ? openingBalance - paidOpening : 0n;
 
-        // WF15: returns subtract from what the sale still owes and refunds
-        // add back — outstanding = total − returns − payments + refunds.
-        // Only the candidate sales matter: returns on other sales never take
-        // money off these bills.
         const candidateIds = candidates.map((sale) => sale.id);
         const returnedBySale = new Map<string, bigint>();
         const refundedBySale = new Map<string, bigint>();
@@ -244,7 +216,7 @@ export class PaymentsService {
             (returnedBySale.get(sale.id) ?? 0n) -
             (paidBySale.get(sale.id) ?? 0n) +
             (refundedBySale.get(sale.id) ?? 0n);
-          // Returns can over-pay a bill back to zero; never below.
+
           const left = leftRaw > 0n ? leftRaw : 0n;
           outstanding.set(sale.id, left);
           total += left;
@@ -260,9 +232,6 @@ export class PaymentsService {
           );
         }
 
-        // Oldest-first (WF10 step 3): opening balance first, then sales by
-        // date. Explicit salesIds skips the opening part entirely. Zero
-        // portions are never written (DB CHECK amount > 0).
         const portions: Array<{ saleId: string | null; amount: bigint }> = [];
         let left = amount;
         if (!explicitIds && left > 0n && openingRemaining > 0n) {
@@ -272,15 +241,13 @@ export class PaymentsService {
         }
         for (const sale of candidates) {
           if (left === 0n) break;
-          const available = outstanding.get(sale.id)!;
+          const available = outstanding.get(sale.id) ?? 0n;
           if (available <= 0n) continue;
           const take = left < available ? left : available;
           portions.push({ saleId: sale.id, amount: take });
           left -= take;
         }
 
-        // receiptGroupId has no DB default — one uuid per request, shared by
-        // every row this request writes (the receipt the owner sees).
         const receiptGroupId = randomUUID();
         for (const portion of portions) {
           const payment = await tx.payment.create({
@@ -304,8 +271,6 @@ export class PaymentsService {
               type: CashMovementType.CUSTOMER_PAYMENT,
               direction: CashDirection.IN,
               amount: portion.amount,
-              // The drawer ledger moves on the business day the money was
-              // received (WF7 convention), not on "now".
               movementDate: paymentMoment,
               referenceType: ReferenceType.PAYMENT,
               referenceId: payment.id,
@@ -317,11 +282,6 @@ export class PaymentsService {
         return new StatusBaseResponseDTO(true, CREATED);
       });
     } catch (error) {
-      // Two requests raced the same clientRequestId: the loser rolls back and
-      // must answer "already saved", not 400 (rule 6). `payments_idempotency_uq`
-      // is the only unique index a payment insert can hit (plus the PK), so an
-      // undetermined P2002 is that index; a NAMED other index is a different
-      // bug and must surface as 500.
       if (isUniqueConstraintViolation(error)) {
         const columns = uniqueViolationColumns(error);
         if (
@@ -336,200 +296,20 @@ export class PaymentsService {
     }
   }
 
-  /**
-   * WF12 — Cancel a customer payment with reason.
-   *
-   * One $transaction: lock shop → lock the payment row → mark it CANCELLED
-   * with reason/time/user → one cash REVERSAL (OUT) pointing back at the
-   * original CUSTOMER_PAYMENT movement. The Udhar comes back automatically
-   * because outstanding is derived from ACTIVE rows only. The money goes
-   * back to the customer, so cash below zero is a soft overdraft prompt
-   * (200, nothing written) confirmed with confirmOverdraft: true.
-   */
-  async cancelPayment(
+  cancelPayment(
     id: string,
     dto: CancelPaymentDto,
     shopId: string,
     userId: string,
   ): Promise<CancelPaymentResult> {
-    // Pre-transaction tenant + existence check so we 404 fast without a lock.
-    const payment = await this.prisma.payment.findFirst({
-      where: { id, shopId },
-      select: { id: true, status: true, amount: true },
-    });
-    if (!payment) {
-      throw new NotFoundException(resourceNotFound('Payment', id));
-    }
-    if (payment.status === RecordStatus.CANCELLED) {
-      throw new BadRequestException(
-        cancelledRowMutationForbidden('Payment', id),
-      );
-    }
-
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      const shop = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
-      `;
-      if (!shop?.length) {
-        throw new NotFoundException(resourceNotFound('Shop', shopId));
-      }
-
-      // Re-check under the payment row lock: two cancels racing the same
-      // payment must not both pass the pre-check (rule 8: cancel once).
-      const locked = await tx.$queryRaw<
-        Array<{ status: string; amount: bigint | string }>
-      >`
-        SELECT status, amount FROM payments
-        WHERE id = ${id} AND shop_id = ${shopId}
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(resourceNotFound('Payment', id));
-      }
-      if (locked[0].status !== RecordStatus.ACTIVE) {
-        throw new BadRequestException(
-          cancelledRowMutationForbidden('Payment', id),
-        );
-      }
-      const amount = BigInt(locked[0].amount);
-
-      const original = await tx.cashMovement.findFirst({
-        where: {
-          shopId,
-          type: CashMovementType.CUSTOMER_PAYMENT,
-          referenceType: ReferenceType.PAYMENT,
-          referenceId: id,
-        },
-        select: { id: true },
-      });
-      if (!original) {
-        throw new NotFoundException(
-          resourceNotFound('Cash movement for payment', id),
-        );
-      }
-
-      let overdraft = false;
-      const after = (await this.currentCash(tx, shopId)) - Number(amount);
-      if (after < 0) {
-        if (!dto.confirmOverdraft) {
-          return { kind: 'overdraft' as const, shortfall: -after };
-        }
-        overdraft = true;
-      }
-
-      const now = new Date();
-      await tx.payment.update({
-        where: { id, shopId },
-        data: {
-          status: RecordStatus.CANCELLED,
-          cancelledAt: now,
-          cancelReason: dto.cancelReason,
-          cancelledById: userId,
-        },
-      });
-
-      await tx.cashMovement.create({
-        data: {
-          shopId,
-          type: CashMovementType.REVERSAL,
-          direction: CashDirection.OUT,
-          amount,
-          movementDate: now,
-          referenceType: ReferenceType.PAYMENT,
-          referenceId: id,
-          reversesMovementId: original.id,
-          isOverdraft: overdraft,
-          note: dto.cancelReason,
-          createdById: userId,
-        },
-      });
-
-      return { kind: 'cancelled' as const };
-    });
-
-    if (outcome.kind === 'overdraft') {
-      return new PurchaseOverdraftResponseDto(
-        outcome.shortfall,
-        'payment cancellation',
-      );
-    }
-    return new StatusBaseResponseDTO(true, CANCELLED);
+    return this.cancelService.cancelPayment(id, dto, shopId, userId);
   }
 
-  /**
-   * WF12 step 3 — the impact preview for one customer payment. Read-only
-   * twin of cancelPayment: cash that would be reversed (OUT) and the Udhar
-   * the owner gets back. Nothing is locked or written.
-   */
-  async getCancelImpact(
+  getCancelImpact(
     id: string,
     shopId: string,
   ): Promise<CancelImpactResponseDto> {
-    const payment = await this.prisma.payment.findFirst({
-      where: { id, shopId },
-      select: { id: true, status: true, amount: true, customerId: true },
-    });
-    if (!payment) {
-      throw new NotFoundException(resourceNotFound('Payment', id));
-    }
-    if (payment.status === RecordStatus.CANCELLED) {
-      throw new BadRequestException(
-        cancelledRowMutationForbidden('Payment', id),
-      );
-    }
-
-    const currentCash = await this.currentCash(this.prisma, shopId);
-    const cashAfter = currentCash - Number(payment.amount);
-
-    let customerUdharAfter: number | null = null;
-    if (payment.customerId) {
-      const [customer, salesAgg, paymentsAgg] = await Promise.all([
-        this.prisma.customer.findFirst({
-          where: { id: payment.customerId, shopId },
-          select: { openingBalance: true },
-        }),
-        this.prisma.sale.aggregate({
-          where: {
-            shopId,
-            customerId: payment.customerId,
-            status: RecordStatus.ACTIVE,
-          },
-          _sum: { totalAmount: true },
-        }),
-        this.prisma.payment.aggregate({
-          where: {
-            shopId,
-            customerId: payment.customerId,
-            status: RecordStatus.ACTIVE,
-          },
-          _sum: { amount: true },
-        }),
-      ]);
-      if (customer) {
-        const balance =
-          Number(customer.openingBalance) +
-          Number(salesAgg._sum.totalAmount ?? 0n) -
-          Number(paymentsAgg._sum.amount ?? 0n);
-        // Dropping this payment from the active sum gives the money back.
-        customerUdharAfter = balance + Number(payment.amount);
-      }
-    }
-
-    return {
-      recordType: 'PAYMENT',
-      recordId: payment.id,
-      recordNo: null,
-      currentCash,
-      cashReversedAmount: Number(payment.amount),
-      cashReversedDirection: 'OUT',
-      cashAfter,
-      willCauseOverdraft: cashAfter < 0,
-      customerUdharAfter,
-      supplierPayableAfter: null,
-      stockItems: [],
-      blocked: false,
-      blockedReason: null,
-    };
+    return this.cancelService.getCancelImpact(id, shopId);
   }
 
   async getPayments(
@@ -597,79 +377,6 @@ export class PaymentsService {
     });
     if (!row) throw new NotFoundException(resourceNotFound('Payment', id));
     return this.toResponse(row);
-  }
-
-  /**
-   * Auto mode: lock every ACTIVE sale of this customer, oldest first. Locking
-   * all of them (not just the ones allocation will reach) keeps the lock set
-   * deterministic, so two concurrent payments always queue in the same order.
-   */
-  private async lockOpenSales(
-    tx: Tx,
-    shopId: string,
-    customerId: string,
-  ): Promise<CandidateSale[]> {
-    const rows = await tx.$queryRaw<
-      Array<{ id: string; total_amount: bigint | string }>
-    >`
-      SELECT id, total_amount FROM sales
-      WHERE shop_id = ${shopId} AND customer_id = ${customerId}
-        AND status = 'ACTIVE'
-      ORDER BY sale_date, id
-      FOR UPDATE
-    `;
-    return (rows ?? []).map((row) => ({
-      id: row.id,
-      totalAmount: BigInt(row.total_amount),
-    }));
-  }
-
-  /**
-   * Explicit mode: lock the named sales one by one, always in (saleDate, id)
-   * order so two overlapping explicit payments acquire the same lock order.
-   */
-  private async lockExplicitSales(
-    tx: Tx,
-    ids: string[],
-    shopId: string,
-    customerId: string,
-  ): Promise<CandidateSale[]> {
-    const ordered = await tx.sale.findMany({
-      where: { id: { in: ids }, shopId, customerId, status: 'ACTIVE' },
-      orderBy: [{ saleDate: 'asc' }, { id: 'asc' }],
-      select: { id: true, totalAmount: true },
-    });
-    if (ordered.length !== ids.length) {
-      const found = new Set(ordered.map((sale) => sale.id));
-      const missing = ids.find((id) => !found.has(id))!;
-      throw new NotFoundException(resourceNotFound('Sale', missing));
-    }
-    for (const sale of ordered) {
-      const locked = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM sales
-        WHERE id = ${sale.id} AND shop_id = ${shopId} AND status = 'ACTIVE'
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(resourceNotFound('Sale', sale.id));
-      }
-    }
-    return ordered.map((sale) => ({
-      id: sale.id,
-      totalAmount: sale.totalAmount,
-    }));
-  }
-
-  private async currentCash(tx: Tx, shopId: string): Promise<number> {
-    const inbound = await tx.cashMovement.aggregate({
-      where: { shopId, direction: CashDirection.IN },
-      _sum: { amount: true },
-    });
-    const outbound = await tx.cashMovement.aggregate({
-      where: { shopId, direction: CashDirection.OUT },
-      _sum: { amount: true },
-    });
-    return Number(inbound._sum.amount ?? 0) - Number(outbound._sum.amount ?? 0);
   }
 
   private toResponse(row: PaymentWithRefs): ResponsePaymentDto {

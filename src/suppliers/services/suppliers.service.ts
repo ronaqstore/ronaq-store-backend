@@ -14,6 +14,7 @@ import { LedgerQueryFilterDto } from '../dto/ledger-query.filter.js';
 import { ResponseSupplierDto } from '../dto/response-supplier.dto.js';
 import { SupplierLedgerDto } from '../dto/response-supplier-ledger.dto.js';
 import { LedgerEntryDto } from '../../common-dto/response/ledger-entry.dto.js';
+import { finalizePartyLedger } from '../../helpers/ledger-balance.helper.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import {
@@ -28,22 +29,12 @@ import {
 
 const WALK_IN_SELLER = 'supplier';
 
-/** No joins on suppliers, so the payload is the plain scalar row. */
 type SupplierRow = Prisma.SupplierGetPayload<{
   select?: null;
   omit?: null;
   include?: null;
 }>;
 
-/**
- * WF5 — Add a Supplier.
- *
- * Deliberately simple: no $transaction (one insert, nothing else to keep in
- * step) and no duplicate-name guard, because `suppliers` has only
- * `@@index([shopId, name])` — not a unique constraint. Blocking duplicates in
- * code would promise something PostgreSQL does not enforce, and a race would
- * break it anyway. Matches ERD v2 page 6 and WF5 step 4.
- */
 @Injectable()
 export class SuppliersService {
   private readonly logger = new Logger(SuppliersService.name);
@@ -53,7 +44,7 @@ export class SuppliersService {
   async createSupplier(
     dto: CreateSupplierDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     await this.prisma.supplier.create({
@@ -65,8 +56,6 @@ export class SuppliersService {
         notes: dto.notes?.trim() || null,
         openingBalance: BigInt(dto.openingBalance ?? 0),
         isActive: dto.isActive ?? true,
-        // isSystem is never client-settable: only onboarding creates the
-        // protected "Walk-in seller" row.
       },
     });
 
@@ -91,13 +80,13 @@ export class SuppliersService {
     }
     if (query.search?.trim()) {
       const term = query.search.trim();
-      // Top-level keys are ANDed, so this narrows rather than widens the scope.
+
       const branches: Prisma.SupplierWhereInput[] = [
         { name: { contains: term, mode: 'insensitive' } },
         { phone: { contains: term, mode: 'insensitive' } },
         { address: { contains: term, mode: 'insensitive' } },
       ];
-      // Rows store 923001234567 but the owner types 0300-1234567 — match both.
+
       const canonical = normalizePhone(term);
       if (canonical && canonical !== term) {
         branches.push({ phone: { contains: canonical, mode: 'insensitive' } });
@@ -134,14 +123,6 @@ export class SuppliersService {
     return this.toResponse(row);
   }
 
-  /**
-   * WF11 supplier side — why the shop still owes this supplier. Same idea as
-   * the customer ledger: no ledger table, just the real purchase and
-   * supplier-payment rows with cancelled ones visible but counted as 0.
-   * Opening-stock purchases are excluded everywhere because they create no
-   * payable (WF7 rule), so `balance` always equals
-   * GET /supplier-payments/payable/{id}.payable.
-   */
   async getSupplierLedger(
     id: string,
     query: LedgerQueryFilterDto,
@@ -214,7 +195,7 @@ export class SuppliersService {
         id: p.id,
         type: 'SUPPLIER_PAYMENT',
         date: p.paymentDate.toISOString().slice(0, 10),
-        // null purchaseId = a payment against the opening balance.
+
         reference: p.purchaseId
           ? (purchaseNoById.get(p.purchaseId) ?? null)
           : null,
@@ -225,51 +206,37 @@ export class SuppliersService {
         amount: p.amount,
         delta: p.status === RecordStatus.ACTIVE ? -p.amount : 0n,
       })),
-    ].sort(
-      (a, b) =>
-        a.sortAt - b.sortAt ||
-        a.createdAt - b.createdAt ||
-        a.id.localeCompare(b.id),
-    );
+    ];
 
-    let running = supplier.openingBalance;
-    const all: LedgerEntryDto[] = raws.map((r) => {
-      running += r.delta;
-      return {
-        id: r.id,
-        type: r.type,
-        date: r.date,
-        reference: r.reference,
-        notes: r.notes,
-        status: r.status,
-        amount: Number(r.amount),
-        delta: Number(r.delta),
-        balance: Number(running),
-      };
-    });
-
-    const skip = getSkipNumber(page, pageSize);
-    return {
-      supplierId: supplier.id,
-      supplierName: supplier.name,
-      openingBalance: Number(supplier.openingBalance),
-      balance: Number(running),
+    return finalizePartyLedger(
+      raws,
+      ({ id, type, date, reference, notes, status, amount, delta }) => ({
+        id,
+        type,
+        date,
+        reference,
+        notes,
+        status,
+        amount,
+        delta,
+      }),
+      supplier.openingBalance,
       page,
       pageSize,
-      total: all.length,
-      items: all.slice(skip, skip + pageSize),
-    };
+      {
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+      },
+    );
   }
 
   async updateSupplier(
     id: string,
     dto: UpdateSupplierDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // Read first: isSystem decides what may change, and the shopId in the same
-    // where clause stops one shop editing another shop's supplier.
     const existing = await this.prisma.supplier.findFirst({
       where: { id, shopId },
     });
@@ -280,7 +247,6 @@ export class SuppliersService {
     const newName = dto.name?.trim();
 
     if (existing.isSystem) {
-      // ERD v2 page 6: "is_system = true ... cannot be deleted or renamed."
       if (newName !== undefined && newName !== existing.name) {
         throw new ForbiddenException(systemRowProtected(WALK_IN_SELLER));
       }
@@ -311,11 +277,9 @@ export class SuppliersService {
   async deleteSupplier(
     id: string,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // Suppliers are deactivated, never deleted (WF5 step 4). updateMany cannot
-    // evaluate isSystem, so we read the row first to protect the Walk-in seller.
     const existing = await this.prisma.supplier.findFirst({
       where: { id, shopId },
     });

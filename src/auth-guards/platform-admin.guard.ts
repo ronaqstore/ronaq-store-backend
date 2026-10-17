@@ -6,44 +6,31 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { adminAccountDisabled, invalidToken } from '../errors/error.builder.js';
-import {
-  AuthenticatedPlatformAdmin,
-  AuthTokenType,
-  verifyTokenOfType,
-} from './auth-token.js';
+import { AuthenticatedPlatformAdmin, AuthTokenType } from './auth-token.js';
+import { JwtGuardBase } from './jwt-guard.base.js';
 
-/**
- * Guard for the SaaS side (platform admins). Kept separate from AuthGuard on
- * purpose: an admin has no shop_id, so attaching them to a shop request would
- * silently produce `shopId: null` in every downstream query.
- *
- * A platform admin token can never open an OWNER route, and vice versa —
- * see AuthTokenType.
- */
 @Injectable()
-export class PlatformAdminGuard implements CanActivate {
+export class PlatformAdminGuard extends JwtGuardBase implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: AppConfigurationService,
-    private readonly prisma: PrismaService,
-  ) {}
+    jwtService: JwtService,
+    configService: AppConfigurationService,
+    prisma: PrismaService,
+  ) {
+    super(jwtService, configService, prisma);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
-
-    const payload = await verifyTokenOfType(
-      this.jwtService,
-      this.configService.jwtSecret,
-      request.headers.authorization,
+    const { request, sub } = await this.bearerPayload(
+      context,
       AuthTokenType.PLATFORM_ADMIN,
     );
 
     const admin = await this.prisma.platformAdmin.findUnique({
-      where: { id: payload.sub },
+      where: { id: sub },
       select: { id: true, name: true, isActive: true },
     });
 

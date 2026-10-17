@@ -15,10 +15,6 @@ import {
 
 const IMEI_PATTERN = /^[0-9A-Za-z]{4,20}$/;
 
-/**
- * One line of a purchase. Nested inside CreatePurchaseDto with
- * @Type(() => PurchaseItemDto) so class-validator actually walks the children.
- */
 export class PurchaseItemDto {
   @ApiProperty({
     description:

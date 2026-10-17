@@ -17,14 +17,6 @@ interface Bucket {
   resetAt: number;
 }
 
-/**
- * WF22 step 8 — public storefront rate limit (100 requests / 60s per IP).
- *
- * Deliberately a tiny in-memory fixed window instead of `@nestjs/throttler`:
- * throttler is CommonJS-only and its internal `require('@nestjs/common')`
- * crashes on AWS Lambda (which disables `require(esm)`), taking the whole
- * function down. An ESM-safe guard removes that single point of failure.
- */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
   private static readonly buckets = new Map<string, Bucket>();

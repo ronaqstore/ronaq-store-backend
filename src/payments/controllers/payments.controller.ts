@@ -40,6 +40,7 @@ import { CancelPaymentDto } from '../dto/cancel-payment.dto.js';
 import { PaymentQueryFilterDto } from '../dto/payment-query.filter.js';
 import { ResponsePaymentDto } from '../dto/response-payment.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('payments')
 @Controller('payments')
@@ -67,7 +68,7 @@ export class PaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createPayment(
     @Body() createPaymentDto: CreatePaymentDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.paymentsService.createPayment(
@@ -106,7 +107,7 @@ export class PaymentsController {
   async cancelPayment(
     @Param('id') id: string,
     @Body() cancelPaymentDto: CancelPaymentDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<CancelPaymentResult>> {
     try {
@@ -116,7 +117,6 @@ export class PaymentsController {
         req.user.shopId,
         req.user.userId,
       );
-      // The overdraft prompt writes nothing — must not claim 201.
       res.status('confirmOverdraft' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
@@ -149,7 +149,7 @@ export class PaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
       const res = await this.paymentsService.getCancelImpact(
@@ -185,7 +185,7 @@ export class PaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getPayments(
     @Query() query: PaymentQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponsePaymentDto>>> {
     try {
       const res = await this.paymentsService.getPayments(
@@ -218,7 +218,7 @@ export class PaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getPaymentById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponsePaymentDto>> {
     try {
       const res = await this.paymentsService.getPaymentById(

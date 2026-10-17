@@ -3,39 +3,36 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
+  InternalServerErrorException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
-  HttpException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  PaginatedResponseDTO,
+  logError,
+} from '../../helpers/crud-controller.imports.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { BrandsService } from '../services/brands.service.js';
 import { CreateBrandDto } from '../dto/create-brand.dto.js';
 import { UpdateBrandDto } from '../dto/update-brand.dto.js';
 import { BrandQueryFilterDto } from '../dto/brand-query.filter.js';
 import { ResponseBrandDto } from '../dto/response-brand.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
 
 @ApiTags('brands')
 @Controller('brands')
@@ -56,10 +53,9 @@ export class BrandsController {
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
-  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async createBrand(
     @Body() createBrandDto: CreateBrandDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.brandsService.createBrand(
@@ -81,7 +77,7 @@ export class BrandsController {
   @ApiOperation({
     summary: 'List brands',
     description:
-      'Paginated list scoped to the shop in the JWT. Supports name search, isActive filter and sorting.',
+      'Paginated list of brands for the shop in the JWT. Supports search, isActive filter and sort.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Brands fetched successfully'),
@@ -89,10 +85,9 @@ export class BrandsController {
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
-  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getBrands(
     @Query() query: BrandQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseBrandDto>>> {
     try {
       const res = await this.brandsService.getBrands(query, req.user.shopId);
@@ -108,21 +103,17 @@ export class BrandsController {
   }
 
   @Get('/:id')
-  @ApiOperation({
-    summary: 'Get one brand by id',
-    description:
-      'Returns a single brand. Returns 404 if it does not exist or belongs to another shop.',
-  })
+  @ApiOperation({ summary: 'Get one brand by id' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(ResponseBrandDto, 'Brand fetched successfully'),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
-  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getBrandById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseBrandDto>> {
     try {
       const res = await this.brandsService.getBrandById(id, req.user.shopId);
@@ -138,22 +129,18 @@ export class BrandsController {
   }
 
   @Patch('/:id')
-  @ApiOperation({
-    summary: 'Update a brand',
-    description:
-      'Partial update. Only the fields you send are changed. Setting isActive to false hides the brand without deleting it.',
-  })
+  @ApiOperation({ summary: 'Update a brand' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(StatusBaseResponseDTO, 'Brand updated successfully'),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
-  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async updateBrand(
     @Param('id') id: string,
     @Body() updateBrandDto: UpdateBrandDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.brandsService.updateBrand(
@@ -176,19 +163,18 @@ export class BrandsController {
   @Delete('/:id')
   @ApiOperation({
     summary: 'Deactivate a brand',
-    description:
-      'Soft delete. Sets isActive to false and keeps the row so historical products keep their brand. Nothing is ever removed.',
+    description: 'Soft-deletes by setting isActive to false.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(StatusBaseResponseDTO, 'Brand deactivated successfully'),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
-  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async deleteBrand(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.brandsService.deleteBrand(
