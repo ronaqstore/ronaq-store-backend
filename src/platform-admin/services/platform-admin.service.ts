@@ -5,14 +5,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { ShopStatus } from '../../generated/prisma/enums.js';
 import { AuthService } from '../../auth/services/auth.service.js';
 import {
   normalizePhone,
   normalizePhoneOrRaw,
 } from '../../helpers/phone.helper.js';
+import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
 import { logInfo } from '../../helpers/logger-helper.js';
+import {
+  getSkipNumber,
+  normalizePagination,
+} from '../../helpers/paginate-helper.js';
 import {
   oneOwnerPerShop,
   invalidOwnerPhone,
@@ -33,6 +39,13 @@ import { UpdateSubscriptionDto } from '../dto/update-subscription.dto.js';
 import { UpdateSubscriptionResponseDto } from '../dto/update-subscription-response.dto.js';
 import { ShopOwnerStatusResponseDto } from '../dto/shop-owner-status-response.dto.js';
 import { ChangeStoreSlugDto } from '../dto/change-store-slug.dto.js';
+import {
+  ListShopsQueryDto,
+  type PlatformShopAccessStatus,
+} from '../dto/list-shops-query.dto.js';
+import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
+import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
+import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { StoreService } from '../../store/services/store.service.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import {
@@ -54,6 +67,126 @@ export class PlatformAdminService {
     private readonly authService: AuthService,
     private readonly storeService: StoreService,
   ) {}
+
+  /**
+   * Platform dashboard KPIs. Counts only — there is no plan/MRR model yet.
+   */
+  async getOverview(): Promise<PlatformOverviewResponseDto> {
+    const now = new Date();
+
+    const [totalShops, activeShops, expiredShops, suspendedShops] =
+      await Promise.all([
+        this.prisma.shop.count(),
+        this.prisma.shop.count({
+          where: {
+            status: ShopStatus.ACTIVE,
+            subscriptionEndsAt: { gt: now },
+          },
+        }),
+        this.prisma.shop.count({
+          where: {
+            status: ShopStatus.ACTIVE,
+            subscriptionEndsAt: { lte: now },
+          },
+        }),
+        this.prisma.shop.count({
+          where: { status: ShopStatus.SUSPENDED },
+        }),
+      ]);
+
+    return { totalShops, activeShops, expiredShops, suspendedShops };
+  }
+
+  /**
+   * Paginated shop directory for the platform admin panel.
+   * Subscription is a field on Shop — there is no separate Subscription table.
+   */
+  async listShops(
+    query: ListShopsQueryDto,
+  ): Promise<PaginatedResponseDTO<ResponsePlatformShopDto>> {
+    const { page, pageSize } = normalizePagination(
+      query.page,
+      query.pageSize,
+      100,
+    );
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortOrder = query.sortOrder ?? 'desc';
+    const now = new Date();
+
+    const andParts: Prisma.ShopWhereInput[] = [];
+
+    const accessStatuses = query.accessStatus ?? [];
+    if (accessStatuses.length > 0) {
+      const accessClauses = accessStatuses.map((status) =>
+        this.accessStatusWhere(status, now),
+      );
+      andParts.push(
+        accessClauses.length === 1
+          ? (accessClauses[0] as Prisma.ShopWhereInput)
+          : { OR: accessClauses },
+      );
+    }
+
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      const branches: Prisma.ShopWhereInput[] = [
+        { name: { contains: term, mode: 'insensitive' } },
+        { phone: { contains: term, mode: 'insensitive' } },
+        { address: { contains: term, mode: 'insensitive' } },
+        { users: { some: { name: { contains: term, mode: 'insensitive' } } } },
+        { users: { some: { phone: { contains: term, mode: 'insensitive' } } } },
+      ];
+      const canonical = normalizePhone(term);
+      if (canonical && canonical !== term) {
+        branches.push({ phone: { contains: canonical, mode: 'insensitive' } });
+        branches.push({
+          users: {
+            some: { phone: { contains: canonical, mode: 'insensitive' } },
+          },
+        });
+      }
+      andParts.push({ OR: branches });
+    }
+
+    const where: Prisma.ShopWhereInput =
+      andParts.length === 0
+        ? {}
+        : andParts.length === 1
+          ? (andParts[0] as Prisma.ShopWhereInput)
+          : { AND: andParts };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.shop.findMany({
+        where,
+        skip: getSkipNumber(page, pageSize),
+        take: pageSize,
+        orderBy: { [sortBy]: sortOrder },
+        include: {
+          users: {
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              passwordHash: true,
+            },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+          },
+          storeSettings: {
+            select: { slug: true },
+          },
+        },
+      }),
+      this.prisma.shop.count({ where }),
+    ]);
+
+    return new PaginatedResponseDTO<ResponsePlatformShopDto>(
+      rows.map((row) => this.toPlatformShopResponse(row, now)),
+      total,
+      page,
+      pageSize,
+    );
+  }
 
   /**
    * WF1 — onboard a shop in one call.
@@ -89,15 +222,12 @@ export class PlatformAdminService {
       );
     }
 
-    // Cheap pre-check for a friendly message. The unique index on users.phone is
-    // still the real guarantee — see the P2002 catch below, which is what
-    // actually protects against two admins creating a shop at the same moment.
-    const existingOwner = await this.prisma.user.findUnique({
-      where: { phone: ownerPhone },
-      select: { shop: { select: { name: true } } },
-    });
+    // Cheap pre-check for a friendly message. Login phones are unique across
+    // users AND platform_admins (DB trigger + per-table unique indexes). The
+    // P2002 catch below still covers two concurrent creates racing.
+    const phoneConflict = await findLoginPhoneConflict(this.prisma, ownerPhone);
 
-    if (existingOwner) {
+    if (phoneConflict) {
       throw new BadRequestException(
         ownerPhoneAlreadyRegistered(dto.ownerPhone.trim()),
       );
@@ -385,5 +515,80 @@ export class PlatformAdminService {
     isActive: boolean,
   ): Promise<UpdateSubscriptionResponseDto> {
     return this.updateSubscription(shopId, { isActive });
+  }
+
+  private toPlatformShopResponse(
+    shop: {
+      id: string;
+      name: string;
+      phone: string | null;
+      address: string | null;
+      status: ShopStatus;
+      subscriptionEndsAt: Date;
+      createdAt: Date;
+      users: Array<{
+        id: string;
+        name: string;
+        phone: string;
+        passwordHash: string | null;
+      }>;
+      storeSettings: { slug: string } | null;
+    },
+    now: Date,
+  ): ResponsePlatformShopDto {
+    const owner = shop.users[0] ?? null;
+    const accessStatus = this.deriveAccessStatus(
+      shop.status,
+      shop.subscriptionEndsAt,
+      now,
+    );
+
+    return {
+      id: shop.id,
+      name: shop.name,
+      phone: shop.phone,
+      address: shop.address,
+      status: shop.status,
+      accessStatus,
+      isAccessible:
+        shop.status === ShopStatus.ACTIVE &&
+        shop.subscriptionEndsAt.getTime() > now.getTime(),
+      subscriptionEndsAt: shop.subscriptionEndsAt,
+      ownerId: owner?.id ?? null,
+      ownerName: owner?.name ?? null,
+      ownerPhone: owner?.phone ?? null,
+      hasPassword: Boolean(owner?.passwordHash),
+      storeSlug: shop.storeSettings?.slug ?? null,
+      createdAt: shop.createdAt,
+    };
+  }
+
+  private deriveAccessStatus(
+    status: ShopStatus,
+    subscriptionEndsAt: Date,
+    now: Date,
+  ): PlatformShopAccessStatus {
+    if (status === ShopStatus.SUSPENDED) return 'SUSPENDED';
+    if (subscriptionEndsAt.getTime() <= now.getTime()) return 'EXPIRED';
+    return 'ACTIVE';
+  }
+
+  private accessStatusWhere(
+    accessStatus: PlatformShopAccessStatus,
+    now: Date,
+  ): Prisma.ShopWhereInput {
+    if (accessStatus === 'ACTIVE') {
+      return {
+        status: ShopStatus.ACTIVE,
+        subscriptionEndsAt: { gt: now },
+      };
+    }
+    if (accessStatus === 'EXPIRED') {
+      return {
+        status: ShopStatus.ACTIVE,
+        subscriptionEndsAt: { lte: now },
+      };
+    }
+    return { status: ShopStatus.SUSPENDED };
   }
 }

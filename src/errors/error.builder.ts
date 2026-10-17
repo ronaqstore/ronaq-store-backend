@@ -35,11 +35,14 @@ export const ownerPhoneAlreadyRegistered = (
   return new ErrorResponseDTO(
     'This phone number already has a Ronaq Store account',
     [
-      `${phone} is already linked to another shop. A phone number can only own one shop, so find that shop and reissue its setup link instead of creating a duplicate.`,
+      `${phone} is already in use. Every login mobile number must be unique across the whole platform — shop owners and platform admins included. Use a different number.`,
     ],
     HttpStatus.BAD_REQUEST,
   );
 };
+
+export const loginPhoneAlreadyTaken = (phone: string): ErrorResponseDTO =>
+  ownerPhoneAlreadyRegistered(phone);
 
 export const oneOwnerPerShop = (shopName: string): ErrorResponseDTO => {
   return new ErrorResponseDTO(

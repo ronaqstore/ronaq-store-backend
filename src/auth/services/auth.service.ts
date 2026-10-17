@@ -23,6 +23,7 @@ import {
   adminAccountDisabled,
 } from '../../errors/error.builder.js';
 import { normalizePhone } from '../../helpers/phone.helper.js';
+import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import {
   generateOpaqueToken,
   hashOpaqueToken,
@@ -38,7 +39,6 @@ import {
   OwnerLoginResponseDto,
   PlatformAdminLoginResponseDto,
 } from '../dto/login-response.dto.js';
-import { PasswordSetupLinkResponseDto } from '../dto/password-setup-link-response.dto.js';
 import { MeResponseDto } from '../dto/me-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { RegisterOwnerDto } from '../dto/register-owner.dto.js';
@@ -85,12 +85,15 @@ export class AuthService {
       );
     }
 
-    const existingUser = await this.prisma.user.findUnique({
-      where: { phone: ownerPhone },
-    });
-    if (existingUser) {
+    const phoneConflict = await findLoginPhoneConflict(
+      this.prisma,
+      ownerPhone,
+    );
+    if (phoneConflict) {
       throw new BadRequestException(
-        'This mobile number is already registered. Please log in.',
+        phoneConflict === 'PLATFORM_ADMIN'
+          ? 'This mobile number is already registered as a platform admin. Use a different number.'
+          : 'This mobile number is already registered. Please log in.',
       );
     }
 
@@ -345,64 +348,9 @@ export class AuthService {
   }
 
   /**
-   * WF1 step 3 / password reset — mint a one-time setup link for an owner.
-   *
-   * Ronaq Store deliberately sends no email and no SMS. The admin copies the URL
-   * from this response and forwards it to the owner on WhatsApp, which is how
-   * the target user actually communicates.
-   *
-   * Issuing a link also resets the password, so this is both the first-setup
-   * and the "I forgot my password" path — there is no separate reset endpoint
-   * because there would be no way to deliver it.
-   *
-   * Issuing again invalidates the previous link: only one token is ever live.
-   */
-  async issuePasswordSetupLink(
-    userId: string,
-  ): Promise<PasswordSetupLinkResponseDto> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-
-    if (!user) {
-      throw new NotFoundException(resourceNotFound('User', userId));
-    }
-
-    const replacedPreviousLink = Boolean(
-      user.passwordSetupTokenHash &&
-      user.passwordSetupExpiresAt &&
-      user.passwordSetupExpiresAt.getTime() > Date.now(),
-    );
-    const link = await this.buildSetupLink(user.id);
-
-    logInfo(
-      'auth.service.ts',
-      'issuePasswordSetupLink',
-      `Password setup link issued for ${user.phone}, valid until ${link.expiresAt.toISOString()}`,
-      {
-        userId,
-        shopId: user.shopId,
-        // Not the setupUrl: it embeds the plaintext token, so logging it would
-        // hand account takeover to anyone who can read the logs.
-        expiresAt: link.expiresAt.toISOString(),
-      },
-    );
-
-    return {
-      userId: user.id,
-      userName: user.name,
-      userPhone: user.phone,
-      expiresAt: link.expiresAt,
-      setupUrl: link.setupUrl,
-      replacedPreviousLink,
-    };
-  }
-
-  /**
-   * Mint a setup token for a user that already exists.
-   *
-   * Split out from issuePasswordSetupLink so shop onboarding can call it with
-   * its own transaction client — the user row is created inside that
-   * transaction, so it is not visible to the main Prisma client yet and
-   * issuePasswordSetupLink could not find it.
+   * Mint a one-time setup token for platform onboarding (createShop).
+   * Owners who self-register already set a password; they change it later via
+   * POST /auth/change-password. There is no admin "reissue setup link" path.
    */
   async buildSetupLink(
     userId: string,
