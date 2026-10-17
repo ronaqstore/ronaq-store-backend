@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/** One saved photo of a product, ordered by sortOrder (lowest = cover). */
 export class ResponseProductImageDto {
   @ApiProperty({
     description: 'UUID v7 of this product_images row.',
@@ -10,7 +9,7 @@ export class ResponseProductImageDto {
 
   @ApiProperty({
     description: 'Public https URL of the stored photo.',
-    example: 'https://pub-xxxx.r2.dev/products-images/…/…/a15-front.jpg',
+    example: 'https://example.com/products-images/a15-front.jpg',
   })
   url: string;
 
@@ -21,7 +20,6 @@ export class ResponseProductImageDto {
   sortOrder: number;
 }
 
-/** GET /products/:id/images — wrapped so Swagger can document `data.items`. */
 export class ResponseProductImagesDto {
   @ApiProperty({
     type: [ResponseProductImageDto],

@@ -29,6 +29,7 @@ import { ReturnsService } from '../services/returns.service.js';
 import { ReturnQueryFilterDto } from '../dto/return-query.filter.js';
 import { ResponseReturnDto } from '../dto/response-return.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('returns')
 @Controller('returns')
@@ -53,7 +54,7 @@ export class ReturnsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getReturns(
     @Query() query: ReturnQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseReturnDto>>> {
     try {
       const res = await this.returnsService.getReturns(query, req.user.shopId);
@@ -83,7 +84,7 @@ export class ReturnsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getReturnById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseReturnDto>> {
     try {
       const res = await this.returnsService.getReturnById(id, req.user.shopId);

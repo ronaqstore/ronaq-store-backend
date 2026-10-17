@@ -92,10 +92,16 @@ const txStub = {
 const prismaStub = {
   shop: {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
     update: jest.fn(),
+    count: jest.fn(),
   },
   user: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
+  },
+  platformAdmin: {
+    findFirst: jest.fn(),
   },
   $transaction: jest.fn((cb: any) => cb(txStub)),
 };
@@ -130,6 +136,8 @@ describe('PlatformAdminService', () => {
     jest.clearAllMocks();
     resetTxCalls();
     prismaStub.user.findUnique.mockResolvedValue(null);
+    prismaStub.user.findFirst.mockResolvedValue(null);
+    prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
     service = new PlatformAdminService(
       prismaStub as unknown as PrismaService,
       authStub as unknown as AuthService,
@@ -192,7 +200,8 @@ describe('PlatformAdminService', () => {
         service.createShop({ ...validDto, ownerPhone: '123' }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(prismaStub.user.findUnique).not.toHaveBeenCalled();
+      expect(prismaStub.user.findFirst).not.toHaveBeenCalled();
+      expect(prismaStub.platformAdmin.findFirst).not.toHaveBeenCalled();
     });
 
     it('does not call an unparseable phone "already registered"', async () => {
@@ -218,18 +227,29 @@ describe('PlatformAdminService', () => {
     });
 
     it('refuses a phone that already owns another shop', async () => {
-      prismaStub.user.findUnique.mockResolvedValue({
-        shop: { name: 'Other Shop' },
-      });
+      prismaStub.user.findFirst.mockResolvedValue({ id: 'other-owner' });
 
       await expect(service.createShop(validDto)).rejects.toMatchObject({
         status: 400,
       });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses a phone already used by a platform admin', async () => {
+      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+
+      await expect(service.createShop(validDto)).rejects.toMatchObject({
+        status: 400,
+        response: expect.objectContaining({
+          error: 'This phone number already has a Ronaq Store account',
+        }),
+      });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
 
     it('turns a concurrent duplicate phone into a friendly 400', async () => {
-      // Two admins race: both pass the pre-check, then the unique index on
-      // users.phone rejects the loser. P2002 is the real guarantee.
+      // Two admins race: both pass the pre-check, then the unique index /
+      // cross-table trigger rejects the loser. P2002 is the real guarantee.
       prismaStub.$transaction.mockRejectedValueOnce(uniqueViolation());
 
       await expect(service.createShop(validDto)).rejects.toMatchObject({
@@ -466,6 +486,106 @@ describe('PlatformAdminService', () => {
         'new-address',
       );
       expect(res.status).toBe(true);
+    });
+  });
+
+  describe('getOverview', () => {
+    it('returns the four shop counts', async () => {
+      prismaStub.shop.count
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(6)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(2);
+
+      await expect(service.getOverview()).resolves.toEqual({
+        totalShops: 10,
+        activeShops: 6,
+        expiredShops: 2,
+        suspendedShops: 2,
+      });
+    });
+  });
+
+  describe('listShops', () => {
+    it('filters by multiple access statuses with OR', async () => {
+      prismaStub.shop.findMany.mockResolvedValue([]);
+      prismaStub.shop.count.mockResolvedValue(0);
+
+      await service.listShops({
+        page: 1,
+        pageSize: 10,
+        accessStatus: ['ACTIVE', 'EXPIRED'],
+      });
+
+      expect(prismaStub.shop.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ status: ShopStatus.ACTIVE }),
+              expect.objectContaining({ status: ShopStatus.ACTIVE }),
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('maps owner + derived accessStatus onto each row', async () => {
+      const future = new Date(Date.now() + 86_400_000);
+      prismaStub.shop.findMany.mockResolvedValue([
+        {
+          id: 'shop-1',
+          name: 'Khalid Mobile Center',
+          phone: '923001234567',
+          address: 'Main Bazaar',
+          status: ShopStatus.ACTIVE,
+          subscriptionEndsAt: future,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          users: [
+            {
+              id: 'user-1',
+              name: 'Khalid',
+              phone: '923001234567',
+              passwordHash: 'hash',
+            },
+          ],
+          storeSettings: { slug: 'khalid-mobile-center' },
+        },
+      ]);
+      prismaStub.shop.count.mockResolvedValue(1);
+
+      const res = await service.listShops({ page: 1, pageSize: 10 });
+
+      expect(res.total).toBe(1);
+      expect(res.items[0]).toMatchObject({
+        id: 'shop-1',
+        accessStatus: 'ACTIVE',
+        isAccessible: true,
+        ownerName: 'Khalid',
+        hasPassword: true,
+        storeSlug: 'khalid-mobile-center',
+      });
+    });
+
+    it('marks ACTIVE shops past subscriptionEndsAt as EXPIRED', async () => {
+      prismaStub.shop.findMany.mockResolvedValue([
+        {
+          id: 'shop-2',
+          name: 'Old Shop',
+          phone: null,
+          address: null,
+          status: ShopStatus.ACTIVE,
+          subscriptionEndsAt: new Date(Date.now() - 86_400_000),
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          users: [],
+          storeSettings: null,
+        },
+      ]);
+      prismaStub.shop.count.mockResolvedValue(1);
+
+      const res = await service.listShops({ page: 1, pageSize: 10 });
+
+      expect(res.items[0]?.accessStatus).toBe('EXPIRED');
+      expect(res.items[0]?.isAccessible).toBe(false);
     });
   });
 });

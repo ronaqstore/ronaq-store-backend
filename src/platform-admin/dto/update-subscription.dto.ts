@@ -3,13 +3,6 @@ import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsDateString, IsOptional } from 'class-validator';
 
-/**
- * WF3 — renew or suspend a shop.
- *
- * Both halves are here on purpose: renewing is a date change, suspending is a
- * status flip, and an admin who wants to pause a shop should not have to know
- * that it means editing two different columns.
- */
 export class UpdateSubscriptionDto {
   @ApiPropertyOptional({
     description:

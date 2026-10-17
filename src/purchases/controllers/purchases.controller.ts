@@ -30,7 +30,7 @@ import { AuthGuard } from '../../auth-guards/auth-guard.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
-import { CancelImpactResponseDto } from '../../common-dto/response/cancel-impact.dto.js';
+import { CancelImpactResponseDto } from '../../helpers/document-controller.imports.js';
 import {
   PurchasesService,
   CreatePurchaseResult,
@@ -40,6 +40,7 @@ import { CancelPurchaseDto } from '../dto/cancel-purchase.dto.js';
 import { PurchaseQueryFilterDto } from '../dto/purchase-query.filter.js';
 import { ResponsePurchaseDto } from '../dto/response-purchase.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('purchases')
 @Controller('purchases')
@@ -70,9 +71,7 @@ export class PurchasesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createPurchase(
     @Body() createPurchaseDto: CreatePurchaseDto,
-    @Req() req: any,
-    // passthrough: we still return the body ourselves, but the status code has
-    // to differ — 201 only when a row was actually written.
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<CreatePurchaseResult>> {
     try {
@@ -81,10 +80,7 @@ export class PurchasesController {
         req.user.shopId,
         req.user.userId,
       );
-      // The overdraft prompt creates nothing, so it must not claim 201.
       res.status('confirmOverdraft' in result ? 200 : 201);
-      // Both shapes carry their own human sentence: "Purchase created
-      // successfully" or the overdraft warning the client must show.
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
       logError('purchases.controller.ts', 'createPurchase', error, {
@@ -119,7 +115,7 @@ export class PurchasesController {
   async cancelPurchase(
     @Param('id') id: string,
     @Body() cancelPurchaseDto: CancelPurchaseDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.purchasesService.cancelPurchase(
@@ -161,7 +157,7 @@ export class PurchasesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
       const res = await this.purchasesService.getCancelImpact(
@@ -197,7 +193,7 @@ export class PurchasesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getPurchases(
     @Query() query: PurchaseQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponsePurchaseDto>>> {
     try {
       const res = await this.purchasesService.getPurchases(
@@ -230,7 +226,7 @@ export class PurchasesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getPurchaseById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponsePurchaseDto>> {
     try {
       const res = await this.purchasesService.getPurchaseById(

@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 import { ShopStatus, UserStatus } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -15,43 +15,27 @@ import {
   shopSuspended,
   userSuspended,
 } from '../errors/error.builder.js';
-import {
-  AuthenticatedOwner,
-  AuthTokenType,
-  verifyTokenOfType,
-} from './auth-token.js';
+import { AuthenticatedOwner, AuthTokenType } from './auth-token.js';
+import { JwtGuardBase } from './jwt-guard.base.js';
 
-/**
- * Multi-tenancy contract: this guard attaches
- *   request.user = { userId, shopId, role }
- * Every downstream feature service must scope its Prisma queries by
- * request.user.shopId so one shop owner cannot see another shop's data.
- *
- * The guard re-reads the user and the shop on every request rather than
- * trusting the token alone. That costs one indexed lookup, and it is what
- * makes WF3 real: suspending a shop or a user takes effect immediately instead
- * of waiting for a 24h token to expire.
- */
 @Injectable()
-export class AuthGuard implements CanActivate {
+export class AuthGuard extends JwtGuardBase implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: AppConfigurationService,
-    private readonly prisma: PrismaService,
-  ) {}
+    jwtService: JwtService,
+    configService: AppConfigurationService,
+    prisma: PrismaService,
+  ) {
+    super(jwtService, configService, prisma);
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
-
-    const payload = await verifyTokenOfType(
-      this.jwtService,
-      this.configService.jwtSecret,
-      request.headers.authorization,
+    const { request, sub } = await this.bearerPayload(
+      context,
       AuthTokenType.OWNER,
     );
 
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { id: sub },
       include: { shop: true },
     });
 

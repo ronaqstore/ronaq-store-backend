@@ -26,6 +26,7 @@ import {
   UNAUTHORIZED_REQUEST_RESPONSE,
 } from '../../constants/error-response.constant.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import {
@@ -39,11 +40,6 @@ import {
 } from '../dto/return-preview.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
 
-/**
- * The two write-side routes live under /sales (they act on one sale), the
- * read-side routes live on ReturnsController under /returns — the two
- * controllers never share a path.
- */
 @ApiTags('sales')
 @Controller('sales')
 @ApiBearerAuth()
@@ -72,7 +68,7 @@ export class SaleReturnsController {
   async previewReturn(
     @Param('id') id: string,
     @Body() previewDto: ReturnPreviewDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ReturnPreviewResponseDto>> {
     try {
       const res = await this.returnsService.previewReturn(
@@ -117,7 +113,7 @@ export class SaleReturnsController {
   async createReturn(
     @Param('id') id: string,
     @Body() createReturnDto: CreateReturnDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<CreateReturnResult>> {
     try {
@@ -127,7 +123,7 @@ export class SaleReturnsController {
         req.user.shopId,
         req.user.userId,
       );
-      // Overdraft prompt writes nothing — must not claim 201.
+
       res.status('confirmOverdraft' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {

@@ -1,8 +1,3 @@
-/**
- * Calculate rows-to-skip for a Prisma findMany() given 1-based page number
- * and page size. Simple arithmetic but kept in one place so every list
- * service does it identically.
- */
 export const getSkipNumber = (
   page: number | string,
   pageSize: number | string,
@@ -12,10 +7,6 @@ export const getSkipNumber = (
   return (p - 1) * ps;
 };
 
-/**
- * Return safe numeric page and pageSize values clamped to sane defaults
- * so a controller can never pass NaN / 0 to a list service.
- */
 export const normalizePagination = (
   page?: number | string | null,
   pageSize?: number | string | null,

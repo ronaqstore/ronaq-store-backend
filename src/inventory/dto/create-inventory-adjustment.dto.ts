@@ -11,15 +11,6 @@ import {
   Min,
 } from 'class-validator';
 
-/**
- * WF8 — one stock change, three flavours.
- *
- * The service decides which fields are legal from the product's trackingType:
- * QUANTITY (accessories) use countedQuantity / quantity, SERIALIZED (phones)
- * use inventoryUnitId. Sending a field the product kind does not use is a 400
- * (forbidNonWhitelisted already blocks unknown keys; these are known keys on
- * the wrong shape).
- */
 export class CreateInventoryAdjustmentDto {
   @ApiProperty({
     description: 'The product whose stock changed. Must belong to this shop.',

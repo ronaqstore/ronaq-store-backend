@@ -1,9 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * Output DTO returned by GET endpoints. Mirrors the Prisma row exactly —
- * suppliers have no joined children and no stock counter to resolve.
- */
 export class ResponseSupplierDto {
   @ApiProperty({
     description: 'UUID v7 of this supplier row.',

@@ -2,14 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsDateString, IsOptional, IsString, Length } from 'class-validator';
 
-/**
- * WF1 steps 1 and 2 in one call.
- *
- * The admin enters the shop and the owner together, because a shop without an
- * owner is an unusable tenant — nobody could ever log in to it. The owner picks
- * his own password later via the returned setup link, so the admin never handles
- * or sees it.
- */
 export class CreateShopDto {
   @ApiProperty({
     description: 'Shop name as the owner writes it on his signboard.',

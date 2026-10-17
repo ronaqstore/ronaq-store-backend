@@ -3,39 +3,36 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
+  InternalServerErrorException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
-  HttpException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  PaginatedResponseDTO,
+  logError,
+} from '../../helpers/crud-controller.imports.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { ExpenseCategoriesService } from '../services/expense-categories.service.js';
 import { CreateExpenseCategoryDto } from '../dto/create-expense-category.dto.js';
 import { UpdateExpenseCategoryDto } from '../dto/update-expense-category.dto.js';
 import { ExpenseCategoryQueryFilterDto } from '../dto/expense-category-query.filter.js';
 import { ResponseExpenseCategoryDto } from '../dto/response-expense-category.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
 
 @ApiTags('expense-categories')
 @Controller('expense-categories')
@@ -64,7 +61,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async createExpenseCategory(
     @Body() createExpenseCategoryDto: CreateExpenseCategoryDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.expenseCategoriesService.createExpenseCategory(
@@ -108,7 +105,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getExpenseCategories(
     @Query() query: ExpenseCategoryQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<
     ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseExpenseCategoryDto>>
   > {
@@ -153,7 +150,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getExpenseCategoryById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseExpenseCategoryDto>> {
     try {
       const res = await this.expenseCategoriesService.getExpenseCategoryById(
@@ -197,7 +194,7 @@ export class ExpenseCategoriesController {
   async updateExpenseCategory(
     @Param('id') id: string,
     @Body() updateExpenseCategoryDto: UpdateExpenseCategoryDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.expenseCategoriesService.updateExpenseCategory(
@@ -242,7 +239,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteExpenseCategory(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.expenseCategoriesService.deleteExpenseCategory(

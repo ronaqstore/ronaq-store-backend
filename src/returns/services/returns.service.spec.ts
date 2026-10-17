@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ReturnsService } from './returns.service.js';
+import { ReturnsFlowService } from './returns-flow.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 const SHOP_ID = 'shop-1';
@@ -194,6 +195,7 @@ describe('ReturnsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReturnsService,
+        ReturnsFlowService,
         { provide: PrismaService, useValue: prismaStub },
       ],
     }).compile();

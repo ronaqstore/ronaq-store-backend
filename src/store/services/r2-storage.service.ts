@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import {
   DeleteObjectCommand,
   PutObjectCommand,
@@ -7,14 +11,6 @@ import {
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { logError } from '../../helpers/logger-helper.js';
 
-/**
- * Thin Cloudflare R2 adapter (S3-compatible). Product photos are uploaded
- * here (WF21) and the resulting public https URL is what the database stores.
- *
- * When R2_STORAGE_ENABLED is false (dev / unit tests / until the bucket is
- * provisioned) `put` stores a placeholder https URL and `deleteByUrl` is a
- * no-op — so every upper-layer test passes without a network call.
- */
 @Injectable()
 export class R2StorageService {
   private readonly logger = new Logger(R2StorageService.name);
@@ -40,23 +36,38 @@ export class R2StorageService {
       : null;
   }
 
-  /**
-   * Uploads a processed image and returns the public https URL to persist.
-   * Fails loudly: no image, no DB row — the caller decides the error handling.
-   */
   async put(key: string, body: Buffer, contentType: string): Promise<string> {
     if (!this.enabled || !this.client) {
       const base = this.publicUrlBase || 'https://placeholder.r2.dev';
       return `${base}/${key}`;
     }
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
-      }),
-    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        }),
+      );
+    } catch (error) {
+      logError('r2-storage.service.ts', 'put', error, {
+        bucket: this.bucket,
+        key,
+      });
+      const code =
+        (error as { name?: string; Code?: string }).name ||
+        (error as { Code?: string }).Code ||
+        '';
+      if (code === 'AccessDenied' || code === 'InvalidAccessKeyId') {
+        throw new ServiceUnavailableException(
+          'Image storage denied. Check Cloudflare R2 API token permissions (Object Read & Write) for this bucket.',
+        );
+      }
+      throw new ServiceUnavailableException(
+        'Image storage is temporarily unavailable. Try again shortly.',
+      );
+    }
     return this.buildPublicUrl(key);
   }
 
@@ -64,11 +75,6 @@ export class R2StorageService {
     return `${this.publicUrlBase}/${key}`;
   }
 
-  /**
-   * Best-effort object delete. Never throws: an orphaned object (R2 up, DB
-   * down) is acceptable — failing the request is not. Rows whose URL does not
-   * come from this bucket (e.g. legacy rows) are skipped.
-   */
   async deleteByUrl(url: string): Promise<void> {
     if (!this.enabled || !this.client || !this.publicUrlBase) return;
     const prefix = `${this.publicUrlBase}/`;

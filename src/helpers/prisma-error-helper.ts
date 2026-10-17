@@ -9,17 +9,6 @@ export function isUniqueConstraintViolation(error: unknown): boolean {
   );
 }
 
-/**
- * Best-effort list of the column(s) that collided, lower-cased.
- *
- * Prisma reports them differently depending on how the client connects:
- *   - classic engine: `meta.target` = ['shop_id', 'sku'] (or a bare string)
- *   - driver adapters (Prisma 7 + @prisma/adapter-pg): `meta.target` is ABSENT.
- *     The information only survives inside the nested Postgres error, at
- *     `meta.driverAdapterError.cause.constraint.index` = 'products_shop_id_sku_key'
- *
- * Returns [] when nothing can be determined, so callers must keep a fallback.
- */
 export function uniqueViolationColumns(error: unknown): string[] {
   if (!isUniqueConstraintViolation(error)) return [];
 
@@ -40,7 +29,7 @@ export function uniqueViolationColumns(error: unknown): string[] {
   const indexName = adapter?.cause?.constraint?.index;
   if (typeof indexName === 'string') {
     const withoutSuffix = indexName.replace(/_key$/, '').toLowerCase();
-    // 'products_shop_id_sku' -> keep the whole thing AND the trailing column
+
     columns.push(withoutSuffix);
     const lastToken = withoutSuffix.split('_').pop();
     if (lastToken) columns.push(lastToken);
@@ -49,10 +38,6 @@ export function uniqueViolationColumns(error: unknown): string[] {
   return [...new Set(columns)];
 }
 
-/**
- * True when the collision was on `column`, tolerating both the bare column
- * name ('sku') and the full index name ('products_shop_id_sku').
- */
 export function violatedColumn(error: unknown, column: string): boolean {
   const needle = column.toLowerCase();
   return uniqueViolationColumns(error).some(

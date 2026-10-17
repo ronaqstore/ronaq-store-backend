@@ -11,18 +11,6 @@ import {
   Min,
 } from 'class-validator';
 
-/**
- * Every updatable field is explicitly listed as optional.
- * We deliberately do NOT use PartialType because we want strict
- * opt-in on a field-by-field basis for edit endpoints.
- *
- * Null on `phone` / `address` / `notes` clears the column (they are nullable).
- * Null on `name` is rejected by the service: name is required and non-nullable.
- *
- * `openingBalance` IS updatable — it is Day-0 data (WF1: "Old customer Udhar →
- * PATCH /customers/:id"). Payments never touch this column; they apply against
- * the calculated balance, so correcting it later is safe.
- */
 export class UpdateCustomerDto {
   @ApiPropertyOptional({
     description: 'New customer name.',

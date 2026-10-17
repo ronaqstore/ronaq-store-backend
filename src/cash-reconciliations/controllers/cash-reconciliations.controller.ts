@@ -33,6 +33,7 @@ import { CreateCashReconciliationDto } from '../dto/create-cash-reconciliation.d
 import { CashReconciliationQueryFilterDto } from '../dto/cash-reconciliation-query.filter.js';
 import { ResponseCashReconciliationDto } from '../dto/response-cash-reconciliation.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('cash-reconciliations')
 @Controller('cash-reconciliations')
@@ -65,7 +66,7 @@ export class CashReconciliationsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createReconciliation(
     @Body() createCashReconciliationDto: CreateCashReconciliationDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.cashReconciliationsService.createReconciliation(
@@ -107,7 +108,7 @@ export class CashReconciliationsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getReconciliations(
     @Query() query: CashReconciliationQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<
     ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseCashReconciliationDto>>
   > {
@@ -151,7 +152,7 @@ export class CashReconciliationsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getReconciliationById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseCashReconciliationDto>> {
     try {
       const result =

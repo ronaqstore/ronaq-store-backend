@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ShopStatus } from '../../generated/prisma/enums.js';
 
-/** How many starter rows onboarding copied into the new shop. */
 export class OnboardedDefaultsDto {
   @ApiProperty({ example: 7 })
   categories: number;
@@ -23,7 +22,6 @@ export class OnboardedDefaultsDto {
   suppliers: number;
 }
 
-/** Automatic number counters, already at their starting value. */
 export class ShopCountersDto {
   @ApiProperty({
     example: 1,
@@ -38,11 +36,6 @@ export class ShopCountersDto {
   nextPurchaseNo: number;
 }
 
-/**
- * WF1 result. The admin needs three things from one call: the shop id (to
- * manage it later), the owner id (to reissue a setup link if the owner loses it)
- * and the setup link to forward on WhatsApp.
- */
 export class CreateShopResponseDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
   shopId: string;

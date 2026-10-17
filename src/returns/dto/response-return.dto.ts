@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/** One line of a saved return, joined with its sale line for names. */
 export class ResponseReturnItemDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000501' })
   id: string;
@@ -30,7 +29,6 @@ export class ResponseReturnItemDto {
   condition: string;
 }
 
-/** Cash given back against a return. Immutable — no cancel endpoint exists. */
 export class ResponseRefundDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000601' })
   id: string;

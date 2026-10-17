@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CsvColumn, formatRupees } from '../../helpers/csv.helper.js';
 
-/** One ACTIVE sale inside the period, with its money moved. Paisa numbers. */
 export class SaleReportRowDTO {
   @ApiProperty()
   id: string;
@@ -24,23 +23,18 @@ export class SaleReportRowDTO {
   @ApiProperty()
   totalAmount: number;
 
-  /** ACTIVE payments against this sale (paisa). */
   @ApiProperty()
   paid: number;
 
-  /** Σ returnAmount of ACTIVE returns on this sale (paisa). */
   @ApiProperty()
   returns: number;
 
-  /** Σ refund amounts on ACTIVE returns of this sale (paisa). */
   @ApiProperty()
   refunds: number;
 
-  /** totalAmount − returns + refunds − paid (paisa). */
   @ApiProperty()
   outstanding: number;
 
-  /** subtotal − Σ(unitCost × qty) over the sale's lines (paisa). */
   @ApiProperty()
   profit: number;
 }

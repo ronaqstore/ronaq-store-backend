@@ -23,6 +23,7 @@ const prismaStub = {
   },
   platformAdmin: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     create: jest.fn(),
   },
   $transaction: jest.fn(),
@@ -243,11 +244,9 @@ describe('AuthService', () => {
     });
   });
 
-  describe('issuePasswordSetupLink', () => {
+  describe('buildSetupLink', () => {
     it('stores only a hash and returns a URL built from APP_BASE_URL', async () => {
-      prismaStub.user.findUnique.mockResolvedValue(activeUser);
-
-      const res = await service.issuePasswordSetupLink('user-1');
+      const res = await service.buildSetupLink('user-1');
 
       const update = prismaStub.user.update.mock.calls[0][0].data;
       expect(update.passwordSetupTokenHash).toMatch(/^[a-f0-9]{64}$/);

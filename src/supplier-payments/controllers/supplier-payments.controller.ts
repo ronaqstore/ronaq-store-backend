@@ -43,6 +43,7 @@ import {
   SupplierPayableDto,
 } from '../dto/response-supplier-payment.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('supplier-payments')
 @Controller('supplier-payments')
@@ -77,9 +78,7 @@ export class SupplierPaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createSupplierPayment(
     @Body() createSupplierPaymentDto: CreateSupplierPaymentDto,
-    @Req() req: any,
-    // passthrough: we still return the body ourselves, but the status code has
-    // to differ — 201 only when a row was actually written.
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<CreateSupplierPaymentResult>> {
     try {
@@ -88,7 +87,6 @@ export class SupplierPaymentsController {
         req.user.shopId,
         req.user.userId,
       );
-      // The overdraft prompt creates nothing, so it must not claim 201.
       res.status('confirmOverdraft' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
@@ -131,7 +129,7 @@ export class SupplierPaymentsController {
   async cancelSupplierPayment(
     @Param('id') id: string,
     @Body() cancelSupplierPaymentDto: CancelSupplierPaymentDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.supplierPaymentsService.cancelSupplierPayment(
@@ -178,7 +176,7 @@ export class SupplierPaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
       const res = await this.supplierPaymentsService.getCancelImpact(
@@ -217,7 +215,7 @@ export class SupplierPaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getSupplierPayments(
     @Query() query: SupplierPaymentQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<
     ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseSupplierPaymentDto>>
   > {
@@ -262,7 +260,7 @@ export class SupplierPaymentsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getSupplierPayable(
     @Param('supplierId') supplierId: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<SupplierPayableDto>> {
     try {
       const res = await this.supplierPaymentsService.getSupplierPayable(

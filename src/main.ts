@@ -15,8 +15,7 @@ net.setDefaultAutoSelectFamily?.(false);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
-    // Nest's Express adapter already parses JSON bodies. This flag only adds
-    // `request.rawBody`, needed later for webhook signature verification.
+
     rawBody: true,
   });
 
@@ -36,9 +35,6 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger UI ships inline scripts and styles that the default CSP blocks, so
-  // /api is skipped. helmet only omits headers it is told to omit; mounting it
-  // twice would not clear a header the global pass already set.
   const helmetMiddleware = helmet();
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path === '/api' || req.path.startsWith('/api/')) {

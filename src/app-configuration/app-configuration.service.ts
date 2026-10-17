@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Joi from 'joi';
+import { BCRYPT_ROUNDS } from '../constants/security.constant.js';
 
 @Injectable()
 export class AppConfigurationService {
@@ -21,7 +22,11 @@ export class AppConfigurationService {
         .uri({ scheme: ['http', 'https'] })
         .default('http://localhost:3000'),
       JWT_EXPIRES_IN: Joi.string().default('24h'),
-      BCRYPT_ROUNDS: Joi.number().integer().min(8).max(15).default(10),
+      BCRYPT_ROUNDS: Joi.number()
+        .integer()
+        .min(8)
+        .max(15)
+        .default(BCRYPT_ROUNDS),
       PASSWORD_SETUP_TOKEN_TTL_MINUTES: Joi.number()
         .integer()
         .min(5)
@@ -128,11 +133,6 @@ export class AppConfigurationService {
     return value.split(',').map((origin) => origin.trim());
   }
 
-  /**
-   * Public base URL of the frontend PWA. Used to build the one-time
-   * password-setup link that the platform admin forwards to the shop owner
-   * over WhatsApp. No trailing slash.
-   */
   get appBaseUrl(): string {
     const value =
       this.configService.get<string>('APP_BASE_URL') ?? 'http://localhost:3000';
@@ -145,7 +145,9 @@ export class AppConfigurationService {
 
   get bcryptRounds(): number {
     const value = Number(this.configService.get<string>('BCRYPT_ROUNDS'));
-    return Number.isInteger(value) && value >= 8 && value <= 15 ? value : 10;
+    return Number.isInteger(value) && value >= 8 && value <= 15
+      ? value
+      : BCRYPT_ROUNDS;
   }
 
   get passwordSetupTokenTtlMinutes(): number {

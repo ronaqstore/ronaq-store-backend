@@ -1,10 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Output DTO returned by GET endpoints. Shape mirrors the Prisma row; we do not
- * expose it directly so future fields can be scrubbed here without breaking the
- * frontend.
- */
 export class ResponseExpenseCategoryDto {
   @ApiProperty({
     description: 'UUID v7 of this expense category row.',

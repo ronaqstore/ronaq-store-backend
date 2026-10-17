@@ -77,6 +77,18 @@ async function main() {
     );
   }
 
+  // Login phones are unique across the whole platform (users + platform_admins).
+  const existingOwner = await prisma.user.findUnique({
+    where: { phone },
+    select: { id: true, name: true },
+  });
+  if (existingOwner) {
+    throw new Error(
+      `Phone ${phone} is already used by a shop owner (user id ${existingOwner.id}, name "${existingOwner.name}").\n` +
+        'Pick a different SEED_ADMIN_PHONE — the same mobile cannot be both a platform admin and a shop owner.',
+    );
+  }
+
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
   // Upsert, not create: re-running resets the password instead of failing on

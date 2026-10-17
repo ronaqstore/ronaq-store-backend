@@ -1,6 +1,3 @@
-/**
- * Short human descriptions used by error-response constants below.
- */
 export const ERROR_DESCRIPTIONS = {
   BAD_REQUEST:
     'The server could not process the request due to malformed input, a validation error, or a failed business rule.',

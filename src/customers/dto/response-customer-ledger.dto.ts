@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { LedgerEntryDto } from '../../common-dto/response/ledger-entry.dto.js';
 
-/** WF11 — why a customer owes what they owe. */
 export class CustomerLedgerDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-0000000000b1' })
   customerId: string;

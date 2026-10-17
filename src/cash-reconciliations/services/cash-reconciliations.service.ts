@@ -20,6 +20,7 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
+import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
 import {
   cashReconciliationReasonRequired,
@@ -28,23 +29,6 @@ import {
 
 const CREATED = 'Cash reconciliation recorded successfully';
 
-type Tx = Prisma.TransactionClient;
-
-/**
- * WF17 — Cash Count (Reconciliation).
- *
- * The owner compares the system's cash (SUM(IN) − SUM(OUT) over the append-only
- * cash ledger) with what is really in the drawer. A reconciliation row records
- * system, counted and the difference; every non-zero difference writes one
- * RECONCILIATION_ADJUSTMENT cash movement (IN when the drawer has more than the
- * system says, OUT when it has less) so system cash lands exactly on counted.
- *
- * Old cash rows are never edited — the adjustment is a new ledger row, exactly
- * like a REVERSAL. A reason is required whenever the difference is not zero
- * (checked here, and backstopped by cash_recon_reason_chk). A matching count
- * still records a row (a permanent record of the count) but writes no movement —
- * cash_movements_amount_chk forbids amount 0, and there is nothing to adjust.
- */
 @Injectable()
 export class CashReconciliationsService {
   private readonly logger = new Logger(CashReconciliationsService.name);
@@ -59,9 +43,6 @@ export class CashReconciliationsService {
     const reason = dto.reason?.trim() ? dto.reason : null;
 
     await this.prisma.$transaction(async (tx) => {
-      // Serialise the currentCash() read: two concurrent counts must not both
-      // snapshot the same balance before the first one's adjustment commits
-      // (the WF6/WF7/expense shop-row-lock trick).
       const shop = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
       `;
@@ -70,7 +51,7 @@ export class CashReconciliationsService {
       }
 
       const countedCash = BigInt(dto.countedCash);
-      const systemCash = BigInt(await this.currentCash(tx, shopId));
+      const systemCash = BigInt(await aggregateCurrentCash(tx, shopId));
       const difference = countedCash - systemCash;
 
       if (difference !== 0n && !reason) {
@@ -167,18 +148,6 @@ export class CashReconciliationsService {
     if (!row)
       throw new NotFoundException(resourceNotFound('Reconciliation', id));
     return this.toResponse(row);
-  }
-
-  private async currentCash(tx: Tx, shopId: string): Promise<number> {
-    const inbound = await tx.cashMovement.aggregate({
-      where: { shopId, direction: CashDirection.IN },
-      _sum: { amount: true },
-    });
-    const outbound = await tx.cashMovement.aggregate({
-      where: { shopId, direction: CashDirection.OUT },
-      _sum: { amount: true },
-    });
-    return Number(inbound._sum.amount ?? 0) - Number(outbound._sum.amount ?? 0);
   }
 
   private toResponse(row: CashReconciliation): ResponseCashReconciliationDto {

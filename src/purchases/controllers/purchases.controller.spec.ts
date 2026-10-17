@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { PurchasesController } from './purchases.controller.js';
 import { PurchasesService } from '../services/purchases.service.js';
+import { PurchasesWriteService } from '../services/purchases-write.service.js';
+import { PurchasesCancelService } from '../services/purchases-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -36,6 +38,8 @@ describe('PurchasesController', () => {
       controllers: [PurchasesController],
       providers: [
         PurchasesService,
+        PurchasesWriteService,
+        PurchasesCancelService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: AuthGuard,

@@ -2,11 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { Length, Matches } from 'class-validator';
 
-/**
- * WF19 step 2 — the store address may only be changed by a platform admin.
- * Format mirrors the owner-facing DB CHECK: lowercase letters/numbers with
- * single hyphens, 3–40 chars; reserved words are refused in the service.
- */
 export class ChangeStoreSlugDto {
   @ApiProperty({
     description:

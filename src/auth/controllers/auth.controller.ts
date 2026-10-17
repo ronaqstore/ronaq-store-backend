@@ -26,6 +26,7 @@ import {
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { AuthService } from '../services/auth.service.js';
 import { OwnerLoginDto } from '../dto/owner-login.dto.js';
@@ -39,10 +40,6 @@ import {
 } from '../dto/login-response.dto.js';
 import { MeResponseDto } from '../dto/me-response.dto.js';
 
-/**
- * Preserve expected HTTP errors: a wrong password is a 401 and a suspended
- * shop is a 403. Unexpected failures become 500 without exposing internals.
- */
 const rethrowOrDefault = (error: unknown, fallback: string): HttpException => {
   if (error instanceof HttpException) return error;
   return new InternalServerErrorException(fallback);
@@ -60,7 +57,10 @@ export class AuthController {
       'Creates owner account, new shop with 30-day trial subscription, default starter categories and store settings. Returns login JWT directly.',
   })
   @ApiSuccessResponseDecorator(
-    OK_RESPONSE_STATUS(OwnerLoginResponseDto, 'Registered and logged in successfully'),
+    OK_RESPONSE_STATUS(
+      OwnerLoginResponseDto,
+      'Registered and logged in successfully',
+    ),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
@@ -69,12 +69,17 @@ export class AuthController {
   ): Promise<ApiSuccessResponseDTO<OwnerLoginResponseDto>> {
     try {
       const res = await this.authService.registerOwner(registerOwnerDto);
-      return new ApiSuccessResponseDTO('Registered and logged in successfully', res);
+      return new ApiSuccessResponseDTO(
+        'Registered and logged in successfully',
+        res,
+      );
     } catch (error) {
       logError('auth.controller.ts', 'register', error);
       if (error instanceof HttpException) throw error;
       const msg = error instanceof Error ? error.message : String(error);
-      throw new InternalServerErrorException(`Failed to register account and shop: ${msg}`);
+      throw new InternalServerErrorException(
+        `Failed to register account and shop: ${msg}`,
+      );
     }
   }
 
@@ -179,7 +184,9 @@ export class AuthController {
   @ApiResponse(FORBIDDEN_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
-  async getMe(@Req() req: any): Promise<ApiSuccessResponseDTO<MeResponseDto>> {
+  async getMe(
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<MeResponseDto>> {
     try {
       const res = await this.authService.getMe(req.user.userId);
       return new ApiSuccessResponseDTO(
@@ -212,7 +219,7 @@ export class AuthController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async changePassword(
     @Body() changePasswordDto: ChangePasswordDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.authService.changePassword(

@@ -1,12 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
 
-/**
- * Self-service password change for an already-logged-in owner.
- *
- * Requires the current password on purpose: a stolen token alone is not enough
- * to lock the real owner out.
- */
 export class ChangePasswordDto {
   @ApiProperty({
     description: 'The password currently in use for this account.',
