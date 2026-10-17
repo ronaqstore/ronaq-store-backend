@@ -36,6 +36,7 @@ type ProductRow = Prisma.ProductGetPayload<{
     category: { select: { name: true } };
     brand: { select: { name: true } };
     stockLevel: { select: { quantityOnHand: true } };
+    images: { select: { url: true; sortOrder: true } };
     _count: { select: { inventoryUnits: { where: { status: 'IN_STOCK' } } } };
   };
 }>;
@@ -44,6 +45,11 @@ const PRODUCT_INCLUDE = {
   category: { select: { name: true } },
   brand: { select: { name: true } },
   stockLevel: { select: { quantityOnHand: true } },
+  images: {
+    select: { url: true, sortOrder: true },
+    orderBy: { sortOrder: 'asc' as const },
+    take: 5,
+  },
   _count: { select: { inventoryUnits: { where: { status: 'IN_STOCK' } } } },
 } as const;
 
@@ -444,6 +450,8 @@ export class ProductsService {
       row.trackingType === 'QUANTITY'
         ? (row.stockLevel?.quantityOnHand ?? 0)
         : row._count.inventoryUnits;
+    const imageUrls = row.images.map((image) => image.url);
+    const coverUrl = row.imageUrl ?? imageUrls[0] ?? null;
 
     return {
       id: row.id,
@@ -461,7 +469,8 @@ export class ProductsService {
       sku: row.sku,
       barcode: row.barcode,
       description: row.description,
-      imageUrl: row.imageUrl,
+      imageUrl: coverUrl,
+      imageUrls,
       defaultPurchasePrice: Number(row.defaultPurchasePrice),
       defaultSellingPrice: Number(row.defaultSellingPrice),
       lowStockThreshold: row.lowStockThreshold,

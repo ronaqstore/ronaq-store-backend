@@ -19,6 +19,6 @@ export class ReorderProductImagesDto {
   })
   @IsArray()
   @ArrayMinSize(1)
-  @IsUUID(undefined, { each: true })
+  @IsUUID(7, { each: true })
   imageIds: string[];
 }

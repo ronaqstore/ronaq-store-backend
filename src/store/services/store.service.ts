@@ -289,6 +289,7 @@ export class StoreService {
       await this.prisma.productImage.create({
         data: { shopId, productId, url, sortOrder },
       });
+      await this.syncProductCoverImage(productId, shopId);
     } catch (error) {
       // The DB is the source of truth; an orphaned object is harmless, so
       // clean it up best-effort and surface the real DB error.
@@ -354,6 +355,7 @@ export class StoreService {
         });
       }
     });
+    await this.syncProductCoverImage(productId, shopId);
     return new StatusBaseResponseDTO(
       true,
       'Product images reordered successfully',
@@ -372,6 +374,7 @@ export class StoreService {
       throw new NotFoundException(resourceNotFound('Product image', imageId));
     }
     await this.prisma.productImage.delete({ where: { id: imageId } });
+    await this.syncProductCoverImage(productId, shopId);
     // Never fail the request because the object delete failed; the DB row is
     // the source of truth and a stray object is only wasted storage.
     await this.r2.deleteByUrl(image.url);
@@ -436,6 +439,22 @@ export class StoreService {
 
     this.cache.clear();
     return new StatusBaseResponseDTO(true, 'Shop logo removed successfully');
+  }
+
+  /** Keep products.image_url = first photo (cover) for list/table thumbnails. */
+  private async syncProductCoverImage(
+    productId: string,
+    shopId: string,
+  ): Promise<void> {
+    const cover = await this.prisma.productImage.findFirst({
+      where: { productId, shopId },
+      orderBy: { sortOrder: 'asc' },
+      select: { url: true },
+    });
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { imageUrl: cover?.url ?? null },
+    });
   }
 
   private async processImage(

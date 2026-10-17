@@ -362,8 +362,13 @@ describe('StoreService (owner surface)', () => {
       const file = await makeJpegFile();
       prisma.product.findFirst.mockResolvedValue({ name: 'iPhone 14' });
       prisma.productImage.count.mockResolvedValue(2);
-      prisma.productImage.findFirst.mockResolvedValue({ sortOrder: 1 });
+      prisma.productImage.findFirst
+        .mockResolvedValueOnce({ sortOrder: 1 })
+        .mockResolvedValueOnce({
+          url: 'https://pub-test.r2.dev/shops/shop-1/products/prod-1/abc.jpg',
+        });
       prisma.productImage.create.mockResolvedValue({});
+      prisma.product.update.mockResolvedValue({});
       r2.put.mockResolvedValue(
         'https://pub-test.r2.dev/shops/shop-1/products/prod-1/abc.jpg',
       );
@@ -394,8 +399,11 @@ describe('StoreService (owner surface)', () => {
 
       prisma.product.findFirst.mockResolvedValue({ name: 'iPhone 14' });
       prisma.productImage.count.mockResolvedValue(0);
-      prisma.productImage.findFirst.mockResolvedValue(null);
+      prisma.productImage.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ url: 'https://pub-test.r2.dev/x.jpg' });
       prisma.productImage.create.mockResolvedValue({});
+      prisma.product.update.mockResolvedValue({});
       r2.put.mockResolvedValue('https://pub-test.r2.dev/x.jpg');
 
       await service.addProductImage('prod-1', file, 'shop-1');
@@ -486,6 +494,11 @@ describe('StoreService (owner surface)', () => {
         cb({ productImage: { update: innerUpdate } }),
       );
 
+      prisma.productImage.findFirst.mockResolvedValue({
+        url: 'https://pub-test.r2.dev/a.jpg',
+      });
+      prisma.product.update.mockResolvedValue({});
+
       await service.reorderProductImages(
         'prod-1',
         { imageIds: ['a', 'b'] },
@@ -499,19 +512,23 @@ describe('StoreService (owner surface)', () => {
     });
 
     it('removes an owned image and deletes its R2 object', async () => {
-      prisma.productImage.findFirst.mockResolvedValue({
-        id: 'img-1',
-        url: 'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x.jpg',
-      });
       prisma.productImage.delete.mockResolvedValue({});
+      prisma.productImage.findFirst
+        .mockResolvedValueOnce({
+          id: 'img-1',
+          url: 'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x.jpg',
+        })
+        .mockResolvedValueOnce(null);
+      prisma.product.update.mockResolvedValue({});
 
       await service.removeProductImage('prod-1', 'img-1', 'shop-1');
 
-      expect(prisma.productImage.findFirst).toHaveBeenCalledWith({
-        where: { id: 'img-1', productId: 'prod-1', shopId: 'shop-1' },
-      });
       expect(prisma.productImage.delete).toHaveBeenCalledWith({
         where: { id: 'img-1' },
+      });
+      expect(prisma.product.update).toHaveBeenCalledWith({
+        where: { id: 'prod-1' },
+        data: { imageUrl: null },
       });
       expect(r2.deleteByUrl).toHaveBeenCalledWith(
         'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x.jpg',

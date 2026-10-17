@@ -69,8 +69,16 @@ export class ResponseProductDto {
   @ApiPropertyOptional()
   description?: string | null;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'Cover image URL (first product photo). Null when none.',
+  })
   imageUrl?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'All product photo URLs in display order (cover first).',
+    type: [String],
+  })
+  imageUrls?: string[];
 
   @ApiProperty({
     description: 'Suggested cost in PAISA (Rs 1 = 100 paisa).',

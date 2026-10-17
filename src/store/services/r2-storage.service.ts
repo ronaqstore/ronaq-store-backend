@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import {
   DeleteObjectCommand,
   PutObjectCommand,
@@ -49,14 +53,33 @@ export class R2StorageService {
       const base = this.publicUrlBase || 'https://placeholder.r2.dev';
       return `${base}/${key}`;
     }
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
-      }),
-    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: body,
+          ContentType: contentType,
+        }),
+      );
+    } catch (error) {
+      logError('r2-storage.service.ts', 'put', error, {
+        bucket: this.bucket,
+        key,
+      });
+      const code =
+        (error as { name?: string; Code?: string }).name ||
+        (error as { Code?: string }).Code ||
+        '';
+      if (code === 'AccessDenied' || code === 'InvalidAccessKeyId') {
+        throw new ServiceUnavailableException(
+          'Image storage denied. Check Cloudflare R2 API token permissions (Object Read & Write) for this bucket.',
+        );
+      }
+      throw new ServiceUnavailableException(
+        'Image storage is temporarily unavailable. Try again shortly.',
+      );
+    }
     return this.buildPublicUrl(key);
   }
 

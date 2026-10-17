@@ -89,6 +89,7 @@ function baseProductRow(overrides: Record<string, unknown> = {}) {
     category: { name: 'Accessories' },
     brand: { name: 'Samsung' },
     stockLevel: { quantityOnHand: 7 },
+    images: [],
     _count: { inventoryUnits: 0 },
     ...overrides,
   };
