@@ -1,6 +1,7 @@
 import net from 'node:net';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
@@ -13,11 +14,13 @@ import { TraceLoggerService } from './common/logger/trace-logger.service.js';
 net.setDefaultAutoSelectFamily?.(false);
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
-
     rawBody: true,
   });
+  // Large phone purchases send thousands of IMEIs in one JSON body.
+  app.useBodyParser('json', { limit: '10mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '10mb' });
 
   const traceLogger = app.get(TraceLoggerService);
   const cls = app.get(ClsService);

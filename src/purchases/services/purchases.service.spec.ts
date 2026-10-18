@@ -33,8 +33,12 @@ interface TxStub {
   $queryRaw: jest.Mock;
   purchase: { create: jest.Mock; update: jest.Mock };
   purchaseItem: { create: jest.Mock; findMany: jest.Mock };
-  inventoryUnit: { create: jest.Mock; update: jest.Mock };
-  inventoryMovement: { create: jest.Mock };
+  inventoryUnit: {
+    create: jest.Mock;
+    createManyAndReturn: jest.Mock;
+    update: jest.Mock;
+  };
+  inventoryMovement: { create: jest.Mock; createMany: jest.Mock };
   stockLevel: { findUnique: jest.Mock; update: jest.Mock; create: jest.Mock };
   supplierPayment: {
     create: jest.Mock;
@@ -79,9 +83,21 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         .mockImplementation((args: any) =>
           Promise.resolve({ id: `unit-${args.data.imei1}` }),
         ),
+      createManyAndReturn: jest
+        .fn()
+        .mockImplementation((args: any) =>
+          Promise.resolve(
+            (args.data as Array<{ imei1: string }>).map((row) => ({
+              id: `unit-${row.imei1}`,
+            })),
+          ),
+        ),
       update: jest.fn().mockResolvedValue({}),
     },
-    inventoryMovement: { create: jest.fn().mockResolvedValue({ id: 'm-1' }) },
+    inventoryMovement: {
+      create: jest.fn().mockResolvedValue({ id: 'm-1' }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     stockLevel: {
       findUnique: jest.fn().mockResolvedValue(null),
       update: jest.fn().mockResolvedValue({}),
@@ -431,13 +447,22 @@ describe('PurchasesService', () => {
         USER_ID,
       );
 
-      expect(tx.inventoryUnit.create).toHaveBeenCalledTimes(2);
-      expect(tx.inventoryMovement.create).toHaveBeenCalledTimes(2);
-      expect(tx.inventoryUnit.create.mock.calls[0][0].data).toEqual(
-        expect.objectContaining({
-          imei1: '111223344556677',
-          condition: 'USED',
-        }),
+      expect(tx.inventoryUnit.createManyAndReturn).toHaveBeenCalledTimes(1);
+      expect(tx.inventoryUnit.createManyAndReturn.mock.calls[0][0].data).toEqual(
+        [
+          expect.objectContaining({
+            imei1: '111223344556677',
+            condition: 'USED',
+          }),
+          expect.objectContaining({
+            imei1: '111223344556688',
+            condition: 'USED',
+          }),
+        ],
+      );
+      expect(tx.inventoryMovement.createMany).toHaveBeenCalledTimes(1);
+      expect(tx.inventoryMovement.createMany.mock.calls[0][0].data).toHaveLength(
+        2,
       );
       expect(tx.stockLevel.update).not.toHaveBeenCalled();
       expect(tx.stockLevel.create).not.toHaveBeenCalled();

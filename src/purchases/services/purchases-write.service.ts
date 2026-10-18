@@ -21,6 +21,9 @@ import { loadShopProductsById } from '../../helpers/product-catalog.helper.js';
 
 type Tx = Prisma.TransactionClient;
 
+/** Keeps Neon round-trips small when a line has thousands of IMEIs. */
+const STOCK_WRITE_CHUNK = 500;
+
 @Injectable()
 export class PurchasesWriteService {
   constructor(private readonly prisma: PrismaService) {}
@@ -114,28 +117,35 @@ export class PurchasesWriteService {
     const imeis = line.imeis ?? [];
 
     if (imeis.length > 0) {
-      for (const imei of imeis) {
-        const unit = await tx.inventoryUnit.create({
-          data: {
+      const unitIds: string[] = [];
+      for (let i = 0; i < imeis.length; i += STOCK_WRITE_CHUNK) {
+        const chunk = imeis.slice(i, i + STOCK_WRITE_CHUNK);
+        const units = await tx.inventoryUnit.createManyAndReturn({
+          data: chunk.map((imei) => ({
             shopId,
             productId: line.productId,
             purchaseItemId,
             imei1: imei,
             condition: line.condition ?? UnitCondition.NEW,
             unitCost: BigInt(line.unitCost),
-          },
+          })),
           select: { id: true },
         });
-        await tx.inventoryMovement.create({
-          data: {
+        for (const unit of units) unitIds.push(unit.id);
+      }
+
+      for (let i = 0; i < unitIds.length; i += STOCK_WRITE_CHUNK) {
+        const chunk = unitIds.slice(i, i + STOCK_WRITE_CHUNK);
+        await tx.inventoryMovement.createMany({
+          data: chunk.map((inventoryUnitId) => ({
             shopId,
             productId: line.productId,
-            inventoryUnitId: unit.id,
+            inventoryUnitId,
             type: InventoryMovementType.PURCHASE,
             quantityChange: 1,
             referenceType: ReferenceType.PURCHASE,
             referenceId: purchaseId,
-          },
+          })),
         });
       }
       return;

@@ -33,6 +33,8 @@ import {
 } from '../services/inventory.service.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
+import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
+import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
 import {
   PaginatedInventoryMovementDto,
   ResponseInventoryMovementDto,
@@ -43,6 +45,45 @@ import {
 @UseGuards(AuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
+
+  @Get('/units')
+  @ApiOperation({
+    summary: 'List in-stock phone units for a product',
+    description:
+      'Returns IN_STOCK inventory units (id + IMEI) for the given product so the sale / write-off UI can pick one.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseInventoryUnitDto,
+      'In-stock units fetched successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async listUnits(
+    @Query() query: InventoryUnitQueryFilterDto,
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<ResponseInventoryUnitDto[]>> {
+    try {
+      const units = await this.inventoryService.listInStockUnits(
+        query.productId,
+        req.user.shopId,
+      );
+      return new ApiSuccessResponseDTO(
+        'In-stock units fetched successfully',
+        units,
+      );
+    } catch (error) {
+      logError('inventory.controller.ts', 'listUnits', error, {
+        shopId: req.user?.shopId,
+        productId: query?.productId,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch inventory units');
+    }
+  }
 
   @Post('/adjustments')
   @ApiOperation({

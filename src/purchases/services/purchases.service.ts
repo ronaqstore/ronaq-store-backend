@@ -96,82 +96,85 @@ export class PurchasesService {
     }
 
     try {
-      const outcome = await this.prisma.$transaction(async (tx) => {
-        const shop = await tx.$queryRaw<Array<{ id: string }>>`
+      const outcome = await this.prisma.$transaction(
+        async (tx) => {
+          const shop = await tx.$queryRaw<Array<{ id: string }>>`
           SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
         `;
-        if (!shop?.length) {
-          throw new NotFoundException(resourceNotFound('Shop', shopId));
-        }
-
-        let overdraft = false;
-        if (paidNow > 0n) {
-          const after =
-            (await aggregateCurrentCash(tx, shopId)) - Number(paidNow);
-          if (after < 0) {
-            if (!dto.confirmOverdraft) {
-              return { kind: 'overdraft' as const, shortfall: -after };
-            }
-            overdraft = true;
+          if (!shop?.length) {
+            throw new NotFoundException(resourceNotFound('Shop', shopId));
           }
-        }
 
-        const purchase = await this.writeFlow.insertPurchase(
-          tx,
-          dto,
-          shopId,
-          userId,
-          totalAmount,
-        );
+          let overdraft = false;
+          if (paidNow > 0n) {
+            const after =
+              (await aggregateCurrentCash(tx, shopId)) - Number(paidNow);
+            if (after < 0) {
+              if (!dto.confirmOverdraft) {
+                return { kind: 'overdraft' as const, shortfall: -after };
+              }
+              overdraft = true;
+            }
+          }
 
-        for (const line of items) {
-          const purchaseItem = await tx.purchaseItem.create({
-            data: {
-              shopId,
-              purchaseId: purchase.id,
-              productId: line.productId,
-              quantity: line.quantity,
-              unitCost: BigInt(line.unitCost),
-              totalCost: BigInt(line.quantity) * BigInt(line.unitCost),
-            },
-          });
-          await this.writeFlow.applyStock(
+          const purchase = await this.writeFlow.insertPurchase(
             tx,
+            dto,
             shopId,
-            purchase.id,
-            purchaseItem.id,
-            line,
+            userId,
+            totalAmount,
           );
-        }
 
-        if (paidNow > 0n) {
-          await tx.supplierPayment.create({
-            data: {
+          for (const line of items) {
+            const purchaseItem = await tx.purchaseItem.create({
+              data: {
+                shopId,
+                purchaseId: purchase.id,
+                productId: line.productId,
+                quantity: line.quantity,
+                unitCost: BigInt(line.unitCost),
+                totalCost: BigInt(line.quantity) * BigInt(line.unitCost),
+              },
+            });
+            await this.writeFlow.applyStock(
+              tx,
               shopId,
-              supplierId: dto.supplierId,
-              purchaseId: purchase.id,
-              amount: paidNow,
-              paymentDate: new Date(dto.purchaseDate),
-              createdById: userId,
-            },
-          });
-          await tx.cashMovement.create({
-            data: {
-              shopId,
-              type: CashMovementType.SUPPLIER_PAYMENT,
-              direction: CashDirection.OUT,
-              amount: paidNow,
-              movementDate: new Date(dto.purchaseDate),
-              referenceType: ReferenceType.PURCHASE,
-              referenceId: purchase.id,
-              isOverdraft: overdraft,
-              createdById: userId,
-            },
-          });
-        }
+              purchase.id,
+              purchaseItem.id,
+              line,
+            );
+          }
 
-        return { kind: 'created' as const };
-      });
+          if (paidNow > 0n) {
+            await tx.supplierPayment.create({
+              data: {
+                shopId,
+                supplierId: dto.supplierId,
+                purchaseId: purchase.id,
+                amount: paidNow,
+                paymentDate: new Date(dto.purchaseDate),
+                createdById: userId,
+              },
+            });
+            await tx.cashMovement.create({
+              data: {
+                shopId,
+                type: CashMovementType.SUPPLIER_PAYMENT,
+                direction: CashDirection.OUT,
+                amount: paidNow,
+                movementDate: new Date(dto.purchaseDate),
+                referenceType: ReferenceType.PURCHASE,
+                referenceId: purchase.id,
+                isOverdraft: overdraft,
+                createdById: userId,
+              },
+            });
+          }
+
+          return { kind: 'created' as const };
+        },
+        { maxWait: 20_000, timeout: 180_000 },
+      );
 
       if (outcome.kind === 'overdraft') {
         return new PurchaseOverdraftResponseDto(outcome.shortfall);

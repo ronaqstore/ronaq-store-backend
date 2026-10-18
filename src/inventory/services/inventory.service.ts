@@ -12,6 +12,7 @@ import {
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
 import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
+import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import {
   getSkipNumber,
@@ -56,6 +57,41 @@ const MANUAL_TYPES: InventoryMovementType[] = [
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listInStockUnits(
+    productId: string,
+    shopId: string,
+  ): Promise<ResponseInventoryUnitDto[]> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, shopId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new NotFoundException(resourceNotFound('Product', productId));
+    }
+
+    const rows = await this.prisma.inventoryUnit.findMany({
+      where: { shopId, productId, status: UnitStatus.IN_STOCK },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        productId: true,
+        imei1: true,
+        imei2: true,
+        condition: true,
+        status: true,
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      productId: row.productId,
+      imei1: row.imei1,
+      imei2: row.imei2,
+      condition: row.condition,
+      status: row.status,
+    }));
+  }
 
   async createAdjustment(
     dto: CreateInventoryAdjustmentDto,
