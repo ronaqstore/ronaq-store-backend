@@ -8,6 +8,5 @@ import { AppConfigurationService } from '../app-configuration/app-configuration.
   imports: [PrismaModule],
   controllers: [BrandsController],
   providers: [BrandsService, AppConfigurationService],
-  // exports: [BrandsService],  ← uncomment if another service calls brandsService
 })
 export class BrandsModule {}

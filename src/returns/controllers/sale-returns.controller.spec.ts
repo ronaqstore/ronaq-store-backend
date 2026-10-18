@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { SaleReturnsController } from './sale-returns.controller.js';
 import { ReturnsService } from '../services/returns.service.js';
+import { ReturnsFlowService } from '../services/returns-flow.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -36,6 +37,7 @@ describe('SaleReturnsController', () => {
       controllers: [SaleReturnsController],
       providers: [
         ReturnsService,
+        ReturnsFlowService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: AuthGuard,

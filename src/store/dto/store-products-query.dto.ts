@@ -11,11 +11,6 @@ import {
   Min,
 } from 'class-validator';
 
-/**
- * WF22 step 5 — query for GET /public/stores/:slug/products.
- * `category` / `brand` accept an id (from the categories route) or an exact
- * name; `q` is a case-insensitive contains match on the product name.
- */
 export class StoreProductsQueryDto {
   @ApiPropertyOptional({ example: 1, description: '1-based page number.' })
   @IsOptional()

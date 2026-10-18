@@ -12,6 +12,7 @@ import {
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
 import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
+import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import {
   getSkipNumber,
@@ -27,6 +28,10 @@ import {
   unitNotInStock,
   unwantedAdjustmentField,
 } from '../../errors/error.builder.js';
+import type {
+  InventoryAdjustmentProductShape,
+  InventoryProductRef,
+} from './inventory.service.types.js';
 
 const CREATED = 'Stock change recorded successfully';
 const NO_CHANGE = 'Counted matches the system — no change recorded';
@@ -49,20 +54,44 @@ const MANUAL_TYPES: InventoryMovementType[] = [
   InventoryMovementType.LOST,
 ];
 
-/**
- * WF8 — Stock adjustment, damaged and lost.
- *
- * One change = one `$transaction`: append one row to the append-only
- * `inventory_movements` ledger (the DB trigger blocks edit/delete) and move
- * the current-value row (stock_levels for accessories, the unit's status for
- * phones). ACCESSORIES: ADJUSTMENT sets the shelf count to the typed number
- * and stores counted − system; DAMAGED/LOST subtracts atomically and can
- * never drive the count below zero. PHONES: DAMAGED/LOST flips one IN_STOCK
- * unit's status so it can never be sold. reason is mandatory for all three.
- */
 @Injectable()
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listInStockUnits(
+    productId: string,
+    shopId: string,
+  ): Promise<ResponseInventoryUnitDto[]> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, shopId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new NotFoundException(resourceNotFound('Product', productId));
+    }
+
+    const rows = await this.prisma.inventoryUnit.findMany({
+      where: { shopId, productId, status: UnitStatus.IN_STOCK },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        productId: true,
+        imei1: true,
+        imei2: true,
+        condition: true,
+        status: true,
+      },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      productId: row.productId,
+      imei1: row.imei1,
+      imei2: row.imei2,
+      condition: row.condition,
+      status: row.status,
+    }));
+  }
 
   async createAdjustment(
     dto: CreateInventoryAdjustmentDto,
@@ -79,31 +108,24 @@ export class InventoryService {
     this.assertShape(product, dto);
 
     if (dto.type === 'ADJUSTMENT') {
-      return this.adjustStock(
-        product,
-        dto.countedQuantity!,
-        dto.reason,
-        shopId,
-      );
+      const countedQuantity = dto.countedQuantity;
+      if (countedQuantity === undefined) {
+        throw new BadRequestException(countedQuantityRequired(product.name));
+      }
+      return this.adjustStock(product, countedQuantity, dto.reason, shopId);
     }
     if (product.trackingType === 'SERIALIZED') {
       return this.damagePhone(product, dto, shopId);
     }
-    return this.damageQuantity(
-      product,
-      dto.quantity!,
-      dto.type,
-      dto.reason,
-      shopId,
-    );
+    const quantity = dto.quantity;
+    if (quantity === undefined) {
+      throw new BadRequestException(quantityRequired(product.name));
+    }
+    return this.damageQuantity(product, quantity, dto.type, dto.reason, shopId);
   }
 
-  /**
-   * Field/type shape rules per product kind — run before any write. Wrong
-   * shape → 400 with the exact field to fix, nothing touched inside the tx.
-   */
   private assertShape(
-    product: { name: string; trackingType: string },
+    product: InventoryAdjustmentProductShape,
     dto: CreateInventoryAdjustmentDto,
   ): void {
     if (dto.type === 'ADJUSTMENT') {
@@ -132,7 +154,6 @@ export class InventoryService {
       return;
     }
 
-    // DAMAGED / LOST.
     if (product.trackingType === 'SERIALIZED') {
       if (dto.inventoryUnitId === undefined) {
         throw new BadRequestException(unitIdRequired(product.name));
@@ -150,7 +171,6 @@ export class InventoryService {
       return;
     }
 
-    // QUANTITY + DAMAGED/LOST.
     if (dto.quantity === undefined) {
       throw new BadRequestException(quantityRequired(product.name));
     }
@@ -166,15 +186,8 @@ export class InventoryService {
     }
   }
 
-  /**
-   * Accessory ADJUSTMENT: count is absolute. The stock row is locked
-   * SELECT ... FOR UPDATE so two concurrent adjustments to the same product
-   * serialize and each records a delta against the row it actually changed.
-   * delta === 0 (the count matched) writes nothing — the DB bans
-   * quantity_change = 0, and no change needs no ledger entry.
-   */
   private async adjustStock(
-    product: { id: string; name: string },
+    product: InventoryProductRef,
     countedQuantity: number,
     reason: string,
     shopId: string,
@@ -222,15 +235,8 @@ export class InventoryService {
       : { kind: 'nochange', message: NO_CHANGE };
   }
 
-  /**
-   * Accessory DAMAGED/LOST: subtract atomically. The conditional UPDATE lets
-   * PostgreSQL be the referee — a concurrent writer cannot double-consume the
-   * same units because `quantity_on_hand >= quantity` is tested under the row
-   * lock. Zero rows updated = not enough left; read the real number for the
-   * message.
-   */
   private async damageQuantity(
-    product: { id: string; name: string },
+    product: InventoryProductRef,
     quantity: number,
     type: 'DAMAGED' | 'LOST',
     reason: string,
@@ -272,13 +278,8 @@ export class InventoryService {
     return { kind: 'created', message: CREATED };
   }
 
-  /**
-   * Phone DAMAGED/LOST: one IN_STOCK unit flips its status so it can never be
-   * sold. The unit row is locked FOR UPDATE — the status check runs under the
-   * lock, so two concurrent attempts on the same phone cannot both pass.
-   */
   private async damagePhone(
-    product: { id: string; name: string },
+    product: InventoryProductRef,
     dto: CreateInventoryAdjustmentDto,
     shopId: string,
   ): Promise<InventoryAdjustmentOutcome> {
@@ -338,8 +339,7 @@ export class InventoryService {
     const sortOrder = query.sortOrder ?? 'desc';
 
     const where: Prisma.InventoryMovementWhereInput = { shopId };
-    // Manual stock changes only by default — purchase/sale movements belong
-    // to the ledger (WF11), not to this write-off screen.
+
     where.type = query.type ?? { in: MANUAL_TYPES };
     if (query.productId) where.productId = query.productId;
 

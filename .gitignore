@@ -8,6 +8,10 @@ dist/
 # Coverage
 coverage/
 
+# Quality check temp
+scripts/.temp-jscpd/
+.jscpd-report/
+
 # Env files (allow .env.example)
 .env
 .env.*

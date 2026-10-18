@@ -22,16 +22,6 @@ export class MeShopDto {
   subscriptionEndsAt: Date;
 }
 
-/**
- * GET /auth/me — who am I, and is my shop still allowed to work?
- *
- * The frontend calls this on every cold start. It is the cheapest way for the
- * PWA to learn it must show the "subscription ended" screen before the owner
- * taps anything.
- *
- * Note the shop field is `shopStatus`, not `status`: the owner's own status and
- * the shop's status are different things and a flat name would be ambiguous.
- */
 export class MeResponseDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
   id: string;

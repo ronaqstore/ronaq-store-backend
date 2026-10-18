@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * WF18 page shape. The normal list contract is `PaginatedResponseDTO`
- * `{ page, pageSize, total, items }`; a report adds the applied business-day
- * range and a report-specific `summary` (whole-period or whole-shop totals,
- * not just the page's rows). `items` are never a bare array.
- */
 export class ReportPageResponseDTO<T, S = Record<string, never>> {
   @ApiProperty({ description: 'Current page number (1-based)' })
   page: number;

@@ -1,14 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
-/**
- * One line of a return. Nested inside CreateReturnDto /
- * ReturnPreviewDto with @Type(() => ReturnItemDto) so class-validator
- * actually walks the children.
- *
- * The line is named by its sale line (saleItemId), never by product: a sale
- * can carry the same product on several lines, and a phone line is one unit.
- */
 export class ReturnItemDto {
   @ApiProperty({
     description:

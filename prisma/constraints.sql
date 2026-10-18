@@ -171,6 +171,39 @@ CREATE TRIGGER inventory_movements_append_only
   BEFORE UPDATE OR DELETE ON inventory_movements
   FOR EACH ROW EXECUTE FUNCTION forbid_update_delete();
 
+-- 3b2. Login phones are unique across the whole platform (users + platform_admins).
+--     Prisma @unique only covers each table on its own.
+CREATE OR REPLACE FUNCTION login_phone_global_unique() RETURNS trigger AS $$
+BEGIN
+  IF TG_TABLE_NAME = 'users' THEN
+    IF EXISTS (
+      SELECT 1 FROM platform_admins a
+      WHERE a.phone = NEW.phone
+    ) THEN
+      RAISE EXCEPTION 'login phone already registered as platform admin'
+        USING ERRCODE = '23505';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'platform_admins' THEN
+    IF EXISTS (
+      SELECT 1 FROM users u
+      WHERE u.phone = NEW.phone
+    ) THEN
+      RAISE EXCEPTION 'login phone already registered as shop user'
+        USING ERRCODE = '23505';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER users_login_phone_global_unique_trg
+  BEFORE INSERT OR UPDATE OF phone ON users
+  FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
+
+CREATE TRIGGER platform_admins_login_phone_global_unique_trg
+  BEFORE INSERT OR UPDATE OF phone ON platform_admins
+  FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
+
 -- 3c. No hard delete of business records. Cancel or deactivate instead.
 --     Master data (categories, brands, expense categories) is deactivated with
 --     is_active, so it is protected here too. (TRUNCATE does not fire row triggers,

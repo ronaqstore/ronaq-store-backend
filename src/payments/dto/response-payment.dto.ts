@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/** One customer payment row, as stored. */
 export class ResponsePaymentDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000401' })
   id: string;

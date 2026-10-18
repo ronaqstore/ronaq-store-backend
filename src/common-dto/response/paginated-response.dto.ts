@@ -1,11 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsNumber, Min } from 'class-validator';
 
-/**
- * Frontend service contract: every list endpoint returns
- * { items, total, page, pageSize } so dukan-pro/src/features/<name>/api/service.ts
- * can stay mechanical. Constructor-created, same shape every time.
- */
 export class PaginatedResponseDTO<T> {
   @ApiProperty({ description: 'Current page number (1-based)' })
   @IsNumber()

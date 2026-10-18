@@ -4,28 +4,18 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsIn,
-  IsInt,
   IsOptional,
   IsString,
   Matches,
-  Max,
-  Min,
 } from 'class-validator';
+import { OptionalListPaginationQueryFilterDto } from '../../common-dto/query/optional-list-pagination-query.filter.dto.js';
 import type { ReportPeriod } from '../../helpers/date.helper.js';
+import {
+  OptionalSearchQueryProperty,
+  SortOrderPeriodQueryProperty,
+} from '../../helpers/query-filter.decorators.js';
 
-/**
- * Query contract shared by every WF18 report.
- *
- * Period resolution (see `periodRange` in date.helper):
- * - `period=today|week|month` — Today / this Monday-start week / this month.
- * - Passing `from`/`to` at all switches to a custom range (a missing side
- *   defaults to the other side = a single-day range).
- *
- * The three snapshot reports (customers, suppliers, inventory) ignore the
- * date fields entirely — outstanding, payable and stock are cumulative facts.
- * `sortBy` is a free string, whitelisted per report in the service.
- */
-export class ReportQueryFilterDto {
+export class ReportQueryFilterDto extends OptionalListPaginationQueryFilterDto {
   @ApiPropertyOptional({
     enum: ['today', 'week', 'month', 'custom'],
     description:
@@ -52,11 +42,10 @@ export class ReportQueryFilterDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   to?: string;
 
-  @ApiPropertyOptional({
-    description: 'Free-text search. Column depends on the report.',
-  })
-  @IsOptional()
-  @IsString()
+  @OptionalSearchQueryProperty(
+    '',
+    'Free-text search. Column depends on the report.',
+  )
   search?: string;
 
   @ApiPropertyOptional({
@@ -67,25 +56,8 @@ export class ReportQueryFilterDto {
   @IsString()
   sortBy?: string;
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'] })
-  @IsOptional()
-  @IsIn(['asc', 'desc'])
+  @SortOrderPeriodQueryProperty()
   sortOrder?: 'asc' | 'desc';
-
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number;
-
-  @ApiPropertyOptional({ example: 10, maximum: 100 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  pageSize?: number;
 
   @ApiPropertyOptional({
     enum: ['csv'],

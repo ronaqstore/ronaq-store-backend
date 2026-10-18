@@ -1,8 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Every list endpoint a dashboard number drills into.
- */
 export class DashboardLinksDto {
   @ApiProperty({ example: '/sales?from=2026-10-07&to=2026-10-07' })
   todaySales: string;
@@ -32,11 +29,6 @@ export class DashboardLinksDto {
   cashPosition: string;
 }
 
-/**
- * WF14 — seven numbers, all derived from this shop's records with cancelled
- * rows excluded. Revenue, cash, Udhar, payable and expenses are deliberately
- * separate numbers: never add them together into one "total".
- */
 export class DashboardDto {
   @ApiProperty({ example: 'today' })
   period: string;

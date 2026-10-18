@@ -77,6 +77,21 @@ describe('R2StorageService', () => {
       });
     });
 
+    it('maps AccessDenied to a clear storage configuration error', async () => {
+      const service = new R2StorageService(makeConfig(true));
+      sendMock.mockRejectedValueOnce(
+        Object.assign(new Error('Access Denied'), { name: 'AccessDenied' }),
+      );
+
+      await expect(
+        service.put(
+          'shops/shop-1/products/p/a.jpg',
+          Buffer.from('x'),
+          'image/jpeg',
+        ),
+      ).rejects.toThrow(/R2 API token permissions/);
+    });
+
     it('deletes an object only when the URL belongs to the bucket', async () => {
       const service = new R2StorageService(makeConfig(true));
 

@@ -1,11 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
-/**
- * Returned from every create / update / delete / cancel / approve endpoint.
- * Never returns the mutated object itself — controller returns a message +
- * success boolean. A follow-up GET/:id fetches the row if the UI needs it.
- */
 export class StatusBaseResponseDTO {
   @ApiProperty({ example: true, description: 'Whether the mutation succeeded' })
   @IsBoolean()
@@ -18,8 +13,19 @@ export class StatusBaseResponseDTO {
   @IsString()
   message: string;
 
-  constructor(status: boolean, message: string) {
+  @ApiPropertyOptional({
+    example: '01924f0a-0000-7000-8000-000000000000',
+    description: 'Optional ID of the created or affected entity',
+  })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  constructor(status: boolean, message: string, id?: string) {
     this.status = status;
     this.message = message;
+    if (id) {
+      this.id = id;
+    }
   }
 }

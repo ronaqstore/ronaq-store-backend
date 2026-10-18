@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Customer } from '../../generated/prisma/client.js';
+import { Customer, Prisma } from '../../generated/prisma/client.js';
 import { RecordStatus } from '../../generated/prisma/enums.js';
 import { CreateCustomerDto } from '../dto/create-customer.dto.js';
 import { UpdateCustomerDto } from '../dto/update-customer.dto.js';
@@ -14,6 +14,7 @@ import { LedgerQueryFilterDto } from '../dto/ledger-query.filter.js';
 import { ResponseCustomerDto } from '../dto/response-customer.dto.js';
 import { CustomerLedgerDto } from '../dto/response-customer-ledger.dto.js';
 import { LedgerEntryDto } from '../../common-dto/response/ledger-entry.dto.js';
+import { finalizePartyLedger } from '../../helpers/ledger-balance.helper.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import {
@@ -38,10 +39,9 @@ export class CustomersService {
   async createCustomer(
     dto: CreateCustomerDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // Customer names and phones are not unique, so there is no duplicate check.
     await this.prisma.customer.create({
       data: {
         shopId,
@@ -53,7 +53,7 @@ export class CustomersService {
         isActive: dto.isActive ?? true,
       },
     });
-    // TODO(ai): append audit log once audit-log module is added
+
     return new StatusBaseResponseDTO(true, 'Customer created successfully');
   }
 
@@ -69,14 +69,14 @@ export class CustomersService {
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: any = { shopId };
+    const where: Prisma.CustomerWhereInput = { shopId };
     const search = query.search?.trim();
     if (search) {
-      const branches: any[] = [
+      const branches: Prisma.CustomerWhereInput[] = [
         { name: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search } },
       ];
-      // Rows store 923001234567 but the owner types 03001234567 — match both.
+
       const canonical = normalizePhone(search);
       if (canonical && canonical !== search) {
         branches.push({ phone: { contains: canonical } });
@@ -118,13 +118,6 @@ export class CustomersService {
     return this.toResponse(customer);
   }
 
-  /**
-   * WF11 — the customer's Udhar history. There is no ledger table: every line
-   * is a real sale, payment, return or refund row, so the ledger can never
-   * disagree with them. Cancelled rows stay visible with delta 0 (WF12 rule) and the balance is
-   * derived over the whole timeline before paging, so page 2 of the timeline
-   * still shows balances that include page 1.
-   */
   async getCustomerLedger(
     id: string,
     query: LedgerQueryFilterDto,
@@ -218,7 +211,7 @@ export class CustomersService {
         id: p.id,
         type: 'PAYMENT',
         date: p.paymentDate.toISOString(),
-        // A payment with no sale is paying the opening balance, not a bill.
+
         reference: p.saleId ? (saleNoById.get(p.saleId) ?? null) : null,
         notes: p.notes,
         status: p.status,
@@ -227,8 +220,7 @@ export class CustomersService {
         amount: p.amount,
         delta: p.status === RecordStatus.ACTIVE ? -p.amount : 0n,
       })),
-      // WF15: a return gives goods back (balance falls), a refund gives cash
-      // back (balance rises). Both are sale-scoped, so both show the saleNo.
+
       ...returns.flatMap<RawEntry>((r) => [
         {
           id: r.id,
@@ -255,52 +247,38 @@ export class CustomersService {
           delta: refund.amount,
         })),
       ]),
-    ].sort(
-      (a, b) =>
-        a.sortAt - b.sortAt ||
-        a.createdAt - b.createdAt ||
-        a.id.localeCompare(b.id),
-    );
+    ];
 
-    let running = customer.openingBalance;
-    const all: LedgerEntryDto[] = raws.map((r) => {
-      running += r.delta;
-      return {
-        id: r.id,
-        type: r.type,
-        date: r.date,
-        reference: r.reference,
-        notes: r.notes,
-        status: r.status,
-        amount: Number(r.amount),
-        delta: Number(r.delta),
-        balance: Number(running),
-      };
-    });
-
-    const skip = getSkipNumber(page, pageSize);
-    return {
-      customerId: customer.id,
-      customerName: customer.name,
-      openingBalance: Number(customer.openingBalance),
-      balance: Number(running),
+    return finalizePartyLedger(
+      raws,
+      ({ id, type, date, reference, notes, status, amount, delta }) => ({
+        id,
+        type,
+        date,
+        reference,
+        notes,
+        status,
+        amount,
+        delta,
+      }),
+      customer.openingBalance,
       page,
       pageSize,
-      total: all.length,
-      items: all.slice(skip, skip + pageSize),
-    };
+      {
+        customerId: customer.id,
+        customerName: customer.name,
+      },
+    );
   }
 
   async updateCustomer(
     id: string,
     dto: UpdateCustomerDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // @IsOptional() lets `null` past validation, so null has to be handled
-    // here: nullable columns are cleared, the required name is a 400.
-    const data: any = {};
+    const data: Prisma.CustomerUpdateManyMutationInput = {};
     if (dto.name !== undefined) {
       if (dto.name === null) {
         throw new BadRequestException(
@@ -330,14 +308,14 @@ export class CustomersService {
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Customer', id));
     }
-    // TODO(ai): append audit log
+
     return new StatusBaseResponseDTO(true, 'Customer updated successfully');
   }
 
   async deleteCustomer(
     id: string,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const result = await this.prisma.customer.updateMany({
@@ -347,11 +325,10 @@ export class CustomersService {
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Customer', id));
     }
-    // TODO(ai): append audit log
+
     return new StatusBaseResponseDTO(true, 'Customer deactivated successfully');
   }
 
-  /** openingBalance is a bigint in the database; JSON cannot serialize bigint. */
   private toResponse(customer: Customer): ResponseCustomerDto {
     return { ...customer, openingBalance: Number(customer.openingBalance) };
   }

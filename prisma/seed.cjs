@@ -13,6 +13,7 @@ const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('../dist/generated/prisma/client.js');
 const { normalizePhone, normalizePhoneOrRaw } = require('../dist/helpers/phone.helper.js');
 const {
+  DEFAULT_BRANDS,
   DEFAULT_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
   WALK_IN_SUPPLIER,
@@ -38,7 +39,7 @@ const ADMIN_RAW_PHONE = process.env.SEED_ADMIN_PHONE || '03029825213';
 const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || 'admin@123';
 const ADMIN_NAME = process.env.SEED_ADMIN_NAME || 'Super Admin';
 
-const OWNER_RAW_PHONE = process.env.SEED_OWNER_PHONE || '03115514151';
+const OWNER_RAW_PHONE = process.env.SEED_OWNER_PHONE || '03029825214';
 const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD || 'admin@123';
 const OWNER_NAME = process.env.SEED_OWNER_NAME || 'Shop Owner';
 const SHOP_NAME = process.env.SEED_SHOP_NAME || 'Ronaq Store';
@@ -79,7 +80,7 @@ async function seedPlatformAdmin() {
 
   console.log('✅ Super Admin (Platform Admin) seeded successfully:');
   console.log(`   Email:    ${emailAdmin.phone} (Password: ${ADMIN_PASSWORD})`);
-  console.log(`   Phone:    03029825213 (canonical: ${phoneAdmin.phone}, Password: ${ADMIN_PASSWORD})`);
+  console.log(`   Phone:    ${ADMIN_RAW_PHONE} (canonical: ${phoneAdmin.phone}, Password: ${ADMIN_PASSWORD})`);
   console.log('');
   return emailAdmin;
 }
@@ -151,6 +152,17 @@ async function seedShopAndOwner() {
             shopId: createdShop.id,
             name: catName,
           })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (DEFAULT_BRANDS && DEFAULT_BRANDS.length > 0) {
+        await tx.brand.createMany({
+          data: DEFAULT_BRANDS.map((brandName) => ({
+            shopId: createdShop.id,
+            name: brandName,
+          })),
+          skipDuplicates: true,
         });
       }
 
@@ -248,9 +260,14 @@ async function main() {
   console.log('──────────────────────────────────────────────────');
   console.log('Super Admin (Platform Admin):');
   console.log('   Email:    super-admin@gmail.com');
-  console.log(`   Phone:    03029825213 (or ${normalizePhone(ADMIN_RAW_PHONE)})`);
+  console.log(`   Phone:    ${ADMIN_RAW_PHONE} (or ${normalizePhone(ADMIN_RAW_PHONE)})`);
   console.log(`   Password: ${ADMIN_PASSWORD}`);
   console.log('   Endpoint: POST /auth/platform-admin/login');
+  console.log('──────────────────────────────────────────────────');
+  console.log('Shop Owner:');
+  console.log(`   Phone:    ${OWNER_RAW_PHONE} (or ${normalizePhone(OWNER_RAW_PHONE)})`);
+  console.log(`   Password: ${OWNER_PASSWORD}`);
+  console.log('   Endpoint: POST /auth/login');
   console.log('──────────────────────────────────────────────────');
 }
 

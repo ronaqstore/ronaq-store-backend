@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PaymentsService } from './payments.service.js';
+import { PaymentsAllocationService } from './payments-allocation.service.js';
+import { PaymentsCancelService } from './payments-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 
@@ -139,6 +141,8 @@ describe('PaymentsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentsService,
+        PaymentsAllocationService,
+        PaymentsCancelService,
         { provide: PrismaService, useValue: prismaStub },
       ],
     }).compile();

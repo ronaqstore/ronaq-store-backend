@@ -13,41 +13,31 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import {
+  FileInterceptor,
   ApiBearerAuth,
   ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  logError,
+} from '../helpers/store-controller.imports.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { photoFileRequired } from '../../errors/error.builder.js';
 import { StoreService } from '../services/store.service.js';
 import { ReorderProductImagesDto } from '../dto/reorder-product-images.dto.js';
 import { ResponseProductImagesDto } from '../dto/response-product-image.dto.js';
 import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
 
-/**
- * WF21 photo routes live under the product path (`/products/:id/images…`)
- * exactly as the Online Store API table specifies, but the image rules
- * (max 5, https-only via R2, order-as-full-list) belong to StoreService — so
- * this controller is registered by StoreModule with the `products` prefix
- * instead of moving that logic into ProductsService.
- */
 @ApiTags('products')
 @Controller('products')
 @ApiBearerAuth()
@@ -70,7 +60,7 @@ export class ProductImagesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getProductImages(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseProductImagesDto>> {
     try {
       const images = await this.storeService.listProductImages(
@@ -122,7 +112,7 @@ export class ProductImagesController {
   async addProductImage(
     @Param('id') id: string,
     @UploadedFile() file: UploadedImageFile,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       if (!file || !file.buffer) {
@@ -165,7 +155,7 @@ export class ProductImagesController {
   async reorderProductImages(
     @Param('id') id: string,
     @Body() reorderProductImagesDto: ReorderProductImagesDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.storeService.reorderProductImages(
@@ -208,7 +198,7 @@ export class ProductImagesController {
   async removeProductImage(
     @Param('id') id: string,
     @Param('imageId') imageId: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.storeService.removeProductImage(

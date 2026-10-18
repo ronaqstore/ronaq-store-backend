@@ -22,6 +22,7 @@ import {
   UNAUTHORIZED_REQUEST_RESPONSE,
 } from '../../constants/error-response.constant.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { DashboardService } from '../services/dashboard.service.js';
 import { DashboardQueryFilterDto } from '../dto/dashboard-query.filter.js';
@@ -50,7 +51,7 @@ export class DashboardController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getDashboard(
     @Query() query: DashboardQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<DashboardDto>> {
     try {
       const res = await this.dashboardService.getDashboard(

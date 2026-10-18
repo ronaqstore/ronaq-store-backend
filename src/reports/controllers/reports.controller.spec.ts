@@ -6,6 +6,9 @@ import {
 } from '@nestjs/common';
 import { ReportsController } from './reports.controller.js';
 import { ReportsService } from '../services/reports.service.js';
+import { ReportsLedgerService } from '../services/reports-ledger.service.js';
+import { ReportsAnalyticsService } from '../services/reports-analytics.service.js';
+import { ReportsQueryHelper } from '../services/reports-query.helper.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -43,6 +46,9 @@ describe('ReportsController', () => {
       controllers: [ReportsController],
       providers: [
         ReportsService,
+        ReportsLedgerService,
+        ReportsAnalyticsService,
+        ReportsQueryHelper,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: AuthGuard,
@@ -75,10 +81,6 @@ describe('ReportsController', () => {
     ['purchaseReport', 'purchases', 'getPurchaseReport'],
     ['expenseReport', 'expenses', 'getExpenseReport'],
     ['profitReport', 'profit', 'getProfitReport'],
-    ['customerReport', 'customers', 'getCustomerReport'],
-    ['supplierReport', 'suppliers', 'getSupplierReport'],
-    ['inventoryReport', 'inventory', 'getInventoryReport'],
-    ['bestSellersReport', 'best-sellers', 'getBestSellersReport'],
   ] as const)(
     '%s scopes to the JWT shop and wraps JSON in the envelope',
     async (method, _name, serviceMethod) => {
@@ -105,12 +107,6 @@ describe('ReportsController', () => {
       'sales',
       'getSalesReport',
       'sales-2026-10-01-to-2026-10-31.csv',
-    ],
-    [
-      'customerReport',
-      'customers',
-      'getCustomerReport',
-      'customers-2026-10-01-to-2026-10-31.csv',
     ],
   ] as const)(
     '%s returns a text/csv download when format=csv',

@@ -31,18 +31,10 @@ import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { StorefrontService } from '../services/storefront.service.js';
 
-/** WF22 step 8 — let the CDN answer repeated catalog reads for a minute. */
 const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
 
-/**
- * Public, UNauthenticated storefront (WF22). This is the link customers
- * share / scan — it must work without a token. Never put a shop id here;
- * everything is looked up by the store slug, and every failure answers with
- * the same "store not available" body.
- */
 @ApiTags('storefront')
 @Controller('public/stores')
-// WF22 step 8 — rate limited per IP so one crawler cannot hammer the catalog.
 @UseGuards(RateLimitGuard)
 export class StorefrontController {
   constructor(private readonly storefrontService: StorefrontService) {}
@@ -54,10 +46,7 @@ export class StorefrontController {
       'NO authentication. Allows customers to search and discover shops by name, city, location, or product catalog.',
   })
   @ApiSuccessResponseDecorator(
-    OK_RESPONSE_STATUS(
-      PaginatedResponseDTO,
-      'Stores fetched successfully',
-    ),
+    OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Stores fetched successfully'),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)

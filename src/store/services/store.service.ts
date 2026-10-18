@@ -13,6 +13,7 @@ import { ResponseProductImageDto } from '../dto/response-product-image.dto.js';
 import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
 import { ResponseStoreSettingsDto } from '../dto/response-store-settings.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
+import type { ExistingStoreSettingsWhatsapp } from './store.service.types.js';
 import { StoreCacheService } from './store-cache.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 import {
@@ -63,10 +64,9 @@ export class StoreService {
   async updateSettings(
     dto: UpdateStoreSettingsDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    // @IsOptional() lets `null` through — the non-nullable columns refuse it.
     if (dto.displayName === null) {
       throw new BadRequestException(
         requiredFieldCannotBeNull('Store settings', 'displayName'),
@@ -77,7 +77,6 @@ export class StoreService {
       where: { shopId },
     });
 
-    // When creating, derive the slug — the owner never supplies one (WF19).
     let createSlug: string | undefined;
     try {
       if (existing) {
@@ -86,8 +85,6 @@ export class StoreService {
           data: this.buildUpdate(dto),
         });
       } else {
-        // No settings row yet — first PATCH creates one. The slug comes from
-        // the same derivation the DB backfill uses.
         createSlug = await this.nextFreeSlug(shopId);
         await this.prisma.shopStoreSettings.create({
           data: {
@@ -110,8 +107,6 @@ export class StoreService {
       throw error;
     }
 
-    // Any settings write invalidates the public slug cache — an OFF switch
-    // must hide the store from the very next request (WF19 step 8).
     this.cache.clear();
 
     const verb = existing ? 'updated' : 'created';
@@ -122,14 +117,9 @@ export class StoreService {
     return new StatusBaseResponseDTO(true, message);
   }
 
-  /**
-   * WF19 step 6 — turning the store ON with nobody to message or nothing to
-   * see deserves a nudge. Mutations return { status, message } only, so the
-   * warning rides in the success message.
-   */
   private async enableWarningSuffix(
     dto: UpdateStoreSettingsDto,
-    existing: { whatsappNumber: string | null } | null,
+    existing: ExistingStoreSettingsWhatsapp | null,
     shopId: string,
   ): Promise<string> {
     const warnings: string[] = [];
@@ -154,11 +144,6 @@ export class StoreService {
     return `. Warning: ${warnings.join('; ')}.`;
   }
 
-  /**
-   * WF19 step 2 — only a platform admin may change the store address, via
-   * PATCH /platform-admin/shops/{id}/store-slug. Shared links and QR codes
-   * break on a rename, which is exactly why the owner cannot do it himself.
-   */
   async changeStoreSlug(
     shopId: string,
     slug: string,
@@ -203,7 +188,6 @@ export class StoreService {
       throw error;
     }
 
-    // The old slug must stop resolving immediately.
     this.cache.clear();
     return new StatusBaseResponseDTO(
       true,
@@ -225,7 +209,7 @@ export class StoreService {
     if (!product.isActive) {
       throw new BadRequestException(productNotPublishable(product.name));
     }
-    // The DB trigger backfills publishedAt when is_published flips to true.
+
     await this.prisma.product.update({
       where: { id: productId },
       data: { isPublished: true },
@@ -244,7 +228,7 @@ export class StoreService {
     if (!product) {
       throw new NotFoundException(resourceNotFound('Product', productId));
     }
-    // The DB trigger clears publishedAt when is_published flips to false.
+
     await this.prisma.product.update({
       where: { id: productId },
       data: { isPublished: false },
@@ -289,9 +273,8 @@ export class StoreService {
       await this.prisma.productImage.create({
         data: { shopId, productId, url, sortOrder },
       });
+      await this.syncProductCoverImage(productId, shopId);
     } catch (error) {
-      // The DB is the source of truth; an orphaned object is harmless, so
-      // clean it up best-effort and surface the real DB error.
       await this.r2.deleteByUrl(url);
       throw error;
     }
@@ -354,6 +337,7 @@ export class StoreService {
         });
       }
     });
+    await this.syncProductCoverImage(productId, shopId);
     return new StatusBaseResponseDTO(
       true,
       'Product images reordered successfully',
@@ -372,8 +356,8 @@ export class StoreService {
       throw new NotFoundException(resourceNotFound('Product image', imageId));
     }
     await this.prisma.productImage.delete({ where: { id: imageId } });
-    // Never fail the request because the object delete failed; the DB row is
-    // the source of truth and a stray object is only wasted storage.
+    await this.syncProductCoverImage(productId, shopId);
+
     await this.r2.deleteByUrl(image.url);
     return new StatusBaseResponseDTO(
       true,
@@ -436,6 +420,21 @@ export class StoreService {
 
     this.cache.clear();
     return new StatusBaseResponseDTO(true, 'Shop logo removed successfully');
+  }
+
+  private async syncProductCoverImage(
+    productId: string,
+    shopId: string,
+  ): Promise<void> {
+    const cover = await this.prisma.productImage.findFirst({
+      where: { productId, shopId },
+      orderBy: { sortOrder: 'asc' },
+      select: { url: true },
+    });
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { imageUrl: cover?.url ?? null },
+    });
   }
 
   private async processImage(
@@ -519,11 +518,6 @@ export class StoreService {
     return shop?.name ?? '';
   }
 
-  /**
-   * Pick a free slug for a shop that has no settings row yet. The base
-   * derivation (slugify / truncate / fallback / reserved) lives in
-   * store-slug.helper.ts — shared with onboarding so both paths agree.
-   */
   private async nextFreeSlug(shopId: string): Promise<string> {
     const base = storeSlugBase(await this.shopDisplayName(shopId), shopId);
     return nextFreeStoreSlug(base, async (candidate) =>

@@ -1,15 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 import {
-  IsBoolean,
-  IsInt,
-  IsOptional,
-  IsString,
-  Length,
-  Max,
-  Min,
-} from 'class-validator';
-import { normalizePhoneOrRaw } from '../../helpers/phone.helper.js';
+  OptionalSupplierAddressProperty,
+  OptionalSupplierNotesProperty,
+  OptionalSupplierOpeningBalanceProperty,
+  OptionalSupplierPhoneProperty,
+} from '../../helpers/supplier-profile.decorators.js';
 
 export class CreateSupplierDto {
   @ApiProperty({
@@ -22,49 +19,18 @@ export class CreateSupplierDto {
   @Length(2, 150)
   name: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Contact number. Pakistani mobiles are normalised to 923XXXXXXXXX; any other spelling is stored as typed rather than rejected.',
-    example: '03001234567',
-  })
-  @Transform(({ value }) =>
-    typeof value === 'string' ? normalizePhoneOrRaw(value.trim()) : value,
-  )
-  @IsOptional()
-  @IsString()
-  @Length(1, 30)
+  @OptionalSupplierPhoneProperty()
   phone?: string;
 
-  @ApiPropertyOptional({
-    example: 'Suite 4, Hall Road, Lahore',
-    maxLength: 300,
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(0, 300)
+  @OptionalSupplierAddressProperty()
   address?: string;
 
-  @ApiPropertyOptional({
-    example: 'Only sells original chargers',
-    maxLength: 1000,
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(0, 1000)
+  @OptionalSupplierNotesProperty()
   notes?: string;
 
-  @ApiPropertyOptional({
-    description:
-      'What you already owed this supplier before Ronaq Store — Day-0 data. In PAISA (Rs 50,000 = 5000000). Integer, cannot be negative.',
-    example: 5000000,
-    default: 0,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(Number.MAX_SAFE_INTEGER)
+  @OptionalSupplierOpeningBalanceProperty(
+    'What you already owed this supplier before Ronaq Store — Day-0 data. In PAISA (Rs 50,000 = 5000000). Integer, cannot be negative.',
+  )
   openingBalance?: number;
 
   @ApiPropertyOptional({

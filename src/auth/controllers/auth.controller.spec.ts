@@ -1,12 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { AuthController } from './auth.controller.js';
-import { PlatformAdminAuthController } from './platform-admin-auth.controller.js';
 import { AuthService } from '../services/auth.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { PlatformAdminGuard } from '../../auth-guards/platform-admin.guard.js';
 
 const prismaStub = {
   user: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
@@ -15,26 +13,21 @@ const prismaStub = {
 };
 
 /**
- * Smoke test: verifies Nest can construct both auth controllers. Guards and
+ * Smoke test: verifies Nest can construct the auth controller. Guards and
  * their heavy dependencies are swapped out so the spec stays lightweight.
  * Real guard enforcement is covered by auth-token.spec.ts and e2e tests.
  */
 describe('AuthController', () => {
   let controller: AuthController;
-  let platformAdminController: PlatformAdminAuthController;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController, PlatformAdminAuthController],
+      controllers: [AuthController],
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: AuthGuard,
-          useValue: { canActivate: jest.fn().mockReturnValue(true) },
-        },
-        {
-          provide: PlatformAdminGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },
         },
         {
@@ -52,13 +45,9 @@ describe('AuthController', () => {
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-    platformAdminController = module.get<PlatformAdminAuthController>(
-      PlatformAdminAuthController,
-    );
   });
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
-    expect(platformAdminController).toBeDefined();
   });
 });

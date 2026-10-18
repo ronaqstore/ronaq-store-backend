@@ -30,12 +30,12 @@ import {
 } from '../../helpers/prisma-error-helper.js';
 import { BulkPublishProductsDto } from '../dto/bulk-publish-products.dto.js';
 
-/** Everything the response needs, fetched in a single query. */
 type ProductRow = Prisma.ProductGetPayload<{
   include: {
     category: { select: { name: true } };
     brand: { select: { name: true } };
     stockLevel: { select: { quantityOnHand: true } };
+    images: { select: { url: true; sortOrder: true } };
     _count: { select: { inventoryUnits: { where: { status: 'IN_STOCK' } } } };
   };
 }>;
@@ -44,6 +44,11 @@ const PRODUCT_INCLUDE = {
   category: { select: { name: true } },
   brand: { select: { name: true } },
   stockLevel: { select: { quantityOnHand: true } },
+  images: {
+    select: { url: true, sortOrder: true },
+    orderBy: { sortOrder: 'asc' as const },
+    take: 5,
+  },
   _count: { select: { inventoryUnits: { where: { status: 'IN_STOCK' } } } },
 } as const;
 
@@ -56,18 +61,22 @@ export class ProductsService {
   async createProduct(
     dto: CreateProductDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
     const sku = dto.sku?.trim() || null;
     const barcode = dto.barcode?.trim() || null;
 
-    // The category/brand FKs carry no shopId, so a raw insert would happily let
-    // this shop attach another shop's category. Verify ownership first.
     await this.assertCategoryOwned(dto.categoryId, shopId);
     await this.assertBrandOwned(dto.brandId, shopId);
 
+    const willBeActive = dto.isActive ?? true;
+    if (dto.isPublished === true && !willBeActive) {
+      throw new BadRequestException(productNotPublishable(name));
+    }
+
+    let createdProductId = '';
     try {
       await this.prisma.$transaction(async (tx) => {
         const product = await tx.product.create({
@@ -88,12 +97,15 @@ export class ProductsService {
             defaultPurchasePrice: dto.defaultPurchasePrice ?? 0,
             defaultSellingPrice: dto.defaultSellingPrice ?? 0,
             lowStockThreshold: dto.lowStockThreshold ?? 0,
-            isActive: dto.isActive ?? true,
+            isActive: willBeActive,
+            isPublished: dto.isPublished ?? false,
+            publicDescription: dto.publicDescription?.trim() || null,
+            contactForPrice: dto.contactForPrice ?? false,
+            ptaStatus: dto.ptaStatus ?? null,
           },
         });
+        createdProductId = product.id;
 
-        // QUANTITY products get a stock counter immediately. SERIALIZED ones
-        // never get one — their stock lives on inventory_units rows (one per IMEI).
         if (dto.trackingType === 'QUANTITY') {
           await tx.stockLevel.create({
             data: {
@@ -109,7 +121,11 @@ export class ProductsService {
       throw this.mapDuplicate(error, name, sku, barcode);
     }
 
-    return new StatusBaseResponseDTO(true, 'Product created successfully');
+    return new StatusBaseResponseDTO(
+      true,
+      'Product created successfully',
+      createdProductId,
+    );
   }
 
   async getProducts(
@@ -133,7 +149,7 @@ export class ProductsService {
     }
     if (query.search?.trim()) {
       const term = query.search.trim();
-      // Top-level keys are ANDed, so this narrows rather than widens the scope.
+
       where.OR = [
         { name: { contains: term, mode: 'insensitive' } },
         { model: { contains: term, mode: 'insensitive' } },
@@ -179,7 +195,7 @@ export class ProductsService {
     id: string,
     dto: UpdateProductDto,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const existing = await this.prisma.product.findFirst({
@@ -205,15 +221,17 @@ export class ProductsService {
       dto.trackingType !== existing.trackingType;
 
     if (trackingTypeChanges) {
+      const nextTrackingType = dto.trackingType;
+      if (nextTrackingType === undefined) {
+        throw new BadRequestException('trackingType is required');
+      }
       await this.assertTrackingTypeChangeAllowed(
         id,
         existing.name,
-        dto.trackingType!,
+        nextTrackingType,
       );
     }
 
-    // WF20: an inactive product can never be published — including when one
-    // request tries to publish and deactivate at the same time.
     const willBeActive = dto.isActive ?? existing.isActive;
     if (dto.isPublished === true && !willBeActive) {
       throw new BadRequestException(productNotPublishable(existing.name));
@@ -248,8 +266,7 @@ export class ProductsService {
       data.lowStockThreshold = dto.lowStockThreshold;
     }
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
-    // Release 1.2 — the public storefront fields. publishedAt is NOT written
-    // here: the DB trigger keeps it in step with is_published.
+
     if (dto.isPublished !== undefined) data.isPublished = dto.isPublished;
     if (dto.publicDescription !== undefined) {
       data.publicDescription = dto.publicDescription?.trim() || null;
@@ -267,8 +284,6 @@ export class ProductsService {
       await this.prisma.$transaction(async (tx) => {
         await tx.product.update({ where: { id }, data });
 
-        // Keep stock_levels in step with the tracking type. Allowed only because
-        // assertTrackingTypeChangeAllowed already proved there is no history.
         if (trackingTypeChanges) {
           if (dto.trackingType === 'QUANTITY') {
             const existingLevel = await tx.stockLevel.findUnique({
@@ -299,7 +314,7 @@ export class ProductsService {
   async deleteProduct(
     id: string,
     shopId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const result = await this.prisma.product.updateMany({
@@ -312,12 +327,6 @@ export class ProductsService {
     return new StatusBaseResponseDTO(true, 'Product deactivated successfully');
   }
 
-  /**
-   * WF20 step 5 — bulk publish / unpublish. Every id must belong to this shop
-   * (a foreign id is a 404, never a silent skip) and publishing refuses an
-   * inactive product, exactly like the single-product path. One transaction:
-   * either the whole selection flips or nothing does.
-   */
   async publishProducts(
     dto: BulkPublishProductsDto,
     shopId: string,
@@ -330,8 +339,10 @@ export class ProductsService {
 
     if (products.length !== ids.length) {
       const found = new Set(products.map((p) => p.id));
-      const missing = ids.find((id) => !found.has(id))!;
-      throw new NotFoundException(resourceNotFound('Product', missing));
+      const missing = ids.find((id) => !found.has(id));
+      if (missing) {
+        throw new NotFoundException(resourceNotFound('Product', missing));
+      }
     }
 
     if (dto.isPublished) {
@@ -382,11 +393,6 @@ export class ProductsService {
     }
   }
 
-  /**
-   * trackingType is locked the moment the product is referenced by any
-   * purchase_items or sale_items row — changing it would silently rewrite the
-   * meaning of every stock record already written.
-   */
   private async assertTrackingTypeChangeAllowed(
     productId: string,
     productName: string,
@@ -400,7 +406,6 @@ export class ProductsService {
       throw new BadRequestException(trackingTypeLocked(productName));
     }
 
-    // Going QUANTITY -> SERIALIZED drops the counter, so it must be empty.
     if (nextType === 'SERIALIZED') {
       const level = await this.prisma.stockLevel.findUnique({
         where: { productId },
@@ -414,7 +419,6 @@ export class ProductsService {
     }
   }
 
-  /** Turns a Prisma P2002 into the friendliest message we can give. */
   private mapDuplicate(
     error: unknown,
     name?: string,
@@ -444,6 +448,8 @@ export class ProductsService {
       row.trackingType === 'QUANTITY'
         ? (row.stockLevel?.quantityOnHand ?? 0)
         : row._count.inventoryUnits;
+    const imageUrls = row.images.map((image) => image.url);
+    const coverUrl = row.imageUrl ?? imageUrls[0] ?? null;
 
     return {
       id: row.id,
@@ -461,7 +467,8 @@ export class ProductsService {
       sku: row.sku,
       barcode: row.barcode,
       description: row.description,
-      imageUrl: row.imageUrl,
+      imageUrl: coverUrl,
+      imageUrls,
       defaultPurchasePrice: Number(row.defaultPurchasePrice),
       defaultSellingPrice: Number(row.defaultSellingPrice),
       lowStockThreshold: row.lowStockThreshold,

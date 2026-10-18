@@ -3,33 +3,31 @@ import {
   Controller,
   Delete,
   Get,
+  HttpException,
+  InternalServerErrorException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   UseGuards,
-  HttpException,
-  InternalServerErrorException,
-} from '@nestjs/common';
-import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
-import {
+  ApiSuccessResponseDecorator,
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
   NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
   UNAUTHORIZED_REQUEST_RESPONSE,
-} from '../../constants/error-response.constant.js';
-import { AuthGuard } from '../../auth-guards/auth-guard.js';
-import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
-import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
+  AuthGuard,
+  ApiSuccessResponseDTO,
+  StatusBaseResponseDTO,
+  PaginatedResponseDTO,
+  logError,
+} from '../../helpers/crud-controller.imports.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { CustomersService } from '../services/customers.service.js';
 import { CreateCustomerDto } from '../dto/create-customer.dto.js';
 import { UpdateCustomerDto } from '../dto/update-customer.dto.js';
@@ -37,7 +35,6 @@ import { CustomerQueryFilterDto } from '../dto/customer-query.filter.js';
 import { LedgerQueryFilterDto } from '../dto/ledger-query.filter.js';
 import { ResponseCustomerDto } from '../dto/response-customer.dto.js';
 import { CustomerLedgerDto } from '../dto/response-customer-ledger.dto.js';
-import { logError } from '../../helpers/logger-helper.js';
 
 @ApiTags('customers')
 @Controller('customers')
@@ -61,7 +58,7 @@ export class CustomersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async createCustomer(
     @Body() createCustomerDto: CreateCustomerDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.customersService.createCustomer(
@@ -94,7 +91,7 @@ export class CustomersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getCustomers(
     @Query() query: CustomerQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseCustomerDto>>> {
     try {
       const res = await this.customersService.getCustomers(
@@ -127,7 +124,7 @@ export class CustomersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getCustomerById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseCustomerDto>> {
     try {
       const res = await this.customersService.getCustomerById(
@@ -164,7 +161,7 @@ export class CustomersController {
   async getCustomerLedger(
     @Param('id') id: string,
     @Query() query: LedgerQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CustomerLedgerDto>> {
     try {
       const res = await this.customersService.getCustomerLedger(
@@ -202,7 +199,7 @@ export class CustomersController {
   async updateCustomer(
     @Param('id') id: string,
     @Body() updateCustomerDto: UpdateCustomerDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.customersService.updateCustomer(
@@ -240,7 +237,7 @@ export class CustomersController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteCustomer(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const res = await this.customersService.deleteCustomer(

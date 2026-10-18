@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
@@ -14,11 +15,8 @@ import {
 } from 'class-validator';
 
 const IMEI_PATTERN = /^[0-9A-Za-z]{4,20}$/;
+const IMEI_COUNT_MAX = 50_000;
 
-/**
- * One line of a purchase. Nested inside CreatePurchaseDto with
- * @Type(() => PurchaseItemDto) so class-validator actually walks the children.
- */
 export class PurchaseItemDto {
   @ApiProperty({
     description:
@@ -56,6 +54,7 @@ export class PurchaseItemDto {
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayMaxSize(IMEI_COUNT_MAX)
   @ArrayUnique()
   @IsString({ each: true })
   @Matches(IMEI_PATTERN, { each: true })

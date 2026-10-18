@@ -8,6 +8,8 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -27,7 +29,9 @@ import {
 } from '../../constants/error-response.constant.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
+import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { PlatformAdminGuard } from '../../auth-guards/platform-admin.guard.js';
+import type { PlatformAdminRequest } from '../../auth-guards/authenticated-request.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { PlatformAdminService } from '../services/platform-admin.service.js';
 import { CreateShopDto } from '../dto/create-shop.dto.js';
@@ -36,19 +40,81 @@ import { UpdateSubscriptionDto } from '../dto/update-subscription.dto.js';
 import { UpdateSubscriptionResponseDto } from '../dto/update-subscription-response.dto.js';
 import { ShopOwnerStatusResponseDto } from '../dto/shop-owner-status-response.dto.js';
 import { ChangeStoreSlugDto } from '../dto/change-store-slug.dto.js';
+import { ListShopsQueryDto } from '../dto/list-shops-query.dto.js';
+import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
+import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
 
-/**
- * SaaS admin panel API: onboard shops and manage subscriptions.
- *
- * Every route is behind PlatformAdminGuard, so an owner token cannot reach any
- * of them — an owner has no business creating shops or extending subscriptions.
- */
 @ApiTags('platform-admin-shops')
 @Controller('platform-admin/shops')
 @ApiBearerAuth()
 @UseGuards(PlatformAdminGuard)
 export class PlatformAdminShopsController {
   constructor(private readonly platformAdminService: PlatformAdminService) {}
+
+  @Get('/overview')
+  @ApiOperation({
+    summary: 'Platform shop KPIs',
+    description:
+      'Counts total / active / expired / suspended shops for the platform dashboard. There is no MRR — billing plans are not modelled yet.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      PlatformOverviewResponseDto,
+      'Platform overview fetched successfully',
+    ),
+  )
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(FORBIDDEN_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async getOverview(): Promise<
+    ApiSuccessResponseDTO<PlatformOverviewResponseDto>
+  > {
+    try {
+      const res = await this.platformAdminService.getOverview();
+      return new ApiSuccessResponseDTO(
+        'Platform overview fetched successfully',
+        res,
+      );
+    } catch (error) {
+      logError('platform-admin.controller.ts', 'getOverview', error);
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException(
+        'Failed to fetch platform overview',
+      );
+    }
+  }
+
+  @Get('/')
+  @ApiOperation({
+    summary: 'List all shops',
+    description:
+      'Paginated platform-wide shop directory with owner + subscription access state. Filter by accessStatus (ACTIVE | EXPIRED | SUSPENDED) and search across shop/owner fields.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Shops fetched successfully'),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(FORBIDDEN_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async listShops(
+    @Query() query: ListShopsQueryDto,
+    @Req() req: PlatformAdminRequest,
+  ): Promise<
+    ApiSuccessResponseDTO<PaginatedResponseDTO<ResponsePlatformShopDto>>
+  > {
+    try {
+      const res = await this.platformAdminService.listShops(query);
+      return new ApiSuccessResponseDTO('Shops fetched successfully', res);
+    } catch (error) {
+      logError('platform-admin.controller.ts', 'listShops', error, {
+        query,
+        adminId: req.user?.adminId,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch shops');
+    }
+  }
 
   @Post('/')
   @ApiOperation({

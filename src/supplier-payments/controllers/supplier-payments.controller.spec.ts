@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { SupplierPaymentsController } from './supplier-payments.controller.js';
 import { SupplierPaymentsService } from '../services/supplier-payments.service.js';
+import { SupplierPaymentsCancelService } from '../services/supplier-payments-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -36,6 +37,7 @@ describe('SupplierPaymentsController', () => {
       controllers: [SupplierPaymentsController],
       providers: [
         SupplierPaymentsService,
+        SupplierPaymentsCancelService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: AuthGuard,

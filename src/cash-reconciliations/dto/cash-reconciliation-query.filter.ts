@@ -1,52 +1,25 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { IsIn, IsOptional } from 'class-validator';
+import { OptionalListPaginationQueryFilterDto } from '../../common-dto/query/optional-list-pagination-query.filter.dto.js';
 import {
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  Matches,
-  Max,
-  Min,
-} from 'class-validator';
+  InclusiveDateFromQueryProperty,
+  InclusiveDateToQueryProperty,
+  OptionalSearchQueryProperty,
+  SortOrderPeriodQueryProperty,
+} from '../../helpers/query-filter.decorators.js';
 
-export class CashReconciliationQueryFilterDto {
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number;
-
-  @ApiPropertyOptional({ example: 10, maximum: 100 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  pageSize?: number;
-
-  @ApiPropertyOptional({ description: 'Matches the reason.' })
-  @IsOptional()
-  @IsString()
+export class CashReconciliationQueryFilterDto extends OptionalListPaginationQueryFilterDto {
+  @OptionalSearchQueryProperty('closing', 'Matches the reason.')
   search?: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Start of the range as an Asia/Karachi business day, YYYY-MM-DD.',
-    example: '2026-10-01',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @InclusiveDateFromQueryProperty(
+    'Start of the range as an Asia/Karachi business day, YYYY-MM-DD.',
+  )
   from?: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Inclusive end of the range as an Asia/Karachi business day, YYYY-MM-DD.',
-    example: '2026-10-31',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  @InclusiveDateToQueryProperty(
+    'Inclusive end of the range as an Asia/Karachi business day, YYYY-MM-DD.',
+  )
   to?: string;
 
   @ApiPropertyOptional({
@@ -56,8 +29,6 @@ export class CashReconciliationQueryFilterDto {
   @IsIn(['reconciledAt', 'systemCash', 'countedCash', 'difference'])
   sortBy?: string;
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
-  @IsOptional()
-  @IsIn(['asc', 'desc'])
+  @SortOrderPeriodQueryProperty()
   sortOrder?: 'asc' | 'desc';
 }

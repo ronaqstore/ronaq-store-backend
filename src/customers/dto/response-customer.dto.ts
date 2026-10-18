@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Output DTO returned by GET endpoints. Shape mirrors the Prisma row; we do not
- * expose it directly because future fields (e.g. internal counters, audit fields)
- * can be scrubbed here without breaking the frontend.
- * openingBalance is a bigint in the database; it is returned as a plain number
- * (paisa) because JSON cannot serialize bigint.
- */
 export class ResponseCustomerDto {
   @ApiProperty({
     description: 'UUID v7 of this customer row.',

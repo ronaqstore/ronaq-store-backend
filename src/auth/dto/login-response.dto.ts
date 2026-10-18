@@ -30,11 +30,6 @@ export class OwnerLoginShopDto {
   subscriptionEndsAt: Date;
 }
 
-/**
- * Owner login response. Also the shape of the JWT payload, minus the token
- * itself — the frontend can trust `shopId` here because the backend never
- * accepts a shopId from the client (CLAUDE.md Rule 2).
- */
 export class OwnerLoginResponseDto {
   @ApiProperty({
     description: 'Signed JWT. Send as `Authorization: Bearer <token>`.',
@@ -75,9 +70,6 @@ export class PlatformAdminSummaryDto {
   phone: string;
 }
 
-/**
- * Platform admin login response. No shopId — admins operate outside tenants.
- */
 export class PlatformAdminLoginResponseDto {
   @ApiProperty({
     description: 'Signed JWT. Send as `Authorization: Bearer <token>`.',

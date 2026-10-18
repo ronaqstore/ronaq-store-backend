@@ -8,6 +8,5 @@ import { AppConfigurationService } from '../app-configuration/app-configuration.
   imports: [PrismaModule],
   controllers: [ExpenseCategoriesController],
   providers: [ExpenseCategoriesService, AppConfigurationService],
-  // exports: [ExpenseCategoriesService],  ← uncomment when the expenses module validates categories through this service
 })
 export class ExpenseCategoriesModule {}

@@ -37,6 +37,7 @@ import { CancelSaleDto } from '../dto/cancel-sale.dto.js';
 import { SaleQueryFilterDto } from '../dto/sale-query.filter.js';
 import { ResponseSaleDto } from '../dto/response-sale.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('sales')
 @Controller('sales')
@@ -65,7 +66,7 @@ export class SalesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createSale(
     @Body() createSaleDto: CreateSaleDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.salesService.createSale(
@@ -104,7 +105,7 @@ export class SalesController {
   async cancelSale(
     @Param('id') id: string,
     @Body() cancelSaleDto: CancelSaleDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<CancelSaleResult>> {
     try {
@@ -114,7 +115,6 @@ export class SalesController {
         req.user.shopId,
         req.user.userId,
       );
-      // The overdraft prompt writes nothing — must not claim 201.
       res.status('confirmOverdraft' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
@@ -148,7 +148,7 @@ export class SalesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
       const res = await this.salesService.getCancelImpact(id, req.user.shopId);
@@ -181,7 +181,7 @@ export class SalesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getSales(
     @Query() query: SaleQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseSaleDto>>> {
     try {
       const res = await this.salesService.getSales(query, req.user.shopId);
@@ -211,7 +211,7 @@ export class SalesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getSaleById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseSaleDto>> {
     try {
       const res = await this.salesService.getSaleById(id, req.user.shopId);

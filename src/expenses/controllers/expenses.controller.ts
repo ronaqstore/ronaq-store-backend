@@ -39,6 +39,7 @@ import { CancelExpenseDto } from '../dto/cancel-expense.dto.js';
 import { ExpenseQueryFilterDto } from '../dto/expense-query.filter.js';
 import { ResponseExpenseDto } from '../dto/response-expense.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
 @ApiTags('expenses')
 @Controller('expenses')
@@ -67,7 +68,7 @@ export class ExpensesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async createExpense(
     @Body() createExpenseDto: CreateExpenseDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<CreateExpenseResult>> {
     try {
@@ -76,7 +77,6 @@ export class ExpensesController {
         req.user.shopId,
         req.user.userId,
       );
-      // Overdraft prompt writes nothing — must not claim 201.
       res.status('confirmOverdraft' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
@@ -106,7 +106,7 @@ export class ExpensesController {
   async cancelExpense(
     @Param('id') id: string,
     @Body() cancelExpenseDto: CancelExpenseDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {
       const result = await this.expensesService.cancelExpense(
@@ -142,7 +142,7 @@ export class ExpensesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getExpenses(
     @Query() query: ExpenseQueryFilterDto,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseExpenseDto>>> {
     try {
       const result = await this.expensesService.getExpenses(
@@ -175,7 +175,7 @@ export class ExpensesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getExpenseById(
     @Param('id') id: string,
-    @Req() req: any,
+    @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseExpenseDto>> {
     try {
       const result = await this.expensesService.getExpenseById(

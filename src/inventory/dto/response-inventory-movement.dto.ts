@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/** One row of the stock-movement history — an append-only ledger, never edited. */
 export class ResponseInventoryMovementDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-0000000000e1' })
   id: string;
@@ -51,7 +50,6 @@ export class ResponseInventoryMovementDto {
   createdAt: Date;
 }
 
-/** The list endpoint returns this shape per row. */
 export class PaginatedInventoryMovementDto {
   @ApiProperty({ example: 1 })
   page: number;

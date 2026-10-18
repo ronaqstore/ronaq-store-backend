@@ -1,42 +1,20 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsOptional, IsUUID } from 'class-validator';
+import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
-  IsBoolean,
-  IsDateString,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  Max,
-  Min,
-} from 'class-validator';
+  InclusiveDateFromQueryProperty,
+  InclusiveDateToQueryProperty,
+  OptionalSearchQueryProperty,
+  SortOrderPeriodQueryProperty,
+  optionalBooleanQueryTransform,
+} from '../../helpers/query-filter.decorators.js';
 
-export class PurchaseQueryFilterDto {
-  @ApiPropertyOptional({ example: 1, description: '1-based page number.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ example: 10, description: 'Rows per page, max 100.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  pageSize?: number = 10;
-
-  @ApiPropertyOptional({
-    example: 'AB-771',
-    description:
-      'Case-insensitive contains search across purchase number, the supplier invoice reference and the supplier name.',
-  })
-  @IsOptional()
-  @IsString()
+export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
+  @OptionalSearchQueryProperty(
+    'AB-771',
+    'Case-insensitive contains search across purchase number, the supplier invoice reference and the supplier name.',
+  )
   search?: string;
 
   @ApiPropertyOptional({
@@ -62,31 +40,18 @@ export class PurchaseQueryFilterDto {
   })
   @IsOptional()
   @Type(() => String)
-  @Transform(({ value }) => {
-    if (value === undefined || value === null) return undefined;
-    if (value === true || value === 'true') return true;
-    if (value === false || value === 'false') return false;
-    throw new BadRequestException('isOpeningStock must be true or false');
-  })
+  @Transform(optionalBooleanQueryTransform('isOpeningStock'))
   @IsBoolean()
   isOpeningStock?: boolean;
 
-  @ApiPropertyOptional({
-    example: '2026-10-01',
-    description: 'Inclusive lower bound on purchaseDate, YYYY-MM-DD.',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString()
+  @InclusiveDateFromQueryProperty(
+    'Inclusive lower bound on purchaseDate, YYYY-MM-DD.',
+  )
   from?: string;
 
-  @ApiPropertyOptional({
-    example: '2026-10-31',
-    description: 'Inclusive upper bound on purchaseDate, YYYY-MM-DD.',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString()
+  @InclusiveDateToQueryProperty(
+    'Inclusive upper bound on purchaseDate, YYYY-MM-DD.',
+  )
   to?: string;
 
   @ApiPropertyOptional({
@@ -111,8 +76,6 @@ export class PurchaseQueryFilterDto {
     | 'createdAt'
     | 'updatedAt' = 'purchaseDate';
 
-  @ApiPropertyOptional({ example: 'desc', description: 'asc or desc' })
-  @IsOptional()
-  @IsIn(['asc', 'desc'])
+  @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }

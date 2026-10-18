@@ -1,40 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
-  IsDateString,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  Max,
-  Min,
-} from 'class-validator';
+  InclusiveDateFromQueryProperty,
+  InclusiveDateToQueryProperty,
+  OptionalSearchQueryProperty,
+  SortOrderPeriodQueryProperty,
+} from '../../helpers/query-filter.decorators.js';
 
-export class InventoryAdjustmentQueryFilterDto {
-  @ApiPropertyOptional({ example: 1, description: '1-based page number.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ example: 10, description: 'Rows per page, max 100.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  pageSize?: number = 10;
-
-  @ApiPropertyOptional({
-    example: 'Charger',
-    description:
-      'Case-insensitive contains search across the product name and the movement reason.',
-  })
-  @IsOptional()
-  @IsString()
+export class InventoryAdjustmentQueryFilterDto extends ListPaginationQueryFilterDto {
+  @OptionalSearchQueryProperty(
+    'Charger',
+    'Case-insensitive contains search across the product name and the movement reason.',
+  )
   search?: string;
 
   @ApiPropertyOptional({
@@ -54,22 +32,14 @@ export class InventoryAdjustmentQueryFilterDto {
   @IsIn(['ADJUSTMENT', 'DAMAGED', 'LOST'])
   type?: 'ADJUSTMENT' | 'DAMAGED' | 'LOST';
 
-  @ApiPropertyOptional({
-    example: '2026-10-01',
-    description: 'Inclusive lower bound on the movement timestamp, YYYY-MM-DD.',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString()
+  @InclusiveDateFromQueryProperty(
+    'Inclusive lower bound on the movement timestamp, YYYY-MM-DD.',
+  )
   from?: string;
 
-  @ApiPropertyOptional({
-    example: '2026-10-31',
-    description: 'Inclusive upper bound on the movement timestamp, YYYY-MM-DD.',
-  })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  @IsDateString()
+  @InclusiveDateToQueryProperty(
+    'Inclusive upper bound on the movement timestamp, YYYY-MM-DD.',
+  )
   to?: string;
 
   @ApiPropertyOptional({
@@ -80,8 +50,6 @@ export class InventoryAdjustmentQueryFilterDto {
   @IsIn(['createdAt', 'quantityChange'])
   sortBy?: 'createdAt' | 'quantityChange' = 'createdAt';
 
-  @ApiPropertyOptional({ example: 'desc', description: 'asc or desc' })
-  @IsOptional()
-  @IsIn(['asc', 'desc'])
+  @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }

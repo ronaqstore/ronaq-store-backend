@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/** One payment as stored, with the names resolved in the list query. */
 export class ResponseSupplierPaymentDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000301' })
   id: string;
@@ -63,7 +62,6 @@ export class ResponseSupplierPaymentDto {
   updatedAt: Date;
 }
 
-/** One unpaid bill, oldest first — exactly what step 2 of WF7 renders. */
 export class UnpaidPurchaseDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-0000000000c1' })
   id: string;
@@ -93,7 +91,6 @@ export class UnpaidPurchaseDto {
   remaining: number;
 }
 
-/** What the owner sees when they open a supplier and press "pay later". */
 export class SupplierPayableDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-00000000000a' })
   supplierId: string;

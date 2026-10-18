@@ -8,16 +8,8 @@ import {
   Matches,
 } from 'class-validator';
 
-/**
- * Owner edits the store's public face. All fields optional (partial edit).
- * `null` is legal on every nullable column to clear it; the service rejects
- * `null` on the non-nullable displayName. URL formats mirror the DB CHECKs so
- * a bad value is a friendly 400, not a raw constraint error.
- *
- * `slug` is deliberately ABSENT: the owner cannot change the store address
- * (shared links and QR codes would break) — only a platform admin can, via
- * PATCH /platform-admin/shops/{id}/store-slug (WF19 step 2).
- */
+const HTTP_URL_PATTERN = new RegExp('^https?:\\/\\/', 'i');
+
 export class UpdateStoreSettingsDto {
   @ApiPropertyOptional({
     description: 'Master switch. The public store is a 404 until this is true.',
@@ -54,7 +46,7 @@ export class UpdateStoreSettingsDto {
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
-  @Matches(/^https?:\/\//i, { message: 'logoUrl must be an http(s) URL' })
+  @Matches(HTTP_URL_PATTERN, { message: 'logoUrl must be an http(s) URL' })
   logoUrl?: string | null;
 
   @ApiPropertyOptional({
@@ -63,7 +55,7 @@ export class UpdateStoreSettingsDto {
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
-  @Matches(/^https?:\/\//i)
+  @Matches(HTTP_URL_PATTERN)
   bannerUrl?: string | null;
 
   @ApiPropertyOptional({
@@ -105,11 +97,11 @@ export class UpdateStoreSettingsDto {
 
   @ApiPropertyOptional({
     description: 'Google Maps link for directions. http(s) only.',
-    example: 'https://maps.google.com/?q=24.86,67.03',
+    example: 'https://example.com/maps?q=24.86,67.03',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
-  @Matches(/^https?:\/\//i)
+  @Matches(HTTP_URL_PATTERN)
   googleMapsUrl?: string | null;
 
   @ApiPropertyOptional({
@@ -124,20 +116,20 @@ export class UpdateStoreSettingsDto {
 
   @ApiPropertyOptional({
     description: 'Facebook page URL. http(s) only.',
-    example: 'https://facebook.com/khalid.mobile',
+    example: 'https://example.com/facebook/khalid.mobile',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
-  @Matches(/^https?:\/\//i)
+  @Matches(HTTP_URL_PATTERN)
   facebookUrl?: string | null;
 
   @ApiPropertyOptional({
     description: 'Instagram profile URL. http(s) only.',
-    example: 'https://instagram.com/khalid.mobile',
+    example: 'https://example.com/instagram/khalid.mobile',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
-  @Matches(/^https?:\/\//i)
+  @Matches(HTTP_URL_PATTERN)
   instagramUrl?: string | null;
 
   @ApiPropertyOptional({

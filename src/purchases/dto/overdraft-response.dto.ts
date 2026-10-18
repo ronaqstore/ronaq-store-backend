@@ -1,11 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsBoolean, IsNumber, IsString } from 'class-validator';
 
-/**
- * Returned with HTTP 200 instead of StatusBaseResponseDTO when the payment
- * would take cash below zero and confirmOverdraft was not sent yet. The client
- * shows the warning and retries the identical payload plus confirmOverdraft.
- */
 export class PurchaseOverdraftResponseDto {
   @ApiProperty({ example: true })
   @IsBoolean()

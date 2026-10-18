@@ -30,13 +30,14 @@ export const expenseReportCsvColumns: CsvColumn<ExpenseReportRowDTO>[] = [
   { header: 'Amount', value: (r) => formatRupees(r.amount) },
 ];
 
+export const expenseSummaryCsvHeader = 'Category,Total,Count';
+
 export const expenseReportSummaryCsv = (s: ExpenseReportSummaryDTO): string =>
   [
     `Total Expenses,${formatRupees(s.total)}`,
     `Count,${s.count}`,
+    ...(s.byCategory.length > 0 ? [expenseSummaryCsvHeader] : []),
     ...s.byCategory.map(
       (c) => `${c.categoryName},${formatRupees(c.total)},${c.count}`,
     ),
   ].join('\r\n');
-
-export const expenseSummaryCsvHeader = 'Category,Total,Count';

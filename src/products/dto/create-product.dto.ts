@@ -6,15 +6,14 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUrl,
   IsUUID,
   Length,
   Max,
-  MaxLength,
   Min,
 } from 'class-validator';
+import { ProductOptionalSpecFieldsDto } from '../../common-dto/product/product-optional-spec-fields.dto.js';
 
-export class CreateProductDto {
+export class CreateProductDto extends ProductOptionalSpecFieldsDto {
   @ApiProperty({
     description:
       'Product name shown in every picker. Unique inside a single shop (case-sensitive).',
@@ -49,77 +48,6 @@ export class CreateProductDto {
   })
   @IsIn(['QUANTITY', 'SERIALIZED'])
   trackingType: 'QUANTITY' | 'SERIALIZED';
-
-  @ApiPropertyOptional({
-    description: 'Model number / marketing name.',
-    example: 'SM-A155F',
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  model?: string;
-
-  @ApiPropertyOptional({ example: 'Blue' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  color?: string;
-
-  @ApiPropertyOptional({ example: '8GB' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  ram?: string;
-
-  @ApiPropertyOptional({ example: '128GB' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  storage?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Stock keeping unit. Optional. When set it must be unique inside the shop. NULLs are allowed repeatedly.',
-    example: 'A15-BLU-128',
-    maxLength: 100,
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  sku?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Barcode / IMEI label. Optional. Unique inside the shop when set.',
-    example: '356938035643809',
-    maxLength: 100,
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  barcode?: string;
-
-  @ApiPropertyOptional({ maxLength: 1000 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  description?: string;
-
-  @ApiPropertyOptional({
-    description: 'Absolute image URL. The backend stores the string only.',
-    example: 'https://cdn.example.com/a15.jpg',
-  })
-  @IsOptional()
-  @IsString()
-  @IsUrl({ require_tld: false }, { message: 'imageUrl must be a valid URL' })
-  @MaxLength(500)
-  imageUrl?: string;
 
   @ApiPropertyOptional({
     description:

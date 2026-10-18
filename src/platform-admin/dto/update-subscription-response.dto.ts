@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ShopStatus } from '../../generated/prisma/enums.js';
 
-/** WF3 result — confirms the new subscription window and access state. */
 export class UpdateSubscriptionResponseDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
   shopId: string;
