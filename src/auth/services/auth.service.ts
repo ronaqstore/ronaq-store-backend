@@ -82,7 +82,7 @@ export class AuthService {
     if (phoneConflict) {
       throw new BadRequestException(
         phoneConflict === 'PLATFORM_ADMIN'
-          ? 'This mobile number is already registered as a platform admin. Use a different number.'
+          ? 'This mobile number is already registered. Use a different number.'
           : loginPhoneAlreadyTaken(ownerPhone),
       );
     }
