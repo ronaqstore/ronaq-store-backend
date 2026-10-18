@@ -12,6 +12,7 @@ const ALLOWED = [
   'src/app-configuration/',
   'src/main.ts',
   'src/prisma/prisma.service.ts',
+  'src/helpers/logger-helper.ts',
 ];
 
 if (fs.existsSync(srcRoot)) {

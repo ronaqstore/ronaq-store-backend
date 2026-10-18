@@ -37,6 +37,7 @@ const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('../dist/generated/prisma/client.js');
 const { normalizePhone, normalizePhoneOrRaw } = require('../dist/helpers/phone.helper.js');
 const {
+  DEFAULT_BRANDS,
   DEFAULT_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
   WALK_IN_SUPPLIER,
@@ -123,6 +124,16 @@ async function main() {
         data: DEFAULT_CATEGORIES.map((catName) => ({
           shopId: shop.id,
           name: catName,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (DEFAULT_BRANDS && DEFAULT_BRANDS.length > 0) {
+      await prisma.brand.createMany({
+        data: DEFAULT_BRANDS.map((brandName) => ({
+          shopId: shop.id,
+          name: brandName,
         })),
         skipDuplicates: true,
       });

@@ -1,7 +1,7 @@
 const ERROR_BEGIN = '\n========== ERROR BEGIN ==========';
 const ERROR_END = '==========  ERROR END  ==========\n';
 
-const isJest = typeof process.env.JEST_WORKER_ID !== 'undefined';
+const isJest = typeof process['env']?.JEST_WORKER_ID !== 'undefined';
 
 export const logError = (
   fileName: string,

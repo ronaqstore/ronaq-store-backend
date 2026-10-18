@@ -46,6 +46,7 @@ import { MeResponseDto } from '../dto/me-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { RegisterOwnerDto } from '../dto/register-owner.dto.js';
 import {
+  DEFAULT_BRANDS,
   DEFAULT_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
   WALK_IN_SUPPLIER,
@@ -130,6 +131,15 @@ export class AuthService {
       if (DEFAULT_CATEGORIES.length > 0) {
         await tx.category.createMany({
           data: DEFAULT_CATEGORIES.map((name) => ({
+            shopId: newShop.id,
+            name,
+          })),
+        });
+      }
+
+      if (DEFAULT_BRANDS.length > 0) {
+        await tx.brand.createMany({
+          data: DEFAULT_BRANDS.map((name) => ({
             shopId: newShop.id,
             name,
           })),

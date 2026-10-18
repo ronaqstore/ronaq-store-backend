@@ -278,12 +278,17 @@ describe('PlatformAdminService', () => {
       expect(categories.every((c: any) => c.shopId === 'shop-1')).toBe(true);
     });
 
-    it('seeds no brands, so the owner types their own', async () => {
+    it('seeds default brands on shop creation', async () => {
       const res = await service.createShop(validDto);
 
-      expect(DEFAULT_BRANDS).toHaveLength(0);
-      expect(txStub.brand.createMany).not.toHaveBeenCalled();
-      expect(res.defaults.brands).toBe(0);
+      expect(DEFAULT_BRANDS.length).toBeGreaterThan(0);
+      expect(txStub.brand.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          { shopId: 'shop-1', name: 'Apple' },
+          { shopId: 'shop-1', name: 'Samsung' },
+        ]),
+      });
+      expect(res.defaults.brands).toBe(DEFAULT_BRANDS.length);
     });
 
     it('creates the protected Walk-in seller supplier', async () => {
@@ -317,6 +322,7 @@ describe('PlatformAdminService', () => {
         'shop.create',
         'user.create',
         `category.createMany:${DEFAULT_CATEGORIES.length}`,
+        `brand.createMany:${DEFAULT_BRANDS.length}`,
         `expenseCategory.createMany:${DEFAULT_EXPENSE_CATEGORIES.length}`,
         'supplier.create',
         // WF19 step 1: the store row is born with the shop (OFF).
@@ -342,7 +348,7 @@ describe('PlatformAdminService', () => {
 
       expect(res.defaults).toEqual({
         categories: DEFAULT_CATEGORIES.length,
-        brands: 0,
+        brands: DEFAULT_BRANDS.length,
         expenseCategories: DEFAULT_EXPENSE_CATEGORIES.length,
         suppliers: 1,
       });

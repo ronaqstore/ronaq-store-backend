@@ -5,6 +5,10 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { hashOpaqueToken } from '../../helpers/token.helper.js';
 import { ShopStatus, UserStatus } from '../../generated/prisma/enums.js';
+import {
+  DEFAULT_BRANDS,
+  DEFAULT_CATEGORIES,
+} from '../../platform-admin/constants/default-lists.constant.js';
 
 /** bcrypt of 'DukaanOwner1' at cost 10 — the tests' "correct" password. */
 const OWNER_HASH =
@@ -272,6 +276,83 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 400 });
 
       expect(prismaStub.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('registerOwner', () => {
+    it('seeds default categories, brands, expense categories, and supplier for the new shop', async () => {
+      prismaStub.user.findFirst.mockResolvedValue(null);
+      prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+
+      const txMock = {
+        shop: {
+          create: jest.fn().mockResolvedValue({
+            id: 'new-shop-id',
+            name: 'New Mobile Shop',
+            phone: '923001122334',
+            address: 'City Center',
+            status: ShopStatus.ACTIVE,
+            nextSaleNo: 1,
+            nextPurchaseNo: 1,
+            subscriptionEndsAt: new Date(),
+          }),
+        },
+        user: {
+          create: jest.fn().mockResolvedValue({
+            id: 'new-user-id',
+            shopId: 'new-shop-id',
+            name: 'Shopkeeper',
+            phone: '923001122334',
+            role: 'OWNER',
+            status: UserStatus.ACTIVE,
+          }),
+        },
+        category: {
+          createMany: jest
+            .fn()
+            .mockResolvedValue({ count: DEFAULT_CATEGORIES.length }),
+        },
+        brand: {
+          createMany: jest
+            .fn()
+            .mockResolvedValue({ count: DEFAULT_BRANDS.length }),
+        },
+        expenseCategory: {
+          createMany: jest.fn().mockResolvedValue({ count: 8 }),
+        },
+        supplier: {
+          create: jest.fn().mockResolvedValue({ id: 'sup-1' }),
+        },
+        shopStoreSettings: {
+          findUnique: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ shopId: 'new-shop-id' }),
+        },
+      };
+
+      prismaStub.$transaction.mockImplementation((cb: any) => cb(txMock));
+
+      const res = await service.registerOwner({
+        fullName: 'Shopkeeper',
+        phone: '03001122334',
+        password: 'Password123!',
+        shopName: 'New Mobile Shop',
+        city: 'Peshawar',
+        address: 'City Center',
+      });
+
+      expect(txMock.category.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          { shopId: 'new-shop-id', name: 'Mobile Phones' },
+          { shopId: 'new-shop-id', name: 'Smart Watches' },
+        ]),
+      });
+      expect(txMock.brand.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          { shopId: 'new-shop-id', name: 'Apple' },
+          { shopId: 'new-shop-id', name: 'Samsung' },
+        ]),
+      });
+      expect(res.shopId).toBe('new-shop-id');
     });
   });
 });

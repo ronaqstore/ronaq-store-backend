@@ -1,14 +1,35 @@
 export const DEFAULT_CATEGORIES = [
   'Mobile Phones',
-  'Accessories',
+  'Tablets & iPads',
+  'Smart Watches',
+  'Wireless Earbuds',
+  'Earphones',
+  'Power Banks',
   'Chargers & Cables',
   'Cases & Covers',
   'Screen Guards',
-  'Earphones',
-  'Power Banks',
+  'Speakers',
+  'Storage & Memory Cards',
+  'Accessories',
 ] as const;
 
-export const DEFAULT_BRANDS: readonly string[] = [];
+export const DEFAULT_BRANDS = [
+  'Apple',
+  'Samsung',
+  'Xiaomi',
+  'Vivo',
+  'Oppo',
+  'Infinix',
+  'Tecno',
+  'Realme',
+  'OnePlus',
+  'itel',
+  'Honor',
+  'Google Pixel',
+  'Ronin',
+  'Faster',
+  'Anker',
+] as const;
 
 export const DEFAULT_EXPENSE_CATEGORIES = [
   'Rent',
