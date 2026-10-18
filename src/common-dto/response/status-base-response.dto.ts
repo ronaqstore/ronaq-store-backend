@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class StatusBaseResponseDTO {
   @ApiProperty({ example: true, description: 'Whether the mutation succeeded' })
@@ -13,8 +13,19 @@ export class StatusBaseResponseDTO {
   @IsString()
   message: string;
 
-  constructor(status: boolean, message: string) {
+  @ApiPropertyOptional({
+    example: '01924f0a-0000-7000-8000-000000000000',
+    description: 'Optional ID of the created or affected entity',
+  })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  constructor(status: boolean, message: string, id?: string) {
     this.status = status;
     this.message = message;
+    if (id) {
+      this.id = id;
+    }
   }
 }

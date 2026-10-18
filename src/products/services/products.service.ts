@@ -71,6 +71,12 @@ export class ProductsService {
     await this.assertCategoryOwned(dto.categoryId, shopId);
     await this.assertBrandOwned(dto.brandId, shopId);
 
+    const willBeActive = dto.isActive ?? true;
+    if (dto.isPublished === true && !willBeActive) {
+      throw new BadRequestException(productNotPublishable(name));
+    }
+
+    let createdProductId = '';
     try {
       await this.prisma.$transaction(async (tx) => {
         const product = await tx.product.create({
@@ -91,9 +97,14 @@ export class ProductsService {
             defaultPurchasePrice: dto.defaultPurchasePrice ?? 0,
             defaultSellingPrice: dto.defaultSellingPrice ?? 0,
             lowStockThreshold: dto.lowStockThreshold ?? 0,
-            isActive: dto.isActive ?? true,
+            isActive: willBeActive,
+            isPublished: dto.isPublished ?? false,
+            publicDescription: dto.publicDescription?.trim() || null,
+            contactForPrice: dto.contactForPrice ?? false,
+            ptaStatus: dto.ptaStatus ?? null,
           },
         });
+        createdProductId = product.id;
 
         if (dto.trackingType === 'QUANTITY') {
           await tx.stockLevel.create({
@@ -110,7 +121,11 @@ export class ProductsService {
       throw this.mapDuplicate(error, name, sku, barcode);
     }
 
-    return new StatusBaseResponseDTO(true, 'Product created successfully');
+    return new StatusBaseResponseDTO(
+      true,
+      'Product created successfully',
+      createdProductId,
+    );
   }
 
   async getProducts(

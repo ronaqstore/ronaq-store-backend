@@ -9,7 +9,6 @@ import {
   IsUUID,
   Length,
   Max,
-  MaxLength,
   Min,
 } from 'class-validator';
 import { ProductOptionalSpecFieldsDto } from '../../common-dto/product/product-optional-spec-fields.dto.js';
@@ -85,44 +84,4 @@ export class UpdateProductDto extends ProductOptionalSpecFieldsDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
-
-  @ApiPropertyOptional({
-    description:
-      'Publish / unpublish on the public store. Only an ACTIVE product can be published; the DB trigger maintains publishedAt.',
-    example: true,
-  })
-  @IsOptional()
-  @IsBoolean()
-  isPublished?: boolean;
-
-  @ApiPropertyOptional({
-    description:
-      'What customers read on the store. The private `description` field is never shown publicly. Blank clears it.',
-    example: 'Brand new, box pack, 1 year warranty.',
-    maxLength: 4000,
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @MaxLength(4000)
-  publicDescription?: string | null;
-
-  @ApiPropertyOptional({
-    description:
-      'true hides the selling price on the store and shows "Contact for price" instead.',
-    example: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  contactForPrice?: boolean;
-
-  @ApiPropertyOptional({
-    description:
-      'PTA status shown to customers. null clears it (accessories have none).',
-    enum: ['PTA_APPROVED', 'NON_PTA'],
-    example: 'PTA_APPROVED',
-  })
-  @IsOptional()
-  @IsIn(['PTA_APPROVED', 'NON_PTA'])
-  ptaStatus?: 'PTA_APPROVED' | 'NON_PTA' | null;
 }
