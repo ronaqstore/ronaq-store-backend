@@ -11,28 +11,25 @@ export async function findLoginPhoneConflict(
   phone: string,
   options?: FindLoginPhoneConflictOptions,
 ): Promise<LoginPhoneConflict | null> {
-  const [user, admin] = await Promise.all([
-    client.user.findFirst({
-      where: {
-        phone,
-        ...(options?.excludeUserId
-          ? { id: { not: options.excludeUserId } }
-          : {}),
-      },
-      select: { id: true },
-    }),
-    client.platformAdmin.findFirst({
-      where: {
-        phone,
-        ...(options?.excludePlatformAdminId
-          ? { id: { not: options.excludePlatformAdminId } }
-          : {}),
-      },
-      select: { id: true },
-    }),
-  ]);
-
+  const user = await client.user.findFirst({
+    where: {
+      phone,
+      ...(options?.excludeUserId ? { id: { not: options.excludeUserId } } : {}),
+    },
+    select: { id: true },
+  });
   if (user) return 'USER';
+
+  const admin = await client.platformAdmin.findFirst({
+    where: {
+      phone,
+      ...(options?.excludePlatformAdminId
+        ? { id: { not: options.excludePlatformAdminId } }
+        : {}),
+    },
+    select: { id: true },
+  });
   if (admin) return 'PLATFORM_ADMIN';
+
   return null;
 }

@@ -16,6 +16,10 @@ export class AppConfigurationService {
       DATABASE_URL: Joi.string()
         .uri({ scheme: ['postgresql', 'postgres'] })
         .required(),
+      DIRECT_URL: Joi.string()
+        .uri({ scheme: ['postgresql', 'postgres'] })
+        .optional()
+        .allow(''),
       JWT_SECRET: Joi.string().min(16).required(),
       CORS_ORIGINS: Joi.string().required(),
       APP_BASE_URL: Joi.string()

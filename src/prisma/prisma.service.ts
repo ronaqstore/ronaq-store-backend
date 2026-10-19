@@ -10,6 +10,18 @@ import { PrismaClient } from '../generated/prisma/client.js';
 
 const { Pool } = pg;
 
+function cleanDatabaseUrl(url: string | undefined): string {
+  if (!url) return '';
+  let cleaned = url
+    .replace('&channel_binding=require', '')
+    .replace('?channel_binding=require&', '?')
+    .replace('?channel_binding=require', '');
+  if (!cleaned.includes('connect_timeout')) {
+    cleaned += (cleaned.includes('?') ? '&' : '?') + 'connect_timeout=30';
+  }
+  return cleaned;
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -19,13 +31,18 @@ export class PrismaService
   private readonly pool: pg.Pool;
 
   constructor() {
+    const connectionString = cleanDatabaseUrl(process.env.DATABASE_URL);
     const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       connectionTimeoutMillis: 30_000,
-      idleTimeoutMillis: 30_000,
-      max: 20,
+      idleTimeoutMillis: 10_000,
+      maxLifetimeSeconds: 60,
+      max: 10,
       keepAlive: true,
-      keepAliveInitialDelayMillis: 10_000,
+      keepAliveInitialDelayMillis: 5_000,
+      ssl: {
+        rejectUnauthorized: false,
+      },
     });
 
     pool.on('error', (err: Error) => {
@@ -36,6 +53,10 @@ export class PrismaService
 
     super({
       adapter: new PrismaPg(pool),
+      transactionOptions: {
+        maxWait: 10_000,
+        timeout: 30_000,
+      },
     });
 
     this.pool = pool;
