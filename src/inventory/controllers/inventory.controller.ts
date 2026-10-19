@@ -48,14 +48,14 @@ export class InventoryController {
 
   @Get('/units')
   @ApiOperation({
-    summary: 'List in-stock phone units for a product',
+    summary: 'List phone units for a product',
     description:
-      'Returns IN_STOCK inventory units (id + IMEI) for the given product so the sale / write-off UI can pick one.',
+      'Returns inventory units (id, IMEI, cost, status, condition, supplier/purchase/sale info) for the given product.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       ResponseInventoryUnitDto,
-      'In-stock units fetched successfully',
+      'Inventory units fetched successfully',
     ),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
@@ -67,12 +67,12 @@ export class InventoryController {
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseInventoryUnitDto[]>> {
     try {
-      const units = await this.inventoryService.listInStockUnits(
-        query.productId,
+      const units = await this.inventoryService.listUnits(
+        query,
         req.user.shopId,
       );
       return new ApiSuccessResponseDTO(
-        'In-stock units fetched successfully',
+        'Inventory units fetched successfully',
         units,
       );
     } catch (error) {

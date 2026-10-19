@@ -70,6 +70,8 @@ model SaleItem {
   unitPrice       BigInt  @map("unit_price") // real price at sale time
   unitCost        BigInt  @map("unit_cost") // real cost at sale time (for profit)
   total           BigInt // quantity * unitPrice (no item-level discount)
+  // USED phones: 1|2|3 shop warranty days. NEW phones: null = company warranty. Accessories: null.
+  warrantyDays    Int?    @map("warranty_days")
 
   shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
   sale          Sale           @relation(fields: [saleId], references: [id], onDelete: Restrict)

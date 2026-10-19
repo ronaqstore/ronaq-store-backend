@@ -9,6 +9,7 @@ import {
   InventoryMovementType,
   UnitStatus,
 } from '../../generated/prisma/enums.js';
+import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
 import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
@@ -58,39 +59,127 @@ const MANUAL_TYPES: InventoryMovementType[] = [
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listUnits(
+    query: InventoryUnitQueryFilterDto,
+    shopId: string,
+  ): Promise<ResponseInventoryUnitDto[]> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: query.productId, shopId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new NotFoundException(resourceNotFound('Product', query.productId));
+    }
+
+    const where: Prisma.InventoryUnitWhereInput = {
+      shopId,
+      productId: query.productId,
+    };
+
+    if (query.status && query.status !== 'ALL') {
+      where.status = query.status as UnitStatus;
+    } else if (!query.status) {
+      where.status = UnitStatus.IN_STOCK;
+    }
+
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { imei1: { contains: term, mode: 'insensitive' } },
+        { imei2: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    if (query.condition) {
+      where.condition = query.condition;
+    }
+
+    if (query.batteryMin != null) {
+      where.batteryHealth = { gte: query.batteryMin };
+    }
+
+    const rows = await this.prisma.inventoryUnit.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        product: {
+          select: {
+            defaultSellingPrice: true,
+            brand: { select: { name: true } },
+          },
+        },
+        purchaseItem: {
+          include: {
+            purchase: {
+              include: {
+                supplier: {
+                  select: { name: true, phone: true },
+                },
+              },
+            },
+          },
+        },
+        saleItems: {
+          include: {
+            sale: {
+              include: {
+                customer: {
+                  select: { name: true, phone: true },
+                },
+              },
+            },
+          },
+          take: 1,
+          orderBy: { id: 'desc' },
+        },
+      },
+    });
+
+    return rows.map((row) => {
+      const purchase = row.purchaseItem?.purchase;
+      const supplier = purchase?.supplier;
+      const latestSaleItem = row.saleItems?.[0];
+      const sale = latestSaleItem?.sale;
+      const customer = sale?.customer;
+      const defaultSell = Number(row.product.defaultSellingPrice);
+      const asking = row.askingPrice != null ? Number(row.askingPrice) : null;
+
+      return {
+        id: row.id,
+        productId: row.productId,
+        imei1: row.imei1,
+        imei2: row.imei2,
+        condition: row.condition,
+        status: row.status,
+        unitCost: Number(row.unitCost),
+        batteryHealth: row.batteryHealth,
+        askingPrice: asking,
+        defectNotes: row.defectNotes,
+        effectivePrice: asking ?? defaultSell,
+        createdAt: row.createdAt,
+        purchaseNo: purchase?.purchaseNo ?? null,
+        purchaseDate: purchase?.purchaseDate
+          ? purchase.purchaseDate.toISOString().slice(0, 10)
+          : null,
+        supplierInvoiceRef: purchase?.supplierInvoiceRef ?? null,
+        supplierName: supplier?.name ?? null,
+        supplierPhone: supplier?.phone ?? null,
+        saleNo: sale?.saleNo ?? null,
+        saleDate: sale?.saleDate
+          ? sale.saleDate.toISOString().slice(0, 10)
+          : null,
+        customerName: customer?.name ?? null,
+        customerPhone: customer?.phone ?? null,
+        salePrice: latestSaleItem ? Number(latestSaleItem.unitPrice) : null,
+      };
+    });
+  }
+
   async listInStockUnits(
     productId: string,
     shopId: string,
   ): Promise<ResponseInventoryUnitDto[]> {
-    const product = await this.prisma.product.findFirst({
-      where: { id: productId, shopId },
-      select: { id: true },
-    });
-    if (!product) {
-      throw new NotFoundException(resourceNotFound('Product', productId));
-    }
-
-    const rows = await this.prisma.inventoryUnit.findMany({
-      where: { shopId, productId, status: UnitStatus.IN_STOCK },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        productId: true,
-        imei1: true,
-        imei2: true,
-        condition: true,
-        status: true,
-      },
-    });
-
-    return rows.map((row) => ({
-      id: row.id,
-      productId: row.productId,
-      imei1: row.imei1,
-      imei2: row.imei2,
-      condition: row.condition,
-      status: row.status,
-    }));
+    return this.listUnits({ productId, status: UnitStatus.IN_STOCK }, shopId);
   }
 
   async createAdjustment(

@@ -24,6 +24,12 @@ export class ResponseSupplierDto {
   })
   phone?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Pakistani CNIC of the supplier / seller (XXXXX-XXXXXXX-X).',
+    example: '17301-1234567-1',
+  })
+  cnic?: string | null;
+
   @ApiPropertyOptional({ example: 'Suite 4, Hall Road, Lahore' })
   address?: string | null;
 

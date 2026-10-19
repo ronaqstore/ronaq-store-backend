@@ -43,7 +43,7 @@ export const imeisCountMismatch = (
   return new ErrorResponseDTO(
     `IMEI count does not match quantity for ${productName}`,
     [
-      `${quantity} unit(s) of "${productName}" were ordered but ${imeiCount} IMEI(s) were supplied. Every phone needs exactly one IMEI, so the two numbers must match.`,
+      `${quantity} unit(s) of "${productName}" were ordered but ${imeiCount} phone unit(s) were supplied. Every phone needs IMEI1 + IMEI2, so the unit count must match quantity.`,
     ],
     HttpStatus.BAD_REQUEST,
   );
@@ -53,7 +53,17 @@ export const imeisNotAllowed = (productName: string): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     `IMEIs are not allowed for ${productName}`,
     [
-      `"${productName}" is tracked by quantity, not by IMEI. Remove the imeis list from this line — accessories only need a quantity.`,
+      `"${productName}" is tracked by quantity, not by IMEI. Remove phoneUnits from this line — accessories only need a quantity.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
+export const imeiPairMustDiffer = (imei: string): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'IMEI1 and IMEI2 must be different',
+    [
+      `Both slots were set to ${imei}. Every dual-SIM phone needs two different IMEIs.`,
     ],
     HttpStatus.BAD_REQUEST,
   );
@@ -65,6 +75,26 @@ export const duplicateImei = (imei: string): ErrorResponseDTO => {
     [
       `A phone with IMEI ${imei} already exists in this shop (from an earlier purchase, or listed twice on this one). IMEIs must be unique inside a shop, so fix the number before saving.`,
     ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
+export const batteryHealthNotAllowed = (
+  productName: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    `Battery health is not allowed for ${productName}`,
+    [
+      'Battery health is only for Apple (iPhone) units. Clear batteryHealth for Android and other brands.',
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
+export const batteryHealthOutOfRange = (): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'Battery health must be between 1 and 100',
+    ['Enter a whole percent from 1 to 100, or leave battery health empty.'],
     HttpStatus.BAD_REQUEST,
   );
 };

@@ -71,6 +71,7 @@ export function mapSaleToResponse(row: SaleWithLines): ResponseSaleDto {
       unitPrice: Number(item.unitPrice),
       unitCost: Number(item.unitCost),
       total: Number(item.total),
+      warrantyDays: item.warrantyDays ?? null,
     })),
     payments: row.payments.map((payment): ResponsePaymentDto => ({
       id: payment.id,

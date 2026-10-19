@@ -12,16 +12,19 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { CreatePurchaseDto } from '../dto/create-purchase.dto.js';
 import {
+  batteryHealthNotAllowed,
+  batteryHealthOutOfRange,
   duplicateImei,
+  imeiPairMustDiffer,
   imeisCountMismatch,
   imeisNotAllowed,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { isAppleBrandName } from '../../helpers/device-family.helper.js';
 import { loadShopProductsById } from '../../helpers/product-catalog.helper.js';
 
 type Tx = Prisma.TransactionClient;
 
-/** Keeps Neon round-trips small when a line has thousands of IMEIs. */
 const STOCK_WRITE_CHUNK = 500;
 
 @Injectable()
@@ -43,31 +46,54 @@ export class PurchasesWriteService {
           resourceNotFound('Product', line.productId),
         );
       }
-      const imeis = line.imeis ?? [];
+      const phoneUnits = line.phoneUnits ?? [];
 
       if (product.trackingType === 'SERIALIZED') {
-        if (imeis.length !== line.quantity) {
+        if (phoneUnits.length !== line.quantity) {
           throw new BadRequestException(
-            imeisCountMismatch(product.name, line.quantity, imeis.length),
+            imeisCountMismatch(product.name, line.quantity, phoneUnits.length),
           );
         }
-      } else if (imeis.length > 0) {
+      } else if (phoneUnits.length > 0) {
         throw new BadRequestException(imeisNotAllowed(product.name));
       }
 
-      for (const imei of imeis) {
-        if (seen.has(imei)) throw new BadRequestException(duplicateImei(imei));
-        seen.add(imei);
+      for (const unit of phoneUnits) {
+        if (unit.imei1 === unit.imei2) {
+          throw new BadRequestException(imeiPairMustDiffer(unit.imei1));
+        }
+        for (const imei of [unit.imei1, unit.imei2]) {
+          if (seen.has(imei))
+            throw new BadRequestException(duplicateImei(imei));
+          seen.add(imei);
+        }
+        if (unit.batteryHealth != null) {
+          if (!isAppleBrandName(product.brandName)) {
+            throw new BadRequestException(
+              batteryHealthNotAllowed(product.name),
+            );
+          }
+          if (unit.batteryHealth < 1 || unit.batteryHealth > 100) {
+            throw new BadRequestException(batteryHealthOutOfRange());
+          }
+        }
       }
     }
 
     if (seen.size > 0) {
-      const inUse = await this.prisma.inventoryUnit.findMany({
-        where: { shopId, imei1: { in: [...seen] } },
-        select: { imei1: true },
+      const values = [...seen];
+      const inUse = await this.prisma.inventoryUnit.findFirst({
+        where: {
+          shopId,
+          OR: [{ imei1: { in: values } }, { imei2: { in: values } }],
+        },
+        select: { imei1: true, imei2: true },
       });
-      if (inUse.length > 0) {
-        throw new BadRequestException(duplicateImei(inUse[0].imei1));
+      if (inUse) {
+        const hit =
+          values.find((v) => v === inUse.imei1 || v === inUse.imei2) ??
+          inUse.imei1;
+        throw new BadRequestException(duplicateImei(hit));
       }
     }
 
@@ -114,24 +140,31 @@ export class PurchasesWriteService {
     purchaseItemId: string,
     line: CreatePurchaseDto['items'][number],
   ): Promise<void> {
-    const imeis = line.imeis ?? [];
+    const phoneUnits = line.phoneUnits ?? [];
 
-    if (imeis.length > 0) {
+    if (phoneUnits.length > 0) {
       const unitIds: string[] = [];
-      for (let i = 0; i < imeis.length; i += STOCK_WRITE_CHUNK) {
-        const chunk = imeis.slice(i, i + STOCK_WRITE_CHUNK);
+      for (let i = 0; i < phoneUnits.length; i += STOCK_WRITE_CHUNK) {
+        const chunk = phoneUnits.slice(i, i + STOCK_WRITE_CHUNK);
         const units = await tx.inventoryUnit.createManyAndReturn({
-          data: chunk.map((imei) => ({
+          data: chunk.map((unit) => ({
             shopId,
             productId: line.productId,
             purchaseItemId,
-            imei1: imei,
-            condition: line.condition ?? UnitCondition.NEW,
+            imei1: unit.imei1,
+            imei2: unit.imei2,
+            condition: unit.condition ?? line.condition ?? UnitCondition.NEW,
             unitCost: BigInt(line.unitCost),
+            batteryHealth: unit.batteryHealth ?? null,
+            askingPrice:
+              unit.askingPrice != null ? BigInt(unit.askingPrice) : null,
+            defectNotes: unit.defectNotes?.trim()
+              ? unit.defectNotes.trim()
+              : null,
           })),
           select: { id: true },
         });
-        for (const unit of units) unitIds.push(unit.id);
+        for (const created of units) unitIds.push(created.id);
       }
 
       for (let i = 0; i < unitIds.length; i += STOCK_WRITE_CHUNK) {

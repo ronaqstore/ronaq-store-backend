@@ -55,7 +55,7 @@ export class PurchasesController {
     description:
       'WF6 — buys goods from a supplier, fills stock and optionally pays cash, all in ONE transaction. ' +
       'totalAmount is computed server-side from quantity × unitCost; never send it. ' +
-      'SERIALIZED (phone) lines must supply exactly one IMEI per unit; QUANTITY lines must not send imeis. ' +
+      'SERIALIZED (phone) lines must supply phoneUnits (IMEI1 + IMEI2 per phone); QUANTITY lines must not send phoneUnits. ' +
       'clientRequestId makes the save double-tap safe: a repeat returns success without writing again. ' +
       'isOpeningStock writes stock only — no payable, no cash. ' +
       'If paidNow would take cash below zero the response is 200 ' +

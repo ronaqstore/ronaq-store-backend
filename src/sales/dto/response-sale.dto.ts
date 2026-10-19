@@ -45,6 +45,13 @@ export class ResponseSaleItemDto {
     example: 160000,
   })
   total: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Shop warranty days for USED phones (1|2|3). null = company warranty (NEW) or N/A (accessories).',
+    example: 2,
+  })
+  warrantyDays?: number | null;
 }
 
 export class ResponsePaymentDto {

@@ -189,18 +189,27 @@ export class PurchasesService {
       }
       if (
         isUniqueConstraintViolation(error) &&
-        violatedColumn(error, 'imei1')
+        (violatedColumn(error, 'imei1') || violatedColumn(error, 'imei2'))
       ) {
         const allImeis = [
-          ...new Set(dto.items.flatMap((line) => line.imeis ?? [])),
+          ...new Set(
+            dto.items.flatMap((line) =>
+              (line.phoneUnits ?? []).flatMap((u) => [u.imei1, u.imei2]),
+            ),
+          ),
         ];
         const inUse = await this.prisma.inventoryUnit.findFirst({
-          where: { shopId, imei1: { in: allImeis } },
-          select: { imei1: true },
+          where: {
+            shopId,
+            OR: [{ imei1: { in: allImeis } }, { imei2: { in: allImeis } }],
+          },
+          select: { imei1: true, imei2: true },
         });
-        throw new BadRequestException(
-          duplicateImei(inUse?.imei1 ?? allImeis[0] ?? 'that IMEI'),
-        );
+        const hit =
+          allImeis.find((v) => v === inUse?.imei1 || v === inUse?.imei2) ??
+          allImeis[0] ??
+          'that IMEI';
+        throw new BadRequestException(duplicateImei(hit));
       }
       throw error;
     }

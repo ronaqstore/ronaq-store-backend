@@ -91,6 +91,32 @@ export const inventoryUnitIdRequiredForSale = (
   );
 };
 
+export const warrantyDaysRequiredForUsedPhone = (
+  productName: string,
+  imei: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'Used phones need a shop warranty',
+    [
+      `"${productName}" (IMEI ${imei}) is USED, so pick a shop warranty of 1, 2, or 3 days on this sale line.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
+export const companyWarrantyForNewPhone = (
+  productName: string,
+  imei: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'Brand-new phones use company warranty',
+    [
+      `"${productName}" (IMEI ${imei}) is NEW — warranty comes from the company. Do not set shop warranty days on this line.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const saleHasReturns = (saleNo: string): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     `Sale ${saleNo} cannot be cancelled`,

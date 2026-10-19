@@ -27,11 +27,18 @@ export class ResponsePurchaseItemDto {
   totalCost: number;
 
   @ApiPropertyOptional({
-    description: 'IMEIs created from this line (SERIALIZED products only).',
-    example: ['111223344556677'],
-    type: [String],
+    description:
+      'Phone units created from this line (SERIALIZED only). Each entry is IMEI1 + IMEI2.',
+    example: [{ imei1: '111223344556677', imei2: '111223344556688' }],
   })
-  imeis?: string[];
+  phoneUnits?: Array<{
+    imei1: string;
+    imei2: string;
+    condition?: string;
+    batteryHealth?: number | null;
+    askingPrice?: number | null;
+    defectNotes?: string | null;
+  }>;
 }
 
 export class ResponsePurchaseDto {

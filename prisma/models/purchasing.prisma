@@ -7,6 +7,7 @@ model Supplier {
   shopId         String   @map("shop_id") @db.Uuid
   name           String
   phone          String?
+  cnic           String? // Pakistani CNIC for the supplier / seller
   address        String?
   notes          String?
   openingBalance BigInt   @default(0) @map("opening_balance") // old dues entered on day one

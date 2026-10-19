@@ -52,6 +52,7 @@ export class SuppliersService {
         shopId,
         name: dto.name.trim(),
         phone: dto.phone?.trim() || null,
+        cnic: dto.cnic?.trim() || null,
         address: dto.address?.trim() || null,
         notes: dto.notes?.trim() || null,
         openingBalance: BigInt(dto.openingBalance ?? 0),
@@ -84,6 +85,7 @@ export class SuppliersService {
       const branches: Prisma.SupplierWhereInput[] = [
         { name: { contains: term, mode: 'insensitive' } },
         { phone: { contains: term, mode: 'insensitive' } },
+        { cnic: { contains: term, mode: 'insensitive' } },
         { address: { contains: term, mode: 'insensitive' } },
       ];
 
@@ -258,6 +260,9 @@ export class SuppliersService {
     const data: Prisma.SupplierUpdateInput = {};
     if (newName !== undefined) data.name = newName;
     if (dto.phone !== undefined) data.phone = dto.phone?.trim() || null;
+    if (dto.cnic !== undefined) {
+      data.cnic = dto.cnic == null ? null : dto.cnic.trim() || null;
+    }
     if (dto.address !== undefined) data.address = dto.address?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
     if (dto.openingBalance !== undefined) {
@@ -304,6 +309,7 @@ export class SuppliersService {
       shopId: row.shopId,
       name: row.name,
       phone: row.phone,
+      cnic: row.cnic,
       address: row.address,
       notes: row.notes,
       openingBalance: Number(row.openingBalance),

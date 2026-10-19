@@ -63,6 +63,8 @@ model Product {
   publicDescription String?    @map("public_description") // what customers read; `description` stays private
   contactForPrice   Boolean    @default(false) @map("contact_for_price") // hide the price, show "Contact for price"
   ptaStatus         PtaStatus? @map("pta_status")
+  // QUANTITY accessories only: ORIGINAL vs COPY. Null for phones / unset.
+  authenticity      ProductAuthenticity? @map("authenticity")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)

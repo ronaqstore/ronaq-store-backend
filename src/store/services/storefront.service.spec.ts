@@ -77,6 +77,9 @@ describe('StorefrontService (public catalog)', () => {
               count: jest.fn(),
               findFirst: jest.fn(),
             },
+            inventoryUnit: {
+              findMany: jest.fn().mockResolvedValue([]),
+            },
           },
         },
       ],
@@ -321,7 +324,6 @@ describe('StorefrontService (public catalog)', () => {
         'barcode',
         'unitCost',
         'costPrice',
-        'trackingType',
         'condition',
         'imei',
         'isActive',
@@ -334,6 +336,8 @@ describe('StorefrontService (public catalog)', () => {
       ]) {
         expect(forbidden in item).toBe(false);
       }
+      expect(item.trackingType).toBe('SERIALIZED');
+      expect(item.modelKey).toBeTruthy();
       // `description` is the PUBLIC text (publicDescription), never the
       // owner's private notes — the value proves which one it is.
       expect(item.description).toBe('Genuine.');

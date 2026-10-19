@@ -190,7 +190,7 @@ describe('ProductsService', () => {
       });
       expect(prismaStub.brand.findFirst).toHaveBeenCalledWith({
         where: { id: BRAND_ID, shopId: 'shop-2' },
-        select: { id: true },
+        select: { id: true, name: true },
       });
     });
 
@@ -577,7 +577,9 @@ describe('ProductsService', () => {
     });
 
     it('writes the R1.2 publish fields and never touches publishedAt', async () => {
-      prismaStub.product.findFirst.mockResolvedValue(baseProductRow());
+      prismaStub.product.findFirst.mockResolvedValue(
+        baseProductRow({ trackingType: 'SERIALIZED' }),
+      );
       prismaStub.product.update.mockResolvedValue({});
 
       await service.updateProduct(

@@ -154,6 +154,7 @@ describe('SuppliersService', () => {
       expect(where.OR).toEqual([
         { name: { contains: 'abc', mode: 'insensitive' } },
         { phone: { contains: 'abc', mode: 'insensitive' } },
+        { cnic: { contains: 'abc', mode: 'insensitive' } },
         { address: { contains: 'abc', mode: 'insensitive' } },
       ]);
     });
@@ -171,6 +172,7 @@ describe('SuppliersService', () => {
       expect(where.OR).toEqual([
         { name: { contains: '0300-1234567', mode: 'insensitive' } },
         { phone: { contains: '0300-1234567', mode: 'insensitive' } },
+        { cnic: { contains: '0300-1234567', mode: 'insensitive' } },
         { address: { contains: '0300-1234567', mode: 'insensitive' } },
         { phone: { contains: '923001234567', mode: 'insensitive' } },
       ]);
@@ -187,7 +189,7 @@ describe('SuppliersService', () => {
       );
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
-      expect(where.OR).toHaveLength(3);
+      expect(where.OR).toHaveLength(4);
     });
 
     it('passes the isActive filter through', async () => {

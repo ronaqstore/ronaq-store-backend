@@ -9,9 +9,15 @@ model InventoryUnit {
   productId      String        @map("product_id") @db.Uuid
   purchaseItemId String        @map("purchase_item_id") @db.Uuid
   imei1          String
-  imei2          String?
+  imei2          String
   condition      UnitCondition @default(NEW)
   unitCost       BigInt        @map("unit_cost")
+  /// iPhone only (1–100). Null for Android / NEW when unknown.
+  batteryHealth  Int?          @map("battery_health")
+  /// Paisa ask price for this unit; null = use product defaultSellingPrice.
+  askingPrice    BigInt?       @map("asking_price")
+  /// Dead / water / broken camera-touch-sensor-screen notes.
+  defectNotes    String?       @map("defect_notes")
   status         UnitStatus    @default(IN_STOCK)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -25,7 +31,7 @@ model InventoryUnit {
   returnItems ReturnItem[]
 
   @@unique([shopId, imei1])
-  @@unique([shopId, imei2]) // NULL imei2 allowed many times
+  @@unique([shopId, imei2])
   @@index([productId, status])
   @@index([shopId, status])
   @@index([purchaseItemId])

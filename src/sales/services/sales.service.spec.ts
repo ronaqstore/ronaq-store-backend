@@ -146,11 +146,13 @@ describe('SalesService', () => {
         id: QUANTITY_PRODUCT_ID,
         name: 'Samsung Charger',
         trackingType: 'QUANTITY',
+        brand: { name: 'Samsung' },
       },
       {
         id: SERIAL_PRODUCT_ID,
         name: 'Samsung A15',
         trackingType: 'SERIALIZED',
+        brand: { name: 'Samsung' },
       },
     ]);
     // Stock lock returns the second queryRaw result (the counter is first).
@@ -676,7 +678,12 @@ describe('SalesService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prismaStub.product.findMany).toHaveBeenCalledWith({
         where: { id: { in: [QUANTITY_PRODUCT_ID] }, shopId: SHOP_ID },
-        select: { id: true, name: true, trackingType: true },
+        select: {
+          id: true,
+          name: true,
+          trackingType: true,
+          brand: { select: { name: true } },
+        },
       });
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
