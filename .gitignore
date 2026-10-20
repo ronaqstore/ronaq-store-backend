@@ -12,10 +12,10 @@ coverage/
 scripts/.temp-jscpd/
 .jscpd-report/
 
-# Env files (allow .env.example)
+# Local env files (commit .env.production like admin/web)
 .env
 .env.*
-!.env.example
+!.env.production
 
 # Editor & OS
 .vscode/
