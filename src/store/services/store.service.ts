@@ -13,7 +13,11 @@ import { ResponseProductImageDto } from '../dto/response-product-image.dto.js';
 import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
 import { ResponseStoreSettingsDto } from '../dto/response-store-settings.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import type { ExistingStoreSettingsWhatsapp } from './store.service.types.js';
+import type {
+  ExistingStoreSettingsWhatsapp,
+  ProcessImageOptions,
+  ProcessedImageResult,
+} from './store.service.types.js';
 import { StoreCacheService } from './store-cache.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 import {
@@ -258,7 +262,10 @@ export class StoreService {
       );
     }
 
-    const processed = await this.processImage(file);
+    const processed = await this.processImage(file, {
+      maxEdge: MAX_IMAGE_EDGE,
+      fit: 'inside',
+    });
     const key = `products-images/${shopId}/${productId}/${randomUUID()}.${processed.ext}`;
     const url = await this.r2.put(key, processed.buffer, processed.contentType);
 
@@ -377,7 +384,10 @@ export class StoreService {
       throw new NotFoundException(resourceNotFound('Store settings'));
     }
 
-    const processed = await this.processImage(file, MAX_LOGO_EDGE);
+    const processed = await this.processImage(file, {
+      maxEdge: MAX_LOGO_EDGE,
+      fit: 'cover',
+    });
     const key = `shops-logos/${shopId}/${randomUUID()}.${processed.ext}`;
     const url = await this.r2.put(key, processed.buffer, processed.contentType);
     const previousUrl = settings.logoUrl;
@@ -439,13 +449,10 @@ export class StoreService {
 
   private async processImage(
     file: UploadedImageFile,
-    maxEdge = MAX_IMAGE_EDGE,
-  ): Promise<{
-    buffer: Buffer;
-    ext: string;
-    contentType: string;
-  }> {
+    options: ProcessImageOptions,
+  ): Promise<ProcessedImageResult> {
     const sharpOptions = { limitInputPixels: 50_000_000 };
+    const { maxEdge, fit } = options;
 
     let format: string | undefined;
     try {
@@ -465,8 +472,9 @@ export class StoreService {
         .resize({
           width: maxEdge,
           height: maxEdge,
-          fit: 'inside',
-          withoutEnlargement: true,
+          fit,
+          position: 'centre',
+          withoutEnlargement: fit === 'inside',
         })
         .toBuffer();
     } catch {

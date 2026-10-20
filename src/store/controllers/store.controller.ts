@@ -123,7 +123,7 @@ export class StoreController {
   @ApiOperation({
     summary: 'Upload shop logo',
     description:
-      'Optional shop logo. Multipart field "image" (JPEG/PNG/WebP). Stored under shops-logos/ in R2 and saved on store settings.',
+      'Optional shop logo. Multipart field "image" (JPEG/PNG/WebP). Center-cropped to a square for circular display, stored under shops-logos/ in R2.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

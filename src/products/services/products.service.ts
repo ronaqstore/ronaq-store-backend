@@ -109,10 +109,7 @@ export class ProductsService {
                 dto.trackingType === 'SERIALIZED'
                   ? (dto.ptaStatus ?? null)
                   : null,
-              authenticity:
-                dto.trackingType === 'QUANTITY'
-                  ? (dto.authenticity ?? null)
-                  : null,
+              authenticity: dto.authenticity ?? null,
             },
           });
           createdProductId = product.id;
@@ -309,9 +306,7 @@ export class ProductsService {
       data.ptaStatus = null;
     }
     if (dto.authenticity !== undefined) {
-      data.authenticity = nextTracking === 'QUANTITY' ? dto.authenticity : null;
-    } else if (trackingTypeChanges && nextTracking === 'SERIALIZED') {
-      data.authenticity = null;
+      data.authenticity = dto.authenticity || null;
     }
 
     if (Object.keys(data).length === 0) {
