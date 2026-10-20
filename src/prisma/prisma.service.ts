@@ -22,6 +22,10 @@ function cleanDatabaseUrl(url: string | undefined): string {
   return cleaned;
 }
 
+function databaseIsLocal(url: string): boolean {
+  return /@(localhost|127\.0\.0\.1|\[::1\])[:/]/i.test(url);
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -40,9 +44,9 @@ export class PrismaService
       max: 10,
       keepAlive: true,
       keepAliveInitialDelayMillis: 5_000,
-      ssl: {
-        rejectUnauthorized: false,
-      },
+      ...(databaseIsLocal(connectionString)
+        ? { ssl: false }
+        : { ssl: { rejectUnauthorized: false } }),
     });
 
     pool.on('error', (err: Error) => {
