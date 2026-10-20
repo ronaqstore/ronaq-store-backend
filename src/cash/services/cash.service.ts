@@ -26,6 +26,11 @@ const CREATED = 'Opening cash recorded successfully';
 const INVESTED = 'Owner investment recorded successfully';
 const WITHDRAWN = 'Owner withdrawal recorded successfully';
 
+export function extractCashSearchDigits(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '');
+  return digits.length > 0 ? digits : null;
+}
+
 export type OwnerWithdrawalResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
 
@@ -153,23 +158,42 @@ export class CashService {
     if (query.type) where.type = query.type;
     if (query.direction) where.direction = query.direction;
 
-    const dateFilters: Prisma.CashMovementWhereInput[] = [];
+    const andFilters: Prisma.CashMovementWhereInput[] = [];
     if (query.from)
-      dateFilters.push({
+      andFilters.push({
         movementDate: { gte: businessDayRange(query.from).start },
       });
     if (query.to)
-      dateFilters.push({
+      andFilters.push({
         movementDate: { lt: businessDayRange(query.to).end },
       });
-    if (dateFilters.length > 0) where.AND = dateFilters;
 
-    if (query.search?.trim()) {
-      where.note = {
-        contains: query.search.trim(),
-        mode: 'insensitive',
-      };
+    const term = query.search?.trim();
+    if (term) {
+      const searchOr: Prisma.CashMovementWhereInput[] = [
+        { note: { contains: term, mode: 'insensitive' } },
+      ];
+
+      const digits = extractCashSearchDigits(term);
+      if (digits) {
+        const amountHits = await this.prisma.$queryRaw<{ id: string }[]>`
+          SELECT id
+          FROM cash_movements
+          WHERE shop_id = ${shopId}
+            AND (
+              CAST((amount / 100) AS TEXT) LIKE ${'%' + digits + '%'}
+              OR CAST(amount AS TEXT) LIKE ${'%' + digits + '%'}
+            )
+        `;
+        if (amountHits.length > 0) {
+          searchOr.push({ id: { in: amountHits.map((row) => row.id) } });
+        }
+      }
+
+      andFilters.push({ OR: searchOr });
     }
+
+    if (andFilters.length > 0) where.AND = andFilters;
 
     const [rows, total] = await Promise.all([
       this.prisma.cashMovement.findMany({

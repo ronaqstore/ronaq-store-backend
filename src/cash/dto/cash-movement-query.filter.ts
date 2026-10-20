@@ -42,7 +42,7 @@ export class CashMovementQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @OptionalSearchQueryProperty(
     'rent',
-    'Case-insensitive contains search on the note.',
+    'Case-insensitive contains on note, or partial amount (e.g. 150 matches Rs 150,000).',
   )
   search?: string;
 

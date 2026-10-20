@@ -15,6 +15,7 @@ const prismaStub = {
     count: jest.fn(),
     aggregate: jest.fn(),
   },
+  $queryRaw: jest.fn().mockResolvedValue([]),
   $transaction: jest.fn(),
 };
 
@@ -354,17 +355,27 @@ describe('CashService', () => {
       );
     });
 
-    it('searches the note and honours sortBy/sortOrder', async () => {
+    it('searches note and partial amount, and honours sortBy/sortOrder', async () => {
+      prismaStub.$queryRaw.mockResolvedValueOnce([{ id: 'amt-1' }]);
+
       await service.getCashMovements(
-        { search: '  rent ', sortBy: 'amount', sortOrder: 'asc' } as any,
+        { search: '  150 ', sortBy: 'amount', sortOrder: 'asc' } as any,
         SHOP_ID,
       );
 
+      expect(prismaStub.$queryRaw).toHaveBeenCalled();
       expect(prismaStub.cashMovement.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: {
             shopId: SHOP_ID,
-            note: { contains: 'rent', mode: 'insensitive' },
+            AND: [
+              {
+                OR: [
+                  { note: { contains: '150', mode: 'insensitive' } },
+                  { id: { in: ['amt-1'] } },
+                ],
+              },
+            ],
           },
           orderBy: { amount: 'asc' },
         }),
