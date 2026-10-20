@@ -8,8 +8,7 @@ function cleanUrl(url: string): string {
   let cleaned = url
     .replace('&channel_binding=require', '')
     .replace('?channel_binding=require&', '?')
-    .replace('?channel_binding=require', '')
-    .replace('sslmode=verify-full', 'sslmode=require');
+    .replace('?channel_binding=require', '');
   if (cleaned && !cleaned.includes('connect_timeout')) {
     cleaned += (cleaned.includes('?') ? '&' : '?') + 'connect_timeout=60';
   }
