@@ -22,8 +22,8 @@ const prismaStub = {
   user: { findFirst: jest.fn() },
   platformAdmin: { findFirst: jest.fn() },
   customer: { findFirst: jest.fn() },
-  purchase: { findMany: jest.fn() },
-  supplierPayment: { findMany: jest.fn() },
+  purchase: { findMany: jest.fn(), groupBy: jest.fn() },
+  supplierPayment: { findMany: jest.fn(), groupBy: jest.fn() },
 };
 
 function baseSupplierRow(overrides: Record<string, unknown> = {}) {
@@ -63,6 +63,8 @@ describe('SuppliersService', () => {
     prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
     prismaStub.customer.findFirst.mockResolvedValue(null);
     prismaStub.supplier.findFirst.mockResolvedValue(null);
+    prismaStub.purchase.groupBy.mockResolvedValue([]);
+    prismaStub.supplierPayment.groupBy.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -271,6 +273,7 @@ describe('SuppliersService', () => {
       );
 
       expect(res.items[0].openingBalance).toBe(5000000);
+      expect(res.items[0].currentBalance).toBe(5000000);
       expect(res.items[0].isSystem).toBe(false);
       expect(res.total).toBe(1);
     });

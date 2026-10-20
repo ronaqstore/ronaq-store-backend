@@ -33,6 +33,7 @@ import {
   resourceNotFound,
   systemRowProtected,
 } from '../../errors/error.builder.js';
+import { supplierCurrentBalances } from '../../helpers/party-current-balance.helper.js';
 
 const WALK_IN_SELLER = 'supplier';
 
@@ -119,8 +120,14 @@ export class SuppliersService {
       this.prisma.supplier.count({ where }),
     ]);
 
+    const ledgerDeltas = await supplierCurrentBalances(
+      this.prisma,
+      shopId,
+      rows.map((row) => row.id),
+    );
+
     return new PaginatedResponseDTO<ResponseSupplierDto>(
-      rows.map((row) => this.toResponse(row)),
+      rows.map((row) => this.toResponse(row, ledgerDeltas.get(row.id) ?? 0)),
       total,
       page,
       pageSize,
@@ -135,7 +142,10 @@ export class SuppliersService {
     if (!row) {
       throw new NotFoundException(resourceNotFound('Supplier', id));
     }
-    return this.toResponse(row);
+    const ledgerDeltas = await supplierCurrentBalances(this.prisma, shopId, [
+      id,
+    ]);
+    return this.toResponse(row, ledgerDeltas.get(id) ?? 0);
   }
 
   async getSupplierLedger(
@@ -322,7 +332,8 @@ export class SuppliersService {
     return new StatusBaseResponseDTO(true, 'Supplier deactivated successfully');
   }
 
-  private toResponse(row: SupplierRow): ResponseSupplierDto {
+  private toResponse(row: SupplierRow, ledgerDelta = 0): ResponseSupplierDto {
+    const openingBalance = Number(row.openingBalance);
     return {
       id: row.id,
       shopId: row.shopId,
@@ -331,7 +342,8 @@ export class SuppliersService {
       cnic: row.cnic,
       address: row.address,
       notes: row.notes,
-      openingBalance: Number(row.openingBalance),
+      openingBalance,
+      currentBalance: openingBalance + ledgerDelta,
       isSystem: row.isSystem,
       isActive: row.isActive,
       createdAt: row.createdAt,

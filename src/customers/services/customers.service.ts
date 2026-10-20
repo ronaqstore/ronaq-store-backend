@@ -31,6 +31,7 @@ import {
   requiredFieldCannotBeNull,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { customerCurrentBalances } from '../../helpers/party-current-balance.helper.js';
 
 @Injectable()
 export class CustomersService {
@@ -102,8 +103,16 @@ export class CustomersService {
       this.prisma.customer.count({ where }),
     ]);
 
+    const ledgerDeltas = await customerCurrentBalances(
+      this.prisma,
+      shopId,
+      items.map((item) => item.id),
+    );
+
     return new PaginatedResponseDTO<ResponseCustomerDto>(
-      items.map((item) => this.toResponse(item)),
+      items.map((item) =>
+        this.toResponse(item, ledgerDeltas.get(item.id) ?? 0),
+      ),
       total,
       page,
       pageSize,
@@ -120,7 +129,10 @@ export class CustomersService {
     if (!customer) {
       throw new NotFoundException(resourceNotFound('Customer', id));
     }
-    return this.toResponse(customer);
+    const ledgerDeltas = await customerCurrentBalances(this.prisma, shopId, [
+      id,
+    ]);
+    return this.toResponse(customer, ledgerDeltas.get(id) ?? 0);
   }
 
   async getCustomerLedger(
@@ -336,8 +348,13 @@ export class CustomersService {
     return new StatusBaseResponseDTO(true, 'Customer deactivated successfully');
   }
 
-  private toResponse(customer: Customer): ResponseCustomerDto {
-    return { ...customer, openingBalance: Number(customer.openingBalance) };
+  private toResponse(customer: Customer, ledgerDelta = 0): ResponseCustomerDto {
+    const openingBalance = Number(customer.openingBalance);
+    return {
+      ...customer,
+      openingBalance,
+      currentBalance: openingBalance + ledgerDelta,
+    };
   }
 
   private async assertPhoneAvailable(

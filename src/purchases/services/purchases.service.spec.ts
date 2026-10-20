@@ -844,6 +844,14 @@ describe('PurchasesService', () => {
         createdById: USER_ID,
         createdAt: new Date('2026-10-06T09:20:00.000Z'),
         updatedAt: new Date('2026-10-06T09:20:00.000Z'),
+        supplierPayments: [
+          {
+            id: 'pay-1',
+            amount: 10000000n,
+            paymentDate: new Date('2026-10-06T00:00:00.000Z'),
+            status: 'ACTIVE',
+          },
+        ],
         items: [
           {
             id: 'item-1',
@@ -877,6 +885,14 @@ describe('PurchasesService', () => {
       const res = await service.getPurchaseById('purchase-1', SHOP_ID);
 
       expect(res.totalAmount).toBe(29000000);
+      expect(res.payments).toEqual([
+        {
+          id: 'pay-1',
+          amount: 10000000,
+          paymentDate: '2026-10-06',
+          status: 'ACTIVE',
+        },
+      ]);
       expect(res.purchaseDate).toBe('2026-10-06');
       expect(res.supplierName).toBe('ABC Mobiles');
       expect(res.items[0].phoneUnits).toEqual([

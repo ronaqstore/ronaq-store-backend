@@ -45,6 +45,13 @@ export class ResponseSupplierDto {
 
   @ApiProperty({
     description:
+      'Live payable in PAISA: openingBalance + Σ ACTIVE non-opening purchases − Σ ACTIVE supplier payments. Derived on read; never stored.',
+    example: 7500000,
+  })
+  currentBalance: number;
+
+  @ApiProperty({
+    description:
       'true = the onboarding-created "Walk-in seller". Cannot be renamed or deactivated.',
     example: false,
   })

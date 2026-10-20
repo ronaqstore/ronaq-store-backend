@@ -18,9 +18,10 @@ const prismaStub = {
   user: { findFirst: jest.fn() },
   platformAdmin: { findFirst: jest.fn() },
   supplier: { findFirst: jest.fn() },
-  sale: { findMany: jest.fn() },
-  payment: { findMany: jest.fn() },
-  saleReturn: { findMany: jest.fn() },
+  sale: { findMany: jest.fn(), groupBy: jest.fn() },
+  payment: { findMany: jest.fn(), groupBy: jest.fn() },
+  saleReturn: { findMany: jest.fn(), groupBy: jest.fn() },
+  refund: { findMany: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -47,6 +48,10 @@ describe('CustomersService', () => {
     prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
     prismaStub.supplier.findFirst.mockResolvedValue(null);
     prismaStub.customer.findFirst.mockResolvedValue(null);
+    prismaStub.sale.groupBy.mockResolvedValue([]);
+    prismaStub.payment.groupBy.mockResolvedValue([]);
+    prismaStub.saleReturn.groupBy.mockResolvedValue([]);
+    prismaStub.refund.findMany.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomersService,
@@ -174,6 +179,7 @@ describe('CustomersService', () => {
         }),
       );
       expect(result.items[0].openingBalance).toBe(5000000);
+      expect(result.items[0].currentBalance).toBe(5000000);
     });
 
     it('searches name and phone', async () => {
@@ -212,6 +218,7 @@ describe('CustomersService', () => {
       const result = await service.getCustomerById('cust-1', 'shop-1');
 
       expect(result.openingBalance).toBe(5000000);
+      expect(result.currentBalance).toBe(5000000);
     });
   });
 

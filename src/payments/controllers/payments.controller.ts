@@ -39,6 +39,7 @@ import { CreatePaymentDto } from '../dto/create-payment.dto.js';
 import { CancelPaymentDto } from '../dto/cancel-payment.dto.js';
 import { PaymentQueryFilterDto } from '../dto/payment-query.filter.js';
 import { ResponsePaymentDto } from '../dto/response-payment.dto.js';
+import { CustomerReceivableDto } from '../dto/response-customer-receivable.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 
@@ -200,6 +201,47 @@ export class PaymentsController {
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to fetch payments');
+    }
+  }
+
+  @Get('/receivable/:customerId')
+  @ApiOperation({
+    summary: 'Customer Udhar summary before recording a payment',
+    description:
+      'Returns live Udhar (opening + ACTIVE sales − ACTIVE payments − returns + refunds), opening balance remaining, and every unpaid sale oldest-first with its remaining amount.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      CustomerReceivableDto,
+      'Customer receivable fetched successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async getCustomerReceivable(
+    @Param('customerId') customerId: string,
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<CustomerReceivableDto>> {
+    try {
+      const res = await this.paymentsService.getCustomerReceivable(
+        customerId,
+        req.user.shopId,
+      );
+      return new ApiSuccessResponseDTO(
+        'Customer receivable fetched successfully',
+        res,
+      );
+    } catch (error) {
+      logError('payments.controller.ts', 'getCustomerReceivable', error, {
+        shopId: req.user?.shopId,
+        customerId,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException(
+        'Failed to fetch customer receivable',
+      );
     }
   }
 

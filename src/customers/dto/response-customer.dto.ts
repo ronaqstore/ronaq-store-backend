@@ -38,6 +38,13 @@ export class ResponseCustomerDto {
   openingBalance: number;
 
   @ApiProperty({
+    description:
+      'Live Udhar in PAISA: openingBalance + Σ ACTIVE sales − Σ ACTIVE payments − Σ ACTIVE returns + refunds. Derived on read; never stored.',
+    example: 5500000,
+  })
+  currentBalance: number;
+
+  @ApiProperty({
     example: true,
     description: 'Deactivated customers are hidden from dropdowns.',
   })

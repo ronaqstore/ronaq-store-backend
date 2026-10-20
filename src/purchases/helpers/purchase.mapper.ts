@@ -2,10 +2,20 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import {
   ResponsePurchaseDto,
   ResponsePurchaseItemDto,
+  ResponsePurchasePaymentDto,
 } from '../dto/response-purchase.dto.js';
 
 export const PURCHASE_INCLUDE = {
   supplier: { select: { name: true } },
+  supplierPayments: {
+    select: {
+      id: true,
+      amount: true,
+      paymentDate: true,
+      status: true,
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
   items: {
     include: {
       product: { select: { name: true } },
@@ -65,5 +75,13 @@ export function mapPurchaseToResponse(
         defectNotes: unit.defectNotes,
       })),
     })),
+    payments: row.supplierPayments.map(
+      (payment): ResponsePurchasePaymentDto => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        paymentDate: payment.paymentDate.toISOString().slice(0, 10),
+        status: payment.status,
+      }),
+    ),
   };
 }

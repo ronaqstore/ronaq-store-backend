@@ -1,5 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class ResponsePurchasePaymentDto {
+  @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000401' })
+  id: string;
+
+  @ApiProperty({ description: 'In PAISA.', example: 500000 })
+  amount: number;
+
+  @ApiProperty({ description: 'YYYY-MM-DD.', example: '2026-10-07' })
+  paymentDate: string;
+
+  @ApiProperty({ example: 'ACTIVE' })
+  status: string;
+}
+
 export class ResponsePurchaseItemDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000201' })
   id: string;
@@ -116,4 +130,11 @@ export class ResponsePurchaseDto {
 
   @ApiProperty({ type: [ResponsePurchaseItemDto] })
   items: ResponsePurchaseItemDto[];
+
+  @ApiProperty({
+    description:
+      'ACTIVE + CANCELLED supplier payments linked to this bill. List UIs sum ACTIVE rows for Paid / Outstanding.',
+    type: [ResponsePurchasePaymentDto],
+  })
+  payments: ResponsePurchasePaymentDto[];
 }
