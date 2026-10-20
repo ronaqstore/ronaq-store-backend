@@ -25,7 +25,9 @@ import {
   normalizePhone,
   normalizePhoneOrRaw,
 } from '../../helpers/phone.helper.js';
+import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import {
+  loginPhoneAlreadyTaken,
   requiredFieldCannotBeNull,
   resourceNotFound,
 } from '../../errors/error.builder.js';
@@ -42,11 +44,14 @@ export class CustomersService {
 
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    const phone = dto.phone ? normalizePhoneOrRaw(dto.phone) : null;
+    await this.assertPhoneAvailable(phone);
+
     await this.prisma.customer.create({
       data: {
         shopId,
         name: dto.name.trim(),
-        phone: dto.phone ? normalizePhoneOrRaw(dto.phone) : null,
+        phone,
         address: dto.address?.trim() ?? null,
         notes: dto.notes?.trim() ?? null,
         openingBalance: BigInt(dto.openingBalance ?? 0),
@@ -288,7 +293,9 @@ export class CustomersService {
       data.name = dto.name.trim();
     }
     if (dto.phone !== undefined) {
-      data.phone = dto.phone === null ? null : normalizePhoneOrRaw(dto.phone);
+      const phone = dto.phone === null ? null : normalizePhoneOrRaw(dto.phone);
+      await this.assertPhoneAvailable(phone, id);
+      data.phone = phone;
     }
     if (dto.address !== undefined) {
       data.address = dto.address === null ? null : dto.address.trim();
@@ -331,5 +338,18 @@ export class CustomersService {
 
   private toResponse(customer: Customer): ResponseCustomerDto {
     return { ...customer, openingBalance: Number(customer.openingBalance) };
+  }
+
+  private async assertPhoneAvailable(
+    phone: string | null,
+    excludeCustomerId?: string,
+  ): Promise<void> {
+    if (!phone) return;
+    const conflict = await findLoginPhoneConflict(this.prisma, phone, {
+      excludeCustomerId,
+    });
+    if (conflict) {
+      throw new BadRequestException(loginPhoneAlreadyTaken(phone));
+    }
   }
 }

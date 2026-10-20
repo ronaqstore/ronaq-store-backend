@@ -30,6 +30,12 @@ const prismaStub = {
     findFirst: jest.fn(),
     create: jest.fn(),
   },
+  supplier: {
+    findFirst: jest.fn(),
+  },
+  customer: {
+    findFirst: jest.fn(),
+  },
   $transaction: jest.fn(),
 };
 
@@ -283,6 +289,8 @@ describe('AuthService', () => {
     it('seeds default categories, brands, expense categories, and supplier for the new shop', async () => {
       prismaStub.user.findFirst.mockResolvedValue(null);
       prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+      prismaStub.supplier.findFirst.mockResolvedValue(null);
+      prismaStub.customer.findFirst.mockResolvedValue(null);
 
       const txMock = {
         shop: {

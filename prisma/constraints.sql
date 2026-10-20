@@ -171,27 +171,44 @@ CREATE TRIGGER inventory_movements_append_only
   BEFORE UPDATE OR DELETE ON inventory_movements
   FOR EACH ROW EXECUTE FUNCTION forbid_update_delete();
 
--- 3b2. Login phones are unique across the whole platform (users + platform_admins).
---     Prisma @unique only covers each table on its own.
+-- 3b2. Mobile phones are unique across person tables
+--     (users + platform_admins + suppliers + customers).
+--     Per-table @unique covers same-table duplicates; this trigger blocks
+--     the cross-table case (e.g. supplier phone matching a platform admin).
 CREATE OR REPLACE FUNCTION login_phone_global_unique() RETURNS trigger AS $$
 BEGIN
-  IF TG_TABLE_NAME = 'users' THEN
-    IF EXISTS (
-      SELECT 1 FROM platform_admins a
-      WHERE a.phone = NEW.phone
-    ) THEN
-      RAISE EXCEPTION 'login phone already registered as platform admin'
-        USING ERRCODE = '23505';
-    END IF;
-  ELSIF TG_TABLE_NAME = 'platform_admins' THEN
-    IF EXISTS (
-      SELECT 1 FROM users u
-      WHERE u.phone = NEW.phone
-    ) THEN
-      RAISE EXCEPTION 'login phone already registered as shop user'
-        USING ERRCODE = '23505';
-    END IF;
+  IF NEW.phone IS NULL THEN
+    RETURN NEW;
   END IF;
+
+  IF TG_TABLE_NAME IS DISTINCT FROM 'users' AND EXISTS (
+    SELECT 1 FROM users u WHERE u.phone = NEW.phone
+  ) THEN
+    RAISE EXCEPTION 'mobile phone already registered as shop user'
+      USING ERRCODE = '23505';
+  END IF;
+
+  IF TG_TABLE_NAME IS DISTINCT FROM 'platform_admins' AND EXISTS (
+    SELECT 1 FROM platform_admins a WHERE a.phone = NEW.phone
+  ) THEN
+    RAISE EXCEPTION 'mobile phone already registered as platform admin'
+      USING ERRCODE = '23505';
+  END IF;
+
+  IF TG_TABLE_NAME IS DISTINCT FROM 'suppliers' AND EXISTS (
+    SELECT 1 FROM suppliers s WHERE s.phone = NEW.phone
+  ) THEN
+    RAISE EXCEPTION 'mobile phone already registered as supplier'
+      USING ERRCODE = '23505';
+  END IF;
+
+  IF TG_TABLE_NAME IS DISTINCT FROM 'customers' AND EXISTS (
+    SELECT 1 FROM customers c WHERE c.phone = NEW.phone
+  ) THEN
+    RAISE EXCEPTION 'mobile phone already registered as customer'
+      USING ERRCODE = '23505';
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -202,6 +219,14 @@ CREATE TRIGGER users_login_phone_global_unique_trg
 
 CREATE TRIGGER platform_admins_login_phone_global_unique_trg
   BEFORE INSERT OR UPDATE OF phone ON platform_admins
+  FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
+
+CREATE TRIGGER suppliers_login_phone_global_unique_trg
+  BEFORE INSERT OR UPDATE OF phone ON suppliers
+  FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
+
+CREATE TRIGGER customers_login_phone_global_unique_trg
+  BEFORE INSERT OR UPDATE OF phone ON customers
   FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
 
 -- 3c. No hard delete of business records. Cancel or deactivate instead.

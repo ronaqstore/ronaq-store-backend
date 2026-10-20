@@ -21,15 +21,18 @@ export const invalidOwnerPhone = (phone: string): ErrorResponseDTO => {
   );
 };
 
+export const PHONE_ALREADY_TAKEN_CODE = 'PHONE_ALREADY_TAKEN';
+export const PHONE_ALREADY_TAKEN_MESSAGE =
+  'This mobile number is already used on the platform (shop login, platform admin, supplier, or customer). Pick a different one.';
+
 export const ownerPhoneAlreadyRegistered = (
   phone: string,
 ): ErrorResponseDTO => {
   return new ErrorResponseDTO(
-    'This phone number already has a Ronaq Store account',
-    [
-      `${phone} is already in use. Every login mobile number must be unique across the whole platform — shop owners and platform admins included. Use a different number.`,
-    ],
+    'This phone number is already in use',
+    [`${phone}: ${PHONE_ALREADY_TAKEN_MESSAGE}`],
     HttpStatus.BAD_REQUEST,
+    PHONE_ALREADY_TAKEN_CODE,
   );
 };
 

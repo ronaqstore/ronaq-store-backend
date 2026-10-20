@@ -15,6 +15,9 @@ const prismaStub = {
     updateMany: jest.fn(),
     count: jest.fn(),
   },
+  user: { findFirst: jest.fn() },
+  platformAdmin: { findFirst: jest.fn() },
+  supplier: { findFirst: jest.fn() },
   sale: { findMany: jest.fn() },
   payment: { findMany: jest.fn() },
   saleReturn: { findMany: jest.fn() },
@@ -40,6 +43,10 @@ describe('CustomersService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prismaStub.user.findFirst.mockResolvedValue(null);
+    prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+    prismaStub.supplier.findFirst.mockResolvedValue(null);
+    prismaStub.customer.findFirst.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomersService,
@@ -93,6 +100,19 @@ describe('CustomersService', () => {
           }),
         }),
       );
+    });
+
+    it('rejects a phone already used by a platform admin', async () => {
+      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+
+      await expect(
+        service.createCustomer(
+          { name: 'Ali Khan', phone: '03029825213' },
+          'shop-1',
+          'user-1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.customer.create).not.toHaveBeenCalled();
     });
 
     it('stores the opening balance as a bigint', async () => {

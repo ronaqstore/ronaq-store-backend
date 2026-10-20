@@ -15,7 +15,12 @@ import {
   ValidatorConstraintInterface,
 } from 'class-validator';
 import { isValidPkCnic, normalizeCnicOrNull } from './cnic.helper.js';
-import { normalizePhoneOrRaw } from './phone.helper.js';
+import { normalizePhone, normalizePhoneOrRaw } from './phone.helper.js';
+
+export const PK_MOBILE_INVALID_MESSAGE =
+  'Enter a valid Pakistani mobile (03XXXXXXXXX).';
+export const PK_CNIC_INVALID_MESSAGE =
+  'Enter a valid 13-digit Pakistani CNIC (area code 1–7).';
 
 @ValidatorConstraint({ name: 'isPkCnic', async: false })
 class IsPkCnicConstraint implements ValidatorConstraintInterface {
@@ -25,19 +30,36 @@ class IsPkCnicConstraint implements ValidatorConstraintInterface {
   }
 
   defaultMessage(): string {
-    return 'cnic must be a valid 13-digit Pakistani CNIC (area code 1–7)';
+    return PK_CNIC_INVALID_MESSAGE;
+  }
+}
+
+@ValidatorConstraint({ name: 'isPkMobile', async: false })
+class IsPkMobileConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (value === null || value === undefined || value === '') return true;
+    if (typeof value !== 'string') return false;
+    return normalizePhone(value) !== null || /^923\d{9}$/.test(value);
+  }
+
+  defaultMessage(): string {
+    return PK_MOBILE_INVALID_MESSAGE;
   }
 }
 
 export function OptionalSupplierPhoneProperty(example: string = '03001234567') {
   return applyDecorators(
     ApiPropertyOptional({ example }),
-    Transform(({ value }) =>
-      typeof value === 'string' ? normalizePhoneOrRaw(value.trim()) : value,
-    ),
+    Transform(({ value }) => {
+      if (typeof value !== 'string') return value;
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      return normalizePhone(trimmed) ?? normalizePhoneOrRaw(trimmed);
+    }),
     IsOptional(),
     IsString(),
     Length(1, 30),
+    Validate(IsPkMobileConstraint),
   );
 }
 
@@ -54,7 +76,7 @@ export function OptionalSupplierCnicProperty() {
     ValidateIf((_, v) => v !== undefined && v !== null),
     IsString(),
     Matches(/^\d{5}-\d{7}-\d$/, {
-      message: 'cnic must be formatted as XXXXX-XXXXXXX-X',
+      message: PK_CNIC_INVALID_MESSAGE,
     }),
     Validate(IsPkCnicConstraint),
   );

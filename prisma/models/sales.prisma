@@ -19,6 +19,9 @@ model Customer {
   payments    Payment[]
   saleReturns SaleReturn[]
 
+  // phone: unique when set. Cross-table uniqueness vs users / platform_admins /
+  // suppliers is enforced by trigger.
+  @@unique([phone])
   @@index([shopId, name])
   @@index([shopId, phone])
   @@map("customers")

@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SuppliersService } from './suppliers.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 const SHOP_ID = 'shop-1';
 const SUPPLIER_ID = '01924f0a-0000-7000-8000-0000000000a1';
@@ -15,6 +19,9 @@ const prismaStub = {
     updateMany: jest.fn(),
     count: jest.fn(),
   },
+  user: { findFirst: jest.fn() },
+  platformAdmin: { findFirst: jest.fn() },
+  customer: { findFirst: jest.fn() },
   purchase: { findMany: jest.fn() },
   supplierPayment: { findMany: jest.fn() },
 };
@@ -52,6 +59,10 @@ describe('SuppliersService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prismaStub.user.findFirst.mockResolvedValue(null);
+    prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+    prismaStub.customer.findFirst.mockResolvedValue(null);
+    prismaStub.supplier.findFirst.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -122,6 +133,46 @@ describe('SuppliersService', () => {
       await service.createSupplier({ name: 'ABC Mobiles' }, SHOP_ID, 'u1');
 
       expect(prismaStub.supplier.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects a phone already used by a platform admin', async () => {
+      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+
+      await expect(
+        service.createSupplier(
+          { name: 'ABC Mobiles', phone: '03029825213' },
+          SHOP_ID,
+          'u1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.supplier.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a CNIC already used by another supplier in the shop', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue({ id: 'other-supplier' });
+
+      await expect(
+        service.createSupplier(
+          { name: 'ABC Mobiles', cnic: '17301-1234567-1' },
+          SHOP_ID,
+          'u1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.supplier.create).not.toHaveBeenCalled();
+    });
+
+    it('stores a free phone in E.164 form', async () => {
+      prismaStub.supplier.create.mockResolvedValue({ id: SUPPLIER_ID });
+
+      await service.createSupplier(
+        { name: 'ABC Mobiles', phone: '03001234567' },
+        SHOP_ID,
+        'u1',
+      );
+
+      expect(prismaStub.supplier.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ phone: '923001234567' }),
+      });
     });
   });
 

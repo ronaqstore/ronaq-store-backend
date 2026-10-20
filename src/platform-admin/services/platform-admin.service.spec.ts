@@ -103,6 +103,12 @@ const prismaStub = {
   platformAdmin: {
     findFirst: jest.fn(),
   },
+  supplier: {
+    findFirst: jest.fn(),
+  },
+  customer: {
+    findFirst: jest.fn(),
+  },
   $transaction: jest.fn((cb: any) => cb(txStub)),
 };
 
@@ -138,6 +144,8 @@ describe('PlatformAdminService', () => {
     prismaStub.user.findUnique.mockResolvedValue(null);
     prismaStub.user.findFirst.mockResolvedValue(null);
     prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+    prismaStub.supplier.findFirst.mockResolvedValue(null);
+    prismaStub.customer.findFirst.mockResolvedValue(null);
     service = new PlatformAdminService(
       prismaStub as unknown as PrismaService,
       authStub as unknown as AuthService,
@@ -241,7 +249,8 @@ describe('PlatformAdminService', () => {
       await expect(service.createShop(validDto)).rejects.toMatchObject({
         status: 400,
         response: expect.objectContaining({
-          error: 'This phone number already has a Ronaq Store account',
+          error: 'This phone number is already in use',
+          code: 'PHONE_ALREADY_TAKEN',
         }),
       });
       expect(prismaStub.$transaction).not.toHaveBeenCalled();

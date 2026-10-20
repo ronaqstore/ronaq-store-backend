@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,8 +22,14 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import { normalizePhone } from '../../helpers/phone.helper.js';
 import {
+  normalizePhone,
+  normalizePhoneOrRaw,
+} from '../../helpers/phone.helper.js';
+import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
+import {
+  duplicateFieldValue,
+  loginPhoneAlreadyTaken,
   resourceNotFound,
   systemRowProtected,
 } from '../../errors/error.builder.js';
@@ -47,12 +54,18 @@ export class SuppliersService {
 
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    const phone = this.canonicalPhone(dto.phone);
+    const cnic = dto.cnic?.trim() || null;
+
+    await this.assertPhoneAvailable(phone);
+    await this.assertCnicAvailable(shopId, cnic);
+
     await this.prisma.supplier.create({
       data: {
         shopId,
         name: dto.name.trim(),
-        phone: dto.phone?.trim() || null,
-        cnic: dto.cnic?.trim() || null,
+        phone,
+        cnic,
         address: dto.address?.trim() || null,
         notes: dto.notes?.trim() || null,
         openingBalance: BigInt(dto.openingBalance ?? 0),
@@ -259,9 +272,15 @@ export class SuppliersService {
 
     const data: Prisma.SupplierUpdateInput = {};
     if (newName !== undefined) data.name = newName;
-    if (dto.phone !== undefined) data.phone = dto.phone?.trim() || null;
+    if (dto.phone !== undefined) {
+      const phone = this.canonicalPhone(dto.phone);
+      await this.assertPhoneAvailable(phone, id);
+      data.phone = phone;
+    }
     if (dto.cnic !== undefined) {
-      data.cnic = dto.cnic == null ? null : dto.cnic.trim() || null;
+      const cnic = dto.cnic == null ? null : dto.cnic.trim() || null;
+      await this.assertCnicAvailable(shopId, cnic, id);
+      data.cnic = cnic;
     }
     if (dto.address !== undefined) data.address = dto.address?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
@@ -318,5 +337,46 @@ export class SuppliersService {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  private canonicalPhone(raw: string | null | undefined): string | null {
+    if (raw == null) return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    return normalizePhone(trimmed) ?? normalizePhoneOrRaw(trimmed);
+  }
+
+  private async assertPhoneAvailable(
+    phone: string | null,
+    excludeSupplierId?: string,
+  ): Promise<void> {
+    if (!phone) return;
+    const conflict = await findLoginPhoneConflict(this.prisma, phone, {
+      excludeSupplierId,
+    });
+    if (conflict) {
+      throw new BadRequestException(loginPhoneAlreadyTaken(phone));
+    }
+  }
+
+  private async assertCnicAvailable(
+    shopId: string,
+    cnic: string | null,
+    excludeSupplierId?: string,
+  ): Promise<void> {
+    if (!cnic) return;
+    const existing = await this.prisma.supplier.findFirst({
+      where: {
+        shopId,
+        cnic,
+        ...(excludeSupplierId ? { id: { not: excludeSupplierId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        duplicateFieldValue('Supplier', 'CNIC', cnic),
+      );
+    }
   }
 }

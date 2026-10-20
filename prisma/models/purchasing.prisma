@@ -20,6 +20,11 @@ model Supplier {
   purchases        Purchase[]
   supplierPayments SupplierPayment[]
 
+  // phone: unique when set (Postgres allows many NULLs). Cross-table uniqueness
+  // vs users / platform_admins / customers is enforced by trigger.
+  // cnic: unique per shop when set.
+  @@unique([phone])
+  @@unique([shopId, cnic])
   @@index([shopId, name])
   @@map("suppliers")
 }

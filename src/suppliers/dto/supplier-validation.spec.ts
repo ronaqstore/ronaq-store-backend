@@ -112,25 +112,25 @@ describe('Supplier DTO validation', () => {
     expect(dto.phone).toBe('923001234567');
   });
 
-  it('keeps a phone number it does not recognise rather than rejecting it', async () => {
+  it('rejects a landline that is not a Pakistani mobile', async () => {
     const dto = plainToInstance(CreateSupplierDto, {
       ...validCreate,
       phone: '042-1234567',
     });
 
-    await expect(validate(dto, pipeOptions)).resolves.toEqual([]);
-    expect(dto.phone).toBe('0421234567');
+    await expect(validate(dto, pipeOptions)).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'phone' })]),
+    );
   });
 
-  it('rejects an empty phone when one is sent', async () => {
+  it('treats a blank phone as omitted', async () => {
     const dto = plainToInstance(CreateSupplierDto, {
       ...validCreate,
       phone: '   ',
     });
 
-    await expect(validate(dto, pipeOptions)).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ property: 'phone' })]),
-    );
+    await expect(validate(dto, pipeOptions)).resolves.toEqual([]);
+    expect(dto.phone).toBeUndefined();
   });
 });
 
