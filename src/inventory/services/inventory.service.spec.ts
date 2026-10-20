@@ -479,5 +479,12 @@ describe('InventoryService', () => {
       expect(call.take).toBe(25);
       expect(call.orderBy).toEqual({ quantityChange: 'asc' });
     });
+
+    it('scope=all omits the manual-type restriction', async () => {
+      await service.getInventoryMovements({ scope: 'all' } as any, SHOP_ID);
+
+      const call = prismaStub.inventoryMovement.findMany.mock.calls[0][0];
+      expect(call.where).toEqual({ shopId: SHOP_ID });
+    });
   });
 });

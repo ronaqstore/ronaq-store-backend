@@ -52,4 +52,22 @@ export class InventoryUnitQueryFilterDto {
   @Min(1)
   @Max(100)
   batteryMin?: number;
+
+  @ApiPropertyOptional({ description: 'Page number (1-based).', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({
+    description: 'Rows per page (max 100).',
+    example: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
 }

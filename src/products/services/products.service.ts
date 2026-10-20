@@ -171,6 +171,23 @@ export class ProductsService {
       ];
     }
 
+    if (query.inStockOnly) {
+      where.AND = [
+        {
+          OR: [
+            {
+              trackingType: 'QUANTITY',
+              stockLevel: { quantityOnHand: { gt: 0 } },
+            },
+            {
+              trackingType: 'SERIALIZED',
+              inventoryUnits: { some: { status: 'IN_STOCK' } },
+            },
+          ],
+        },
+      ];
+    }
+
     const [rows, total] = await Promise.all([
       this.prisma.product.findMany({
         where,

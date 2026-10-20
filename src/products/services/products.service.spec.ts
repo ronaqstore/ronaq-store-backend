@@ -365,6 +365,33 @@ describe('ProductsService', () => {
       );
     });
 
+    it('filters to in-stock products when inStockOnly is true', async () => {
+      prismaStub.product.findMany.mockResolvedValue([]);
+      prismaStub.product.count.mockResolvedValue(0);
+
+      await service.getProducts(
+        { page: 1, pageSize: 10, inStockOnly: true },
+        SHOP_ID,
+      );
+
+      const { where } = prismaStub.product.findMany.mock.calls[0][0];
+      expect(where.shopId).toBe(SHOP_ID);
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            {
+              trackingType: 'QUANTITY',
+              stockLevel: { quantityOnHand: { gt: 0 } },
+            },
+            {
+              trackingType: 'SERIALIZED',
+              inventoryUnits: { some: { status: 'IN_STOCK' } },
+            },
+          ],
+        },
+      ]);
+    });
+
     it('returns stock_levels quantity for a QUANTITY product', async () => {
       prismaStub.product.findMany.mockResolvedValue([
         baseProductRow({

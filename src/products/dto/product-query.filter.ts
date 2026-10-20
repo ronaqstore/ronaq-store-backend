@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginatedListQueryFilterDto } from '../../common-dto/query/paginated-list-query.filter.dto.js';
 import {
+  OptionalBooleanQueryProperty,
   OptionalIsActiveQueryProperty,
   OptionalSearchQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
@@ -42,6 +43,12 @@ export class ProductQueryFilterDto extends PaginatedListQueryFilterDto {
     '"true" returns only active products. "false" returns only deactivated ones. Omit for both.',
   )
   isActive?: boolean;
+
+  @OptionalBooleanQueryProperty(
+    'inStockOnly',
+    '"true" returns only products with quantity on hand (QUANTITY stock_levels > 0, or SERIALIZED units in IN_STOCK). Omit for all.',
+  )
+  inStockOnly?: boolean;
 
   @ApiPropertyOptional({
     example: 'name',

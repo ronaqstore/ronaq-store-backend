@@ -62,7 +62,7 @@ export class InventoryService {
   async listUnits(
     query: InventoryUnitQueryFilterDto,
     shopId: string,
-  ): Promise<ResponseInventoryUnitDto[]> {
+  ): Promise<PaginatedResponseDTO<ResponseInventoryUnitDto>> {
     const product = await this.prisma.product.findFirst({
       where: { id: query.productId, shopId },
       select: { id: true },
@@ -98,44 +98,58 @@ export class InventoryService {
       where.batteryHealth = { gte: query.batteryMin };
     }
 
-    const rows = await this.prisma.inventoryUnit.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        product: {
-          select: {
-            defaultSellingPrice: true,
-            brand: { select: { name: true } },
-          },
-        },
-        purchaseItem: {
-          include: {
-            purchase: {
-              include: {
-                supplier: {
-                  select: { name: true, phone: true },
-                },
-              },
-            },
-          },
-        },
-        saleItems: {
-          include: {
-            sale: {
-              include: {
-                customer: {
-                  select: { name: true, phone: true },
-                },
-              },
-            },
-          },
-          take: 1,
-          orderBy: { id: 'desc' },
+    const { page, pageSize } = normalizePagination(
+      query.page,
+      query.pageSize,
+      100,
+    );
+    const skip = getSkipNumber(page, pageSize);
+
+    const include = {
+      product: {
+        select: {
+          defaultSellingPrice: true,
+          brand: { select: { name: true } },
         },
       },
-    });
+      purchaseItem: {
+        include: {
+          purchase: {
+            include: {
+              supplier: {
+                select: { name: true, phone: true },
+              },
+            },
+          },
+        },
+      },
+      saleItems: {
+        include: {
+          sale: {
+            include: {
+              customer: {
+                select: { name: true, phone: true },
+              },
+            },
+          },
+        },
+        take: 1,
+        orderBy: { id: 'desc' as const },
+      },
+    };
 
-    return rows.map((row) => {
+    const [rows, total] = await Promise.all([
+      this.prisma.inventoryUnit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+        include,
+      }),
+      this.prisma.inventoryUnit.count({ where }),
+    ]);
+
+    const items = rows.map((row) => {
       const purchase = row.purchaseItem?.purchase;
       const supplier = purchase?.supplier;
       const latestSaleItem = row.saleItems?.[0];
@@ -173,13 +187,19 @@ export class InventoryService {
         salePrice: latestSaleItem ? Number(latestSaleItem.unitPrice) : null,
       };
     });
+
+    return new PaginatedResponseDTO(items, total, page, pageSize);
   }
 
   async listInStockUnits(
     productId: string,
     shopId: string,
   ): Promise<ResponseInventoryUnitDto[]> {
-    return this.listUnits({ productId, status: UnitStatus.IN_STOCK }, shopId);
+    const page = await this.listUnits(
+      { productId, status: UnitStatus.IN_STOCK, page: 1, pageSize: 100 },
+      shopId,
+    );
+    return page.items;
   }
 
   async createAdjustment(
@@ -429,7 +449,11 @@ export class InventoryService {
 
     const where: Prisma.InventoryMovementWhereInput = { shopId };
 
-    where.type = query.type ?? { in: MANUAL_TYPES };
+    if (query.type) {
+      where.type = query.type;
+    } else if (query.scope !== 'all') {
+      where.type = { in: MANUAL_TYPES };
+    }
     if (query.productId) where.productId = query.productId;
 
     const dateFilters: Prisma.InventoryMovementWhereInput[] = [];

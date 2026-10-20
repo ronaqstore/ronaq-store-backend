@@ -22,7 +22,10 @@ export function optionalBooleanQueryTransform(
   };
 }
 
-export function OptionalIsActiveQueryProperty(description: string) {
+export function OptionalBooleanQueryProperty(
+  fieldLabel: string,
+  description: string,
+) {
   return applyDecorators(
     ApiPropertyOptional({
       example: 'true',
@@ -30,9 +33,13 @@ export function OptionalIsActiveQueryProperty(description: string) {
     }),
     IsOptional(),
     Type(() => String),
-    Transform(optionalBooleanQueryTransform('isActive')),
+    Transform(optionalBooleanQueryTransform(fieldLabel)),
     IsBoolean(),
   );
+}
+
+export function OptionalIsActiveQueryProperty(description: string) {
+  return OptionalBooleanQueryProperty('isActive', description);
 }
 
 export function OptionalSearchQueryProperty(

@@ -54,7 +54,7 @@ export class InventoryController {
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
-      ResponseInventoryUnitDto,
+      PaginatedResponseDTO,
       'Inventory units fetched successfully',
     ),
   )
@@ -65,7 +65,7 @@ export class InventoryController {
   async listUnits(
     @Query() query: InventoryUnitQueryFilterDto,
     @Req() req: OwnerRequest,
-  ): Promise<ApiSuccessResponseDTO<ResponseInventoryUnitDto[]>> {
+  ): Promise<ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseInventoryUnitDto>>> {
     try {
       const units = await this.inventoryService.listUnits(
         query,
