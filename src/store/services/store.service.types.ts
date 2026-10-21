@@ -5,8 +5,10 @@ export type ExistingStoreSettingsWhatsapp = {
 export type ProcessImageFit = 'inside' | 'cover';
 
 export type ProcessImageOptions = {
-  maxEdge: number;
   fit: ProcessImageFit;
+  maxEdge?: number;
+  width?: number;
+  height?: number;
 };
 
 export type ProcessedImageResult = {

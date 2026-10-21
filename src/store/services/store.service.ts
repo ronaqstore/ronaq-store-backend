@@ -5,7 +5,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import sharp from 'sharp';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { UpdateStoreSettingsDto } from '../dto/update-store-settings.dto.js';
 import { ReorderProductImagesDto } from '../dto/reorder-product-images.dto.js';
@@ -13,11 +12,7 @@ import { ResponseProductImageDto } from '../dto/response-product-image.dto.js';
 import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
 import { ResponseStoreSettingsDto } from '../dto/response-store-settings.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
-import type {
-  ExistingStoreSettingsWhatsapp,
-  ProcessImageOptions,
-  ProcessedImageResult,
-} from './store.service.types.js';
+import type { ExistingStoreSettingsWhatsapp } from './store.service.types.js';
 import { StoreCacheService } from './store-cache.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 import {
@@ -28,7 +23,6 @@ import {
   productNotPublishable,
   imageLimitExceeded,
   reorderImageMismatch,
-  unsupportedImageType,
 } from '../../errors/error.builder.js';
 import {
   isUniqueConstraintViolation,
@@ -43,11 +37,10 @@ import {
 import { normalizeAndAssertContactPhone } from '../helpers/store-contact-phone.helper.js';
 import { normalizeLocationCoords } from '../helpers/store-location.helper.js';
 import { buildStoreSettingsUpdate } from '../helpers/store-settings-update.helper.js';
+import { processStoreImage } from '../helpers/store-image-process.helper.js';
 
 const MAX_PRODUCT_IMAGES = 5;
 const MAX_IMAGE_EDGE = 1600;
-const MAX_LOGO_EDGE = 512;
-const SUPPORTED_IMAGE_FORMATS = new Set(['jpeg', 'png', 'webp']);
 
 @Injectable()
 export class StoreService {
@@ -298,7 +291,7 @@ export class StoreService {
       );
     }
 
-    const processed = await this.processImage(file, {
+    const processed = await processStoreImage(file, {
       maxEdge: MAX_IMAGE_EDGE,
       fit: 'inside',
     });
@@ -408,66 +401,6 @@ export class StoreService {
     );
   }
 
-  async uploadShopLogo(
-    file: UploadedImageFile,
-    shopId: string,
-  ): Promise<StatusBaseResponseDTO> {
-    const settings = await this.prisma.shopStoreSettings.findUnique({
-      where: { shopId },
-      select: { logoUrl: true },
-    });
-    if (!settings) {
-      throw new NotFoundException(resourceNotFound('Store settings'));
-    }
-
-    const processed = await this.processImage(file, {
-      maxEdge: MAX_LOGO_EDGE,
-      fit: 'cover',
-    });
-    const key = `shops-logos/${shopId}/${randomUUID()}.${processed.ext}`;
-    const url = await this.r2.put(key, processed.buffer, processed.contentType);
-    const previousUrl = settings.logoUrl;
-
-    try {
-      await this.prisma.shopStoreSettings.update({
-        where: { shopId },
-        data: { logoUrl: url },
-      });
-    } catch (error) {
-      await this.r2.deleteByUrl(url);
-      throw error;
-    }
-
-    if (previousUrl) {
-      await this.r2.deleteByUrl(previousUrl);
-    }
-
-    this.cache.clear();
-    return new StatusBaseResponseDTO(true, 'Shop logo uploaded successfully');
-  }
-
-  async removeShopLogo(shopId: string): Promise<StatusBaseResponseDTO> {
-    const settings = await this.prisma.shopStoreSettings.findUnique({
-      where: { shopId },
-      select: { logoUrl: true },
-    });
-    if (!settings) {
-      throw new NotFoundException(resourceNotFound('Store settings'));
-    }
-
-    await this.prisma.shopStoreSettings.update({
-      where: { shopId },
-      data: { logoUrl: null },
-    });
-
-    if (settings.logoUrl) {
-      await this.r2.deleteByUrl(settings.logoUrl);
-    }
-
-    this.cache.clear();
-    return new StatusBaseResponseDTO(true, 'Shop logo removed successfully');
-  }
-
   private async syncProductCoverImage(
     productId: string,
     shopId: string,
@@ -481,49 +414,6 @@ export class StoreService {
       where: { id: productId },
       data: { imageUrl: cover?.url ?? null },
     });
-  }
-
-  private async processImage(
-    file: UploadedImageFile,
-    options: ProcessImageOptions,
-  ): Promise<ProcessedImageResult> {
-    const sharpOptions = { limitInputPixels: 50_000_000 };
-    const { maxEdge, fit } = options;
-
-    let format: string | undefined;
-    try {
-      const metadata = await sharp(file.buffer, sharpOptions).metadata();
-      format = metadata.format;
-    } catch {
-      throw new BadRequestException(unsupportedImageType());
-    }
-    if (!format || !SUPPORTED_IMAGE_FORMATS.has(format)) {
-      throw new BadRequestException(unsupportedImageType());
-    }
-
-    let buffer: Buffer;
-    try {
-      buffer = await sharp(file.buffer, sharpOptions)
-        .rotate()
-        .resize({
-          width: maxEdge,
-          height: maxEdge,
-          fit,
-          position: 'centre',
-          withoutEnlargement: fit === 'inside',
-        })
-        .toBuffer();
-    } catch {
-      throw new BadRequestException(unsupportedImageType());
-    }
-
-    if (format === 'jpeg') {
-      return { buffer, ext: 'jpg', contentType: 'image/jpeg' };
-    }
-    if (format === 'png') {
-      return { buffer, ext: 'png', contentType: 'image/png' };
-    }
-    return { buffer, ext: 'webp', contentType: 'image/webp' };
   }
 
   private async shopDisplayName(shopId: string): Promise<string> {
