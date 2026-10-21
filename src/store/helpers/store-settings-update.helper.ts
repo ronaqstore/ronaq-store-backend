@@ -17,6 +17,8 @@ export function buildStoreSettingsUpdate(
   if (dto.city !== undefined) data.city = dto.city?.trim() || null;
   if (dto.latitude !== undefined) data.latitude = dto.latitude;
   if (dto.longitude !== undefined) data.longitude = dto.longitude;
+  if (dto.mapPlaceName !== undefined)
+    data.mapPlaceName = dto.mapPlaceName?.trim() || null;
   if (dto.googleMapsUrl !== undefined)
     data.googleMapsUrl = dto.googleMapsUrl?.trim() || null;
   if (dto.openingHours !== undefined)

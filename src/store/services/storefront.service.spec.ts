@@ -19,6 +19,7 @@ const settingsRow = {
   city: 'Karachi',
   latitude: 24.86,
   longitude: 67.03,
+  mapPlaceName: null,
   googleMapsUrl: null,
   openingHours: null,
   facebookUrl: null,

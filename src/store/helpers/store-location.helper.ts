@@ -33,6 +33,9 @@ export function normalizeLocationCoords(dto: UpdateStoreSettingsDto): void {
 
   dto.latitude = null;
   dto.longitude = null;
+  if (dto.mapPlaceName === undefined) {
+    dto.mapPlaceName = null;
+  }
   if (dto.googleMapsUrl === undefined) {
     dto.googleMapsUrl = null;
   }

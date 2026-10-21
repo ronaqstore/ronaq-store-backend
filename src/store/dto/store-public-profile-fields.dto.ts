@@ -39,6 +39,13 @@ export class StorePublicProfileFieldsDto {
   longitude?: number | null;
 
   @ApiPropertyOptional({
+    description: 'Human-readable map place name (from Places search).',
+    example: 'Pakistan Post Office Timergara',
+    nullable: true,
+  })
+  mapPlaceName?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Google Maps link (auto-built from pin when set).',
   })
   googleMapsUrl?: string | null;

@@ -40,6 +40,7 @@ const settingsRow = {
   city: null,
   latitude: null,
   longitude: null,
+  mapPlaceName: null,
   googleMapsUrl: null,
   openingHours: null,
   facebookUrl: null,

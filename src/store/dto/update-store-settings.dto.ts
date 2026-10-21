@@ -131,6 +131,18 @@ export class UpdateStoreSettingsDto {
 
   @ApiPropertyOptional({
     description:
+      'Human-readable place name from Google Places (shown in admin).',
+    example: 'Pakistan Post Office Timergara',
+    nullable: true,
+  })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  mapPlaceName?: string | null;
+
+  @ApiPropertyOptional({
+    description:
       'Optional Maps link. Prefer latitude/longitude — the API auto-fills this from the pin.',
     example: 'https://www.google.com/maps/search/?api=1&query=34.8266,71.8441',
     nullable: true,

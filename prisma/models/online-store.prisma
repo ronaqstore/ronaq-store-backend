@@ -20,6 +20,8 @@ model ShopStoreSettings {
   latitude       Float?
   /// WGS84 longitude from Google Places (Pakistan). Null until owner picks a pin.
   longitude      Float?
+  /// Human-readable place name from Places / reverse geocode (not the street address field).
+  mapPlaceName   String? @map("map_place_name")
   googleMapsUrl  String? @map("google_maps_url")
   openingHours   String? @map("opening_hours")
   facebookUrl    String? @map("facebook_url")
