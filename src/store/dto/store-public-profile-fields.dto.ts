@@ -24,7 +24,23 @@ export class StorePublicProfileFieldsDto {
   @ApiPropertyOptional({ description: 'City.' })
   city?: string | null;
 
-  @ApiPropertyOptional({ description: 'Google Maps link.' })
+  @ApiPropertyOptional({
+    description: 'Map pin latitude (WGS84).',
+    example: 34.8266,
+    nullable: true,
+  })
+  latitude?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Map pin longitude (WGS84).',
+    example: 71.8441,
+    nullable: true,
+  })
+  longitude?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Google Maps link (auto-built from pin when set).',
+  })
   googleMapsUrl?: string | null;
 
   @ApiPropertyOptional({ description: 'Opening hours text.' })

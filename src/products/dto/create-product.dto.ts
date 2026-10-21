@@ -16,8 +16,8 @@ import { ProductOptionalSpecFieldsDto } from '../../common-dto/product/product-o
 export class CreateProductDto extends ProductOptionalSpecFieldsDto {
   @ApiProperty({
     description:
-      'Product name shown in every picker. Unique inside a single shop (case-sensitive).',
-    example: 'Galaxy A15',
+      'Product name shown in pickers. Same name is allowed for different variants (e.g. two "iPhone 7" with different color/storage). An exact match of name + variant details is still rejected.',
+    example: 'iPhone 7',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()

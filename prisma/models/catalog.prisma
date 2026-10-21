@@ -80,7 +80,9 @@ model Product {
   saleItems          SaleItem[]
   images             ProductImage[]
 
-  @@unique([shopId, name])
+  // Same display name is allowed for different variants (e.g. two "iPhone 7"
+  // with different color/storage). Exact name+variant dupes are blocked in the service.
+  @@index([shopId, name])
   @@unique([shopId, sku]) // NULL skus are allowed many times in PostgreSQL
   @@unique([shopId, barcode])
   @@index([shopId, categoryId])

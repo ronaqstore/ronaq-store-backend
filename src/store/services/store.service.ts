@@ -34,11 +34,15 @@ import {
   isUniqueConstraintViolation,
   violatedColumn,
 } from '../../helpers/prisma-error-helper.js';
+import { toLocalPkPhone } from '../../helpers/phone.helper.js';
 import {
   RESERVED_SLUGS,
   storeSlugBase,
   nextFreeStoreSlug,
 } from '../helpers/store-slug.helper.js';
+import { normalizeAndAssertContactPhone } from '../helpers/store-contact-phone.helper.js';
+import { normalizeLocationCoords } from '../helpers/store-location.helper.js';
+import { buildStoreSettingsUpdate } from '../helpers/store-settings-update.helper.js';
 
 const MAX_PRODUCT_IMAGES = 5;
 const MAX_IMAGE_EDGE = 1600;
@@ -62,7 +66,12 @@ export class StoreService {
     if (!settings) {
       throw new NotFoundException(resourceNotFound('Store settings'));
     }
-    return settings;
+    return {
+      ...settings,
+      phoneNumber: toLocalPkPhone(settings.phoneNumber) ?? settings.phoneNumber,
+      whatsappNumber:
+        toLocalPkPhone(settings.whatsappNumber) ?? settings.whatsappNumber,
+    };
   }
 
   async updateSettings(
@@ -77,6 +86,23 @@ export class StoreService {
       );
     }
 
+    if (dto.phoneNumber !== undefined) {
+      dto.phoneNumber = await normalizeAndAssertContactPhone(
+        this.prisma,
+        dto.phoneNumber,
+        shopId,
+      );
+    }
+    if (dto.whatsappNumber !== undefined) {
+      dto.whatsappNumber = await normalizeAndAssertContactPhone(
+        this.prisma,
+        dto.whatsappNumber,
+        shopId,
+      );
+    }
+
+    normalizeLocationCoords(dto);
+
     const existing = await this.prisma.shopStoreSettings.findUnique({
       where: { shopId },
     });
@@ -86,10 +112,20 @@ export class StoreService {
       if (existing) {
         await this.prisma.shopStoreSettings.update({
           where: { shopId },
-          data: this.buildUpdate(dto),
+          data: buildStoreSettingsUpdate(dto),
         });
       } else {
         createSlug = await this.nextFreeSlug(shopId);
+        const createData = buildStoreSettingsUpdate(dto);
+        if (createData.address === undefined) {
+          const shop = await this.prisma.shop.findUnique({
+            where: { id: shopId },
+            select: { address: true, name: true },
+          });
+          if (shop?.address?.trim()) {
+            createData.address = shop.address.trim();
+          }
+        }
         await this.prisma.shopStoreSettings.create({
           data: {
             shopId,
@@ -98,7 +134,7 @@ export class StoreService {
               dto.displayName ?? (await this.shopDisplayName(shopId)),
             isEnabled: dto.isEnabled ?? false,
             showExactStock: dto.showExactStock ?? false,
-            ...this.buildUpdate(dto),
+            ...createData,
           },
         });
       }
@@ -488,34 +524,6 @@ export class StoreService {
       return { buffer, ext: 'png', contentType: 'image/png' };
     }
     return { buffer, ext: 'webp', contentType: 'image/webp' };
-  }
-
-  private buildUpdate(dto: UpdateStoreSettingsDto): Record<string, unknown> {
-    const data: Record<string, unknown> = {};
-    if (dto.isEnabled !== undefined) data.isEnabled = dto.isEnabled;
-    if (dto.displayName !== undefined)
-      data.displayName = dto.displayName?.trim();
-    if (dto.about !== undefined) data.about = dto.about?.trim() || null;
-    if (dto.logoUrl !== undefined) data.logoUrl = dto.logoUrl?.trim() || null;
-    if (dto.bannerUrl !== undefined)
-      data.bannerUrl = dto.bannerUrl?.trim() || null;
-    if (dto.whatsappNumber !== undefined)
-      data.whatsappNumber = dto.whatsappNumber?.trim() || null;
-    if (dto.phoneNumber !== undefined)
-      data.phoneNumber = dto.phoneNumber?.trim() || null;
-    if (dto.address !== undefined) data.address = dto.address?.trim() || null;
-    if (dto.city !== undefined) data.city = dto.city?.trim() || null;
-    if (dto.googleMapsUrl !== undefined)
-      data.googleMapsUrl = dto.googleMapsUrl?.trim() || null;
-    if (dto.openingHours !== undefined)
-      data.openingHours = dto.openingHours?.trim() || null;
-    if (dto.facebookUrl !== undefined)
-      data.facebookUrl = dto.facebookUrl?.trim() || null;
-    if (dto.instagramUrl !== undefined)
-      data.instagramUrl = dto.instagramUrl?.trim() || null;
-    if (dto.showExactStock !== undefined)
-      data.showExactStock = dto.showExactStock;
-    return data;
   }
 
   private async shopDisplayName(shopId: string): Promise<string> {

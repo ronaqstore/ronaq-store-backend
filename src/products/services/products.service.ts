@@ -18,7 +18,6 @@ import {
 } from '../../helpers/paginate-helper.js';
 import {
   resourceNotFound,
-  duplicateName,
   duplicateFieldValue,
   trackingTypeLocked,
   stockNotEmptyForTrackingChange,
@@ -35,6 +34,7 @@ import {
   PRODUCT_INCLUDE,
   mapProductToResponse,
 } from '../helpers/product.mapper.js';
+import { assertNoDuplicateVariant } from '../helpers/product-variant-uniqueness.helper.js';
 
 @Injectable()
 export class ProductsService {
@@ -61,6 +61,24 @@ export class ProductsService {
       throw new BadRequestException(productNotPublishable(name));
     }
 
+    const model = dto.model?.trim() || null;
+    const color = dto.color?.trim() || null;
+    const ram = dto.ram?.trim() || null;
+    const storage = dto.storage?.trim() || null;
+    const ptaStatus =
+      dto.trackingType === 'SERIALIZED' ? (dto.ptaStatus ?? null) : null;
+    const authenticity = dto.authenticity ?? null;
+
+    await assertNoDuplicateVariant(this.prisma, shopId, {
+      name,
+      model,
+      color,
+      ram,
+      storage,
+      ptaStatus,
+      authenticity,
+    });
+
     let createdProductId = '';
     try {
       await this.prisma.$transaction(
@@ -72,10 +90,10 @@ export class ProductsService {
               brandId: dto.brandId,
               name,
               trackingType: dto.trackingType,
-              model: dto.model?.trim() || null,
-              color: dto.color?.trim() || null,
-              ram: dto.ram?.trim() || null,
-              storage: dto.storage?.trim() || null,
+              model,
+              color,
+              ram,
+              storage,
               sku,
               barcode,
               description: dto.description?.trim() || null,
@@ -87,11 +105,8 @@ export class ProductsService {
               isPublished: dto.isPublished ?? false,
               publicDescription: dto.publicDescription?.trim() || null,
               contactForPrice: dto.contactForPrice ?? false,
-              ptaStatus:
-                dto.trackingType === 'SERIALIZED'
-                  ? (dto.ptaStatus ?? null)
-                  : null,
-              authenticity: dto.authenticity ?? null,
+              ptaStatus,
+              authenticity,
             },
           });
           createdProductId = product.id;
@@ -113,7 +128,7 @@ export class ProductsService {
         },
       );
     } catch (error) {
-      throw this.mapDuplicate(error, name, sku, barcode);
+      throw this.mapDuplicate(error, sku, barcode);
     }
 
     return new StatusBaseResponseDTO(
@@ -261,6 +276,44 @@ export class ProductsService {
       dto.ptaStatus !== undefined ? dto.ptaStatus : existing.ptaStatus;
     this.assertPtaForBrand(brandName, nextPta, nextTrackingForPta);
 
+    const nextName = newName ?? existing.name;
+    const nextModel =
+      dto.model !== undefined ? dto.model?.trim() || null : existing.model;
+    const nextColor =
+      dto.color !== undefined ? dto.color?.trim() || null : existing.color;
+    const nextRam =
+      dto.ram !== undefined ? dto.ram?.trim() || null : existing.ram;
+    const nextStorage =
+      dto.storage !== undefined
+        ? dto.storage?.trim() || null
+        : existing.storage;
+    const nextAuthenticity =
+      dto.authenticity !== undefined
+        ? dto.authenticity || null
+        : existing.authenticity;
+    const nextTracking = dto.trackingType ?? existing.trackingType;
+    const nextPtaStored =
+      nextTracking === 'SERIALIZED'
+        ? dto.ptaStatus !== undefined
+          ? dto.ptaStatus
+          : existing.ptaStatus
+        : null;
+
+    await assertNoDuplicateVariant(
+      this.prisma,
+      shopId,
+      {
+        name: nextName,
+        model: nextModel,
+        color: nextColor,
+        ram: nextRam,
+        storage: nextStorage,
+        ptaStatus: nextPtaStored,
+        authenticity: nextAuthenticity,
+      },
+      id,
+    );
+
     const data: Prisma.ProductUpdateInput = {};
     if (newName !== undefined) data.name = newName;
     if (dto.categoryId !== undefined) {
@@ -298,7 +351,6 @@ export class ProductsService {
     if (dto.contactForPrice !== undefined) {
       data.contactForPrice = dto.contactForPrice;
     }
-    const nextTracking = dto.trackingType ?? existing.trackingType;
     if (dto.ptaStatus !== undefined) {
       data.ptaStatus = nextTracking === 'SERIALIZED' ? dto.ptaStatus : null;
     } else if (trackingTypeChanges && nextTracking === 'QUANTITY') {
@@ -337,7 +389,7 @@ export class ProductsService {
         }
       });
     } catch (error) {
-      throw this.mapDuplicate(error, newName, newSku, newBarcode);
+      throw this.mapDuplicate(error, newSku, newBarcode);
     }
 
     return new StatusBaseResponseDTO(true, 'Product updated successfully');
@@ -467,7 +519,6 @@ export class ProductsService {
 
   private mapDuplicate(
     error: unknown,
-    name?: string,
     sku?: string | null,
     barcode?: string | null,
   ): unknown {
@@ -482,9 +533,6 @@ export class ProductsService {
       return new BadRequestException(
         duplicateFieldValue('Product', 'barcode', barcode),
       );
-    }
-    if (name) {
-      return new BadRequestException(duplicateName('Product', name));
     }
     return error;
   }

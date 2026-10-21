@@ -249,7 +249,7 @@ describe('PlatformAdminService', () => {
       await expect(service.createShop(validDto)).rejects.toMatchObject({
         status: 400,
         response: expect.objectContaining({
-          error: 'This phone number is already in use',
+          error: 'This number is already in use',
           code: 'PHONE_ALREADY_TAKEN',
         }),
       });

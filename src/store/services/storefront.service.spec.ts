@@ -17,6 +17,8 @@ const settingsRow = {
   phoneNumber: '0300-1234567',
   address: 'Shop 12, Shahra-e-Faisal',
   city: 'Karachi',
+  latitude: 24.86,
+  longitude: 67.03,
   googleMapsUrl: null,
   openingHours: null,
   facebookUrl: null,

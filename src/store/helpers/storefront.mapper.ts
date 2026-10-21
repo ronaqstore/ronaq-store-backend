@@ -7,6 +7,7 @@ import {
 } from '../dto/response-storefront.dto.js';
 import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
 import type { StorefrontSettingsProfile } from '../services/storefront.service.types.js';
+import { toLocalPkPhone } from '../../helpers/phone.helper.js';
 import { toModelKey } from '../../helpers/slug.helper.js';
 
 export const STOREFRONT_SELLABLE_STATUS = 'IN_STOCK';
@@ -69,10 +70,13 @@ export function toStorefrontProfile(
     about: settings.about,
     logoUrl: settings.logoUrl,
     bannerUrl: settings.bannerUrl,
-    whatsappNumber: settings.whatsappNumber,
-    phoneNumber: settings.phoneNumber,
+    whatsappNumber:
+      toLocalPkPhone(settings.whatsappNumber) ?? settings.whatsappNumber,
+    phoneNumber: toLocalPkPhone(settings.phoneNumber) ?? settings.phoneNumber,
     address: settings.address,
     city: settings.city,
+    latitude: settings.latitude ?? null,
+    longitude: settings.longitude ?? null,
     googleMapsUrl: settings.googleMapsUrl,
     openingHours: settings.openingHours,
     facebookUrl: settings.facebookUrl,

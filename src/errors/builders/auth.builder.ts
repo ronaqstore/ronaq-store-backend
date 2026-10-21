@@ -15,21 +15,20 @@ export const invalidOwnerPhone = (phone: string): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'That is not a valid phone number',
     [
-      `${phone} is not a Pakistani mobile number. Use the form 03XX1234567, or with a country code 923XX1234567. The phone number is the owner's login id, so it must be one he actually owns.`,
+      `${phone} is not a Pakistani mobile number. Use the local form 03XXXXXXXXX (example: 03029825213).`,
     ],
     HttpStatus.BAD_REQUEST,
   );
 };
 
 export const PHONE_ALREADY_TAKEN_CODE = 'PHONE_ALREADY_TAKEN';
-export const PHONE_ALREADY_TAKEN_MESSAGE =
-  'This mobile number is already used on the platform (shop login, platform admin, supplier, or customer). Pick a different one.';
+export const PHONE_ALREADY_TAKEN_MESSAGE = 'This number is already in use';
 
 export const ownerPhoneAlreadyRegistered = (
   phone: string,
 ): ErrorResponseDTO => {
   return new ErrorResponseDTO(
-    'This phone number is already in use',
+    PHONE_ALREADY_TAKEN_MESSAGE,
     [`${phone}: ${PHONE_ALREADY_TAKEN_MESSAGE}`],
     HttpStatus.BAD_REQUEST,
     PHONE_ALREADY_TAKEN_CODE,
@@ -37,6 +36,9 @@ export const ownerPhoneAlreadyRegistered = (
 };
 
 export const loginPhoneAlreadyTaken = (phone: string): ErrorResponseDTO =>
+  ownerPhoneAlreadyRegistered(phone);
+
+export const storeContactPhoneTaken = (phone: string): ErrorResponseDTO =>
   ownerPhoneAlreadyRegistered(phone);
 
 export const oneOwnerPerShop = (shopName: string): ErrorResponseDTO => {

@@ -102,13 +102,32 @@ const validCreate = {
   trackingType: 'QUANTITY' as const,
 };
 
+/** Existing row for update, then null for the name+variant uniqueness probe. */
+function mockProductFoundForUpdate(
+  row: Record<string, unknown> = baseProductRow(),
+) {
+  prismaStub.product.findFirst.mockImplementation((args?: any) => {
+    const idFilter = args?.where?.id;
+    if (idFilter && typeof idFilter === 'object' && idFilter.not) {
+      return Promise.resolve(null);
+    }
+    if (idFilter) return Promise.resolve(row);
+    return Promise.resolve(null);
+  });
+}
+
 describe('ProductsService', () => {
   let service: ProductsService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
     prismaStub.category.findFirst.mockResolvedValue({ id: CATEGORY_ID });
-    prismaStub.brand.findFirst.mockResolvedValue({ id: BRAND_ID });
+    prismaStub.brand.findFirst.mockResolvedValue({
+      id: BRAND_ID,
+      name: 'Samsung',
+    });
+    // Default: no name+variant clash (create / update uniqueness probe).
+    prismaStub.product.findFirst.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -194,14 +213,32 @@ describe('ProductsService', () => {
       });
     });
 
-    it('maps a duplicate product name to a friendly 400', async () => {
-      prismaStub.product.create.mockRejectedValue(
-        uniqueViolation(['shop_id', 'name']),
-      );
+    it('allows the same product name when variant details differ', async () => {
+      prismaStub.product.findFirst.mockResolvedValue(null);
+      prismaStub.product.create.mockResolvedValue({ id: 'prod-new' });
+
+      await expect(
+        service.createProduct(
+          {
+            ...validCreate,
+            name: 'iPhone 7',
+            color: 'Black',
+            storage: '64',
+            trackingType: 'SERIALIZED',
+          },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).resolves.toMatchObject({ status: true });
+    });
+
+    it('rejects an exact name + variant duplicate with a friendly 400', async () => {
+      prismaStub.product.findFirst.mockResolvedValue({ id: 'prod-existing' });
 
       await expect(
         service.createProduct(validCreate, SHOP_ID, 'user-1'),
       ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.create).not.toHaveBeenCalled();
     });
 
     it('maps a duplicate SKU to a SKU-specific 400', async () => {
@@ -243,21 +280,7 @@ describe('ProductsService', () => {
     });
 
     describe('with the Prisma 7 driver-adapter error shape (meta.target absent)', () => {
-      it('reports a duplicate NAME', async () => {
-        prismaStub.product.create.mockRejectedValue(
-          adapterUniqueViolation('products_shop_id_name_key'),
-        );
-
-        const err = await service
-          .createProduct(validCreate, SHOP_ID, 'user-1')
-          .catch((e) => e);
-
-        expect(err).toBeInstanceOf(BadRequestException);
-        expect(JSON.stringify(err.getResponse())).toContain('already exists');
-        expect(JSON.stringify(err.getResponse())).not.toContain('SKU');
-      });
-
-      it('reports a duplicate SKU, not the name', async () => {
+      it('reports a duplicate SKU, not a name clash', async () => {
         prismaStub.product.create.mockRejectedValue(
           adapterUniqueViolation('products_shop_id_sku_key'),
         );
@@ -270,7 +293,7 @@ describe('ProductsService', () => {
         expect(JSON.stringify(err.getResponse())).toContain('SKU');
       });
 
-      it('reports a duplicate barcode, not the name', async () => {
+      it('reports a duplicate barcode, not a name clash', async () => {
         prismaStub.product.create.mockRejectedValue(
           adapterUniqueViolation('products_shop_id_barcode_key'),
         );
@@ -285,19 +308,6 @@ describe('ProductsService', () => {
 
         expect(err).toBeInstanceOf(BadRequestException);
         expect(JSON.stringify(err.getResponse())).toContain('barcode');
-      });
-
-      it('reports a duplicate name when the SKU was not sent', async () => {
-        prismaStub.product.create.mockRejectedValue(
-          adapterUniqueViolation('products_shop_id_name_key'),
-        );
-
-        const err = await service
-          .createProduct(validCreate, SHOP_ID, 'user-1')
-          .catch((e) => e);
-
-        expect(err).toBeInstanceOf(BadRequestException);
-        expect(JSON.stringify(err.getResponse())).toContain('Product');
       });
     });
   });
@@ -524,9 +534,7 @@ describe('ProductsService', () => {
     });
 
     it('drops the stock counter when switching QUANTITY -> SERIALIZED with no history and no stock', async () => {
-      prismaStub.product.findFirst.mockResolvedValue(
-        baseProductRow({ trackingType: 'QUANTITY' }),
-      );
+      mockProductFoundForUpdate(baseProductRow({ trackingType: 'QUANTITY' }));
       prismaStub.purchaseItem.count.mockResolvedValue(0);
       prismaStub.saleItem.count.mockResolvedValue(0);
       prismaStub.stockLevel.findUnique.mockResolvedValue({ quantityOnHand: 0 });
@@ -545,9 +553,7 @@ describe('ProductsService', () => {
     });
 
     it('creates a stock counter when switching SERIALIZED -> QUANTITY with no history', async () => {
-      prismaStub.product.findFirst.mockResolvedValue(
-        baseProductRow({ trackingType: 'SERIALIZED' }),
-      );
+      mockProductFoundForUpdate(baseProductRow({ trackingType: 'SERIALIZED' }));
       prismaStub.purchaseItem.count.mockResolvedValue(0);
       prismaStub.saleItem.count.mockResolvedValue(0);
       prismaStub.stockLevel.findUnique.mockResolvedValue(null);
@@ -571,9 +577,7 @@ describe('ProductsService', () => {
     });
 
     it('does not touch stock levels when trackingType is unchanged', async () => {
-      prismaStub.product.findFirst.mockResolvedValue(
-        baseProductRow({ trackingType: 'QUANTITY' }),
-      );
+      mockProductFoundForUpdate(baseProductRow({ trackingType: 'QUANTITY' }));
       prismaStub.product.update.mockResolvedValue({});
 
       await service.updateProduct(
@@ -592,21 +596,23 @@ describe('ProductsService', () => {
       });
     });
 
-    it('maps a duplicate name on update to a friendly 400', async () => {
-      prismaStub.product.findFirst.mockResolvedValue(baseProductRow());
-      prismaStub.product.update.mockRejectedValue(
-        uniqueViolation(['shop_id', 'name']),
-      );
+    it('rejects an exact name + variant duplicate on update', async () => {
+      prismaStub.product.findFirst.mockImplementation((args?: any) => {
+        const idFilter = args?.where?.id;
+        if (idFilter && typeof idFilter === 'object' && idFilter.not) {
+          return Promise.resolve({ id: 'prod-other' });
+        }
+        return Promise.resolve(baseProductRow());
+      });
 
       await expect(
         service.updateProduct('prod-1', { name: 'Dup' }, SHOP_ID, 'user-1'),
       ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.update).not.toHaveBeenCalled();
     });
 
     it('writes the R1.2 publish fields and never touches publishedAt', async () => {
-      prismaStub.product.findFirst.mockResolvedValue(
-        baseProductRow({ trackingType: 'SERIALIZED' }),
-      );
+      mockProductFoundForUpdate(baseProductRow({ trackingType: 'SERIALIZED' }));
       prismaStub.product.update.mockResolvedValue({});
 
       await service.updateProduct(
