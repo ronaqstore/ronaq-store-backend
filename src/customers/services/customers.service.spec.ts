@@ -23,6 +23,7 @@ const prismaStub = {
   saleReturn: { findMany: jest.fn(), groupBy: jest.fn() },
   refund: { findMany: jest.fn() },
   $transaction: jest.fn(),
+  $queryRaw: jest.fn(),
 };
 
 const customerRow = (overrides: Record<string, unknown> = {}) => ({
@@ -192,12 +193,56 @@ describe('CustomersService', () => {
         expect.objectContaining({
           where: {
             shopId: 'shop-1',
-            OR: [
-              { name: { contains: 'ali', mode: 'insensitive' } },
-              { phone: { contains: 'ali' } },
-            ],
             isActive: true,
+            AND: [
+              {
+                OR: [
+                  { name: { contains: 'ali', mode: 'insensitive' } },
+                  { phone: { contains: 'ali' } },
+                ],
+              },
+            ],
           },
+        }),
+      );
+    });
+
+    it('filters phone, address, opening balance and current credit', async () => {
+      prismaStub.$queryRaw.mockResolvedValue([{ id: 'cust-1' }]);
+      prismaStub.customer.findMany.mockResolvedValue([customerRow()]);
+      prismaStub.customer.count.mockResolvedValue(1);
+
+      await service.getCustomers(
+        {
+          phone: '0300',
+          address: 'Lahore',
+          minOpeningBalance: 0,
+          maxOpeningBalance: 10_000_000,
+          minCurrentBalance: 1000,
+          maxCurrentBalance: 5_000_000,
+        },
+        'shop-1',
+      );
+
+      expect(prismaStub.$queryRaw).toHaveBeenCalled();
+      expect(prismaStub.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            shopId: 'shop-1',
+            id: { in: ['cust-1'] },
+            AND: expect.arrayContaining([
+              { OR: [{ phone: { contains: '0300' } }] },
+              {
+                address: { contains: 'Lahore', mode: 'insensitive' },
+              },
+              {
+                openingBalance: {
+                  gte: 0n,
+                  lte: 10_000_000n,
+                },
+              },
+            ]),
+          }),
         }),
       );
     });

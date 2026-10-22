@@ -625,8 +625,8 @@ describe('PaymentsService', () => {
       );
 
       const where = prismaStub.payment.findMany.mock.calls[0][0].where;
-      expect(where.AND).toHaveLength(2);
-      expect(where.OR).toHaveLength(2);
+      expect(where.AND).toHaveLength(3);
+      expect(where.AND[2].OR).toHaveLength(2);
       expect(where.shopId).toBe(SHOP_ID);
     });
   });

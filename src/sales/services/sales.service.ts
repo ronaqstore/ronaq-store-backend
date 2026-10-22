@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma } from '../../generated/prisma/client.js';
 import {
   CashDirection,
   CashMovementType,
@@ -32,6 +31,12 @@ import {
   violatedColumn,
 } from '../../helpers/prisma-error-helper.js';
 import { SALE_INCLUDE, mapSaleToResponse } from '../helpers/sale.mapper.js';
+import {
+  buildSaleListWhere,
+  buildSaleMoneyFilterSql,
+  buildSaleMoneyOrderedIdsSql,
+  saleListNeedsMoneyJoin,
+} from '../helpers/sale-list-where.helper.js';
 import {
   SalesLineWriterService,
   type LockedSaleLine,
@@ -215,28 +220,59 @@ export class SalesService {
     const sortBy = query.sortBy ?? 'saleDate';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.SaleWhereInput = { shopId };
-    if (query.customerId) where.customerId = query.customerId;
-    if (query.status) where.status = query.status;
-    const dateFilters: Prisma.SaleWhereInput[] = [];
-    if (query.from)
-      dateFilters.push({ saleDate: { gte: new Date(query.from) } });
-    if (query.to) dateFilters.push({ saleDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { saleNo: { contains: term, mode: 'insensitive' } },
-        { customer: { name: { contains: term, mode: 'insensitive' } } },
-      ];
+    let where = buildSaleListWhere(query, shopId);
+    const moneySort =
+      sortBy === 'paid' || sortBy === 'outstanding' ? sortBy : null;
+
+    if (saleListNeedsMoneyJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        moneySort
+          ? buildSaleMoneyOrderedIdsSql(query, shopId, moneySort, sortOrder)
+          : buildSaleMoneyFilterSql(query, shopId),
+      );
+      const orderedIds = matched.map((row) => row.id);
+      where = { shopId, id: { in: orderedIds } };
+
+      if (moneySort) {
+        const total = orderedIds.length;
+        const pageIds = orderedIds.slice(
+          getSkipNumber(page, pageSize),
+          getSkipNumber(page, pageSize) + pageSize,
+        );
+        if (pageIds.length === 0) {
+          return new PaginatedResponseDTO<ResponseSaleDto>(
+            [],
+            total,
+            page,
+            pageSize,
+          );
+        }
+        const rows = await this.prisma.sale.findMany({
+          where: { shopId, id: { in: pageIds } },
+          include: SALE_INCLUDE,
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return new PaginatedResponseDTO<ResponseSaleDto>(
+          pageIds
+            .map((id) => byId.get(id))
+            .filter((row): row is NonNullable<typeof row> => row != null)
+            .map((row) => mapSaleToResponse(row)),
+          total,
+          page,
+          pageSize,
+        );
+      }
     }
+
+    const prismaSortBy =
+      sortBy === 'paid' || sortBy === 'outstanding' ? 'saleDate' : sortBy;
 
     const [rows, total] = await Promise.all([
       this.prisma.sale.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [prismaSortBy]: sortOrder },
         include: SALE_INCLUDE,
       }),
       this.prisma.sale.count({ where }),

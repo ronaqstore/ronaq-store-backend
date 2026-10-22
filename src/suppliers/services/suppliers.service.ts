@@ -34,6 +34,11 @@ import {
   systemRowProtected,
 } from '../../errors/error.builder.js';
 import { supplierCurrentBalances } from '../../helpers/party-current-balance.helper.js';
+import {
+  buildSupplierCurrentBalanceFilterSql,
+  buildSupplierListWhere,
+  supplierListNeedsCurrentBalanceJoin,
+} from '../helpers/supplier-list-where.helper.js';
 
 const WALK_IN_SELLER = 'supplier';
 
@@ -89,25 +94,16 @@ export class SuppliersService {
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.SupplierWhereInput = { shopId };
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
-    }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
+    let where = buildSupplierListWhere(query, shopId);
 
-      const branches: Prisma.SupplierWhereInput[] = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { phone: { contains: term, mode: 'insensitive' } },
-        { cnic: { contains: term, mode: 'insensitive' } },
-        { address: { contains: term, mode: 'insensitive' } },
-      ];
-
-      const canonical = normalizePhone(term);
-      if (canonical && canonical !== term) {
-        branches.push({ phone: { contains: canonical, mode: 'insensitive' } });
-      }
-      where.OR = branches;
+    if (supplierListNeedsCurrentBalanceJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildSupplierCurrentBalanceFilterSql(query, shopId),
+      );
+      where = {
+        ...where,
+        id: { in: matched.map((row) => row.id) },
+      };
     }
 
     const [rows, total] = await Promise.all([

@@ -1,5 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
+import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { AmountRangeQueryFilterDto } from '../../common-dto/query/amount-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -8,7 +9,7 @@ import {
   SortOrderPeriodQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
+class PaymentQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
     'ali',
     'Case-insensitive contains search across the customer name and the payment notes.',
@@ -32,6 +33,14 @@ export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
   saleId?: string;
 
   @ApiPropertyOptional({
+    example: 'S-0047',
+    description: 'Contains filter on linked sale number.',
+  })
+  @IsOptional()
+  @IsString()
+  saleNo?: string;
+
+  @ApiPropertyOptional({
     example: '01924f0a-0000-7000-8000-0000000009e2',
     description:
       'Only rows of this receipt group — one request that split a payment across several sales shares one receiptGroupId.',
@@ -39,6 +48,14 @@ export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
   @IsOptional()
   @IsUUID()
   receiptGroupId?: string;
+
+  @ApiPropertyOptional({
+    example: 'CASH',
+    description: 'Payment method filter. Currently CASH.',
+  })
+  @IsOptional()
+  @IsIn(['CASH'])
+  method?: 'CASH';
 
   @ApiPropertyOptional({
     example: 'ACTIVE',
@@ -84,3 +101,8 @@ export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class PaymentQueryFilterDto extends IntersectionType(
+  PaymentQueryFilterBaseDto,
+  AmountRangeQueryFilterDto,
+) {}

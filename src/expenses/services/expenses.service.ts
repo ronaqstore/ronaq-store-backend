@@ -28,6 +28,7 @@ import {
   cancelledRowMutationForbidden,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 
 const EXPENSE_INCLUDE = {
   category: { select: { name: true } },
@@ -223,20 +224,31 @@ export class ExpensesService {
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.status) where.status = query.status;
 
-    const dateFilters: Prisma.ExpenseWhereInput[] = [];
+    const andFilters: Prisma.ExpenseWhereInput[] = [];
     if (query.from)
-      dateFilters.push({ expenseDate: { gte: new Date(query.from) } });
-    if (query.to)
-      dateFilters.push({ expenseDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
-
+      andFilters.push({ expenseDate: { gte: new Date(query.from) } });
+    if (query.to) andFilters.push({ expenseDate: { lte: new Date(query.to) } });
+    const amountFilter = buildAmountRangeFilter(
+      query.minAmount,
+      query.maxAmount,
+    );
+    if (amountFilter) andFilters.push({ amount: amountFilter });
+    const description = query.description?.trim();
+    if (description) {
+      andFilters.push({
+        description: { contains: description, mode: 'insensitive' },
+      });
+    }
     if (query.search?.trim()) {
       const term = query.search.trim();
-      where.OR = [
-        { description: { contains: term, mode: 'insensitive' } },
-        { category: { name: { contains: term, mode: 'insensitive' } } },
-      ];
+      andFilters.push({
+        OR: [
+          { description: { contains: term, mode: 'insensitive' } },
+          { category: { name: { contains: term, mode: 'insensitive' } } },
+        ],
+      });
     }
+    if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =
       sortBy === 'categoryName'

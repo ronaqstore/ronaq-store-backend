@@ -58,6 +58,17 @@ export class ProductQueryFilterDto extends PaginatedListQueryFilterDto {
   inStockOnly?: boolean;
 
   @ApiPropertyOptional({
+    example: 5,
+    description:
+      'Exact on-hand stock match. QUANTITY uses stock_levels; SERIALIZED uses IN_STOCK unit count.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantityOnHand?: number;
+
+  @ApiPropertyOptional({
     example: 5000000,
     description:
       'Minimum default selling price in PAISA (inclusive). Rs 50,000 = 5000000.',

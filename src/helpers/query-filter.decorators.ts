@@ -6,9 +6,11 @@ import {
   IsBoolean,
   IsDateString,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Min,
 } from 'class-validator';
 
 export function optionalBooleanQueryTransform(
@@ -84,5 +86,18 @@ export function SortOrderPeriodQueryProperty(
     ApiPropertyOptional({ example: 'desc', description }),
     IsOptional(),
     IsIn(['asc', 'desc']),
+  );
+}
+
+export function OptionalPaisaAmountQueryProperty(
+  example: number,
+  description: string,
+) {
+  return applyDecorators(
+    ApiPropertyOptional({ example, description }),
+    IsOptional(),
+    Type(() => Number),
+    IsInt(),
+    Min(0),
   );
 }

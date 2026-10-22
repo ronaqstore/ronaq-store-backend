@@ -60,14 +60,16 @@ export function purchaseListNeedsMoneyJoin(
     query.payStatus === 'PAID' ||
     query.payStatus === 'PARTIAL' ||
     query.payStatus === 'PAYABLE' ||
-    query.payStatus === 'CANCELLED'
+    query.payStatus === 'CANCELLED' ||
+    query.sortBy === 'paid' ||
+    query.sortBy === 'outstanding'
   );
 }
 
-export function buildPurchaseMoneyFilterSql(
+function buildPurchaseMoneyConditions(
   query: PurchaseQueryFilterDto,
   shopId: string,
-): Prisma.Sql {
+): Prisma.Sql[] {
   const conditions: Prisma.Sql[] = [Prisma.sql`p.shop_id = ${shopId}::uuid`];
 
   if (query.supplierId) {
@@ -158,15 +160,59 @@ export function buildPurchaseMoneyFilterSql(
     `);
   }
 
+  return conditions;
+}
+
+const PURCHASE_MONEY_FROM = Prisma.sql`
+  FROM purchases p
+  LEFT JOIN (
+    SELECT purchase_id, COALESCE(SUM(amount), 0) AS paid_amount
+    FROM supplier_payments
+    WHERE status = 'ACTIVE' AND purchase_id IS NOT NULL
+    GROUP BY purchase_id
+  ) pay ON pay.purchase_id = p.id
+`;
+
+export function buildPurchaseMoneyFilterSql(
+  query: PurchaseQueryFilterDto,
+  shopId: string,
+): Prisma.Sql {
+  const conditions = buildPurchaseMoneyConditions(query, shopId);
   return Prisma.sql`
     SELECT p.id
-    FROM purchases p
-    LEFT JOIN (
-      SELECT purchase_id, COALESCE(SUM(amount), 0) AS paid_amount
-      FROM supplier_payments
-      WHERE status = 'ACTIVE' AND purchase_id IS NOT NULL
-      GROUP BY purchase_id
-    ) pay ON pay.purchase_id = p.id
+    ${PURCHASE_MONEY_FROM}
     WHERE ${Prisma.join(conditions, ' AND ')}
+  `;
+}
+
+function purchaseMoneySortSql(
+  sortBy: 'paid' | 'outstanding',
+  sortOrder: 'asc' | 'desc',
+): Prisma.Sql {
+  const direction = sortOrder === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+  if (sortBy === 'paid') {
+    return Prisma.sql`COALESCE(pay.paid_amount, 0) ${direction}, p.id ASC`;
+  }
+  return Prisma.sql`
+    CASE
+      WHEN p.status = 'CANCELLED' OR p.is_opening_stock THEN 0
+      ELSE GREATEST(p.total_amount - COALESCE(pay.paid_amount, 0), 0)
+    END ${direction},
+    p.id ASC
+  `;
+}
+
+export function buildPurchaseMoneyOrderedIdsSql(
+  query: PurchaseQueryFilterDto,
+  shopId: string,
+  sortBy: 'paid' | 'outstanding',
+  sortOrder: 'asc' | 'desc',
+): Prisma.Sql {
+  const conditions = buildPurchaseMoneyConditions(query, shopId);
+  return Prisma.sql`
+    SELECT p.id
+    ${PURCHASE_MONEY_FROM}
+    WHERE ${Prisma.join(conditions, ' AND ')}
+    ORDER BY ${purchaseMoneySortSql(sortBy, sortOrder)}
   `;
 }

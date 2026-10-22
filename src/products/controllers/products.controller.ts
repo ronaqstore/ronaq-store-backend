@@ -79,7 +79,7 @@ export class ProductsController {
   @ApiOperation({
     summary: 'List products',
     description:
-      'Paginated list scoped to the shop in the JWT. Supports a contains search across name/model/sku/barcode, plus categoryId, brandId, trackingType, isActive, isPublished, minSellingPrice/maxSellingPrice (paisa) and inStockOnly filters. Each row carries categoryName, brandName and the live quantityOnHand.',
+      'Paginated list scoped to the shop in the JWT. Supports a contains search across name/model/sku/barcode, plus categoryId, brandId, trackingType, isActive, isPublished, quantityOnHand (exact stock), minSellingPrice/maxSellingPrice (paisa) and inStockOnly filters. Each row carries categoryName, brandName and the live quantityOnHand.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Products fetched successfully'),

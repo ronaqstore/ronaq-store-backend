@@ -1,13 +1,7 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import {
-  IsBoolean,
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsUUID,
-  Min,
-} from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsUUID } from 'class-validator';
+import { DocumentMoneyRangeQueryFilterDto } from '../../common-dto/query/document-money-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -17,7 +11,7 @@ import {
   optionalBooleanQueryTransform,
 } from '../../helpers/query-filter.decorators.js';
 
-export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
+class PurchaseQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
     'AB-771',
     'Case-insensitive contains search across purchase number, the supplier invoice reference and the supplier name.',
@@ -71,75 +65,17 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
   to?: string;
 
   @ApiPropertyOptional({
-    example: 1000000,
-    description: 'Minimum total amount in PAISA (inclusive).',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  minTotalAmount?: number;
-
-  @ApiPropertyOptional({
-    example: 50000000,
-    description: 'Maximum total amount in PAISA (inclusive).',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  maxTotalAmount?: number;
-
-  @ApiPropertyOptional({
-    example: 0,
-    description: 'Minimum paid amount in PAISA (inclusive).',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  minPaidAmount?: number;
-
-  @ApiPropertyOptional({
-    example: 10000000,
-    description: 'Maximum paid amount in PAISA (inclusive).',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  maxPaidAmount?: number;
-
-  @ApiPropertyOptional({
-    example: 0,
-    description: 'Minimum outstanding amount in PAISA (inclusive).',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  minOutstandingAmount?: number;
-
-  @ApiPropertyOptional({
-    example: 5000000,
-    description: 'Maximum outstanding amount in PAISA (inclusive).',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  maxOutstandingAmount?: number;
-
-  @ApiPropertyOptional({
     example: 'purchaseDate',
     description:
-      'purchaseDate | purchaseNo | totalAmount | status | createdAt | updatedAt.',
+      'purchaseDate | purchaseNo | totalAmount | paid | outstanding | status | createdAt | updatedAt.',
   })
   @IsOptional()
   @IsIn([
     'purchaseDate',
     'purchaseNo',
     'totalAmount',
+    'paid',
+    'outstanding',
     'status',
     'createdAt',
     'updatedAt',
@@ -148,6 +84,8 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
     | 'purchaseDate'
     | 'purchaseNo'
     | 'totalAmount'
+    | 'paid'
+    | 'outstanding'
     | 'status'
     | 'createdAt'
     | 'updatedAt' = 'purchaseDate';
@@ -155,3 +93,8 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class PurchaseQueryFilterDto extends IntersectionType(
+  PurchaseQueryFilterBaseDto,
+  DocumentMoneyRangeQueryFilterDto,
+) {}

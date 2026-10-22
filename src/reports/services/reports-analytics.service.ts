@@ -208,6 +208,7 @@ export class ReportsAnalyticsService {
       where: {
         shopId,
         isActive: true,
+        ...(query.productId ? { id: query.productId } : {}),
         ...this.query.searchOr(query, ['name', 'sku', 'barcode']),
       },
       include: {

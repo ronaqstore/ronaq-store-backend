@@ -1,5 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { DocumentMoneyRangeQueryFilterDto } from '../../common-dto/query/document-money-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -8,7 +9,7 @@ import {
   SortOrderPeriodQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export class SaleQueryFilterDto extends ListPaginationQueryFilterDto {
+class SaleQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
     'S-0001',
     'Case-insensitive contains search across the sale number and the customer name.',
@@ -25,11 +26,20 @@ export class SaleQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'ACTIVE',
-    description: 'ACTIVE (default) or CANCELLED. Omit for both.',
+    description: 'ACTIVE or CANCELLED document status. Omit for both.',
   })
   @IsOptional()
   @IsIn(['ACTIVE', 'CANCELLED'])
   status?: 'ACTIVE' | 'CANCELLED';
+
+  @ApiPropertyOptional({
+    example: 'UDHAR',
+    description:
+      'Payment state filter: PAID | PARTIAL | UDHAR (due) | CANCELLED. CANCELLED matches document status.',
+  })
+  @IsOptional()
+  @IsIn(['PAID', 'PARTIAL', 'UDHAR', 'CANCELLED'])
+  payStatus?: 'PAID' | 'PARTIAL' | 'UDHAR' | 'CANCELLED';
 
   @InclusiveDateFromQueryProperty(
     'Inclusive lower bound on saleDate, YYYY-MM-DD.',
@@ -43,13 +53,35 @@ export class SaleQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'saleDate',
-    description: 'saleDate | saleNo | totalAmount | createdAt | updatedAt.',
+    description:
+      'saleDate | saleNo | totalAmount | paid | outstanding | status | createdAt | updatedAt.',
   })
   @IsOptional()
-  @IsIn(['saleDate', 'saleNo', 'totalAmount', 'createdAt', 'updatedAt'])
-  sortBy?: 'saleDate' | 'saleNo' | 'totalAmount' | 'createdAt' | 'updatedAt' =
-    'saleDate';
+  @IsIn([
+    'saleDate',
+    'saleNo',
+    'totalAmount',
+    'paid',
+    'outstanding',
+    'status',
+    'createdAt',
+    'updatedAt',
+  ])
+  sortBy?:
+    | 'saleDate'
+    | 'saleNo'
+    | 'totalAmount'
+    | 'paid'
+    | 'outstanding'
+    | 'status'
+    | 'createdAt'
+    | 'updatedAt' = 'saleDate';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class SaleQueryFilterDto extends IntersectionType(
+  SaleQueryFilterBaseDto,
+  DocumentMoneyRangeQueryFilterDto,
+) {}

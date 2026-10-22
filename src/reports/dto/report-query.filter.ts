@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Min,
 } from 'class-validator';
@@ -69,6 +70,14 @@ export class ReportQueryFilterDto extends OptionalListPaginationQueryFilterDto {
   @IsOptional()
   @IsIn(['csv', 'pdf'])
   format?: 'csv' | 'pdf';
+
+  @ApiPropertyOptional({
+    example: '01924f0a-0000-7000-8000-000000000101',
+    description: 'Inventory report only. Limit to a single product id.',
+  })
+  @IsOptional()
+  @IsUUID()
+  productId?: string;
 
   @ApiPropertyOptional({
     example: 'SERIALIZED',

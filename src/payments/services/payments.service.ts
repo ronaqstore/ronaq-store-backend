@@ -17,10 +17,7 @@ import { CreatePaymentDto } from '../dto/create-payment.dto.js';
 import { CancelPaymentDto } from '../dto/cancel-payment.dto.js';
 import { PaymentQueryFilterDto } from '../dto/payment-query.filter.js';
 import { ResponsePaymentDto } from '../dto/response-payment.dto.js';
-import {
-  CustomerReceivableDto,
-  UnpaidSaleDto,
-} from '../dto/response-customer-receivable.dto.js';
+import { CustomerReceivableDto } from '../dto/response-customer-receivable.dto.js';
 import { PurchaseOverdraftResponseDto } from '../../purchases/dto/overdraft-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
@@ -41,6 +38,8 @@ import {
 } from '../../helpers/prisma-error-helper.js';
 import { PaymentsAllocationService } from './payments-allocation.service.js';
 import { PaymentsCancelService } from './payments-cancel.service.js';
+import { getCustomerReceivable } from '../helpers/customer-receivable.helper.js';
+import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { name: true } },
@@ -333,19 +332,33 @@ export class PaymentsService {
     if (query.saleId) where.saleId = query.saleId;
     if (query.receiptGroupId) where.receiptGroupId = query.receiptGroupId;
     if (query.status) where.status = query.status;
-    const dateFilters: Prisma.PaymentWhereInput[] = [];
+    if (query.method) where.method = query.method;
+
+    const andFilters: Prisma.PaymentWhereInput[] = [];
     if (query.from)
-      dateFilters.push({ paymentDate: { gte: new Date(query.from) } });
-    if (query.to)
-      dateFilters.push({ paymentDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
+      andFilters.push({ paymentDate: { gte: new Date(query.from) } });
+    if (query.to) andFilters.push({ paymentDate: { lte: new Date(query.to) } });
+    const amountFilter = buildAmountRangeFilter(
+      query.minAmount,
+      query.maxAmount,
+    );
+    if (amountFilter) andFilters.push({ amount: amountFilter });
+    const saleNo = query.saleNo?.trim();
+    if (saleNo) {
+      andFilters.push({
+        sale: { saleNo: { contains: saleNo, mode: 'insensitive' } },
+      });
+    }
     if (query.search?.trim()) {
       const term = query.search.trim();
-      where.OR = [
-        { customer: { name: { contains: term, mode: 'insensitive' } } },
-        { notes: { contains: term, mode: 'insensitive' } },
-      ];
+      andFilters.push({
+        OR: [
+          { customer: { name: { contains: term, mode: 'insensitive' } } },
+          { notes: { contains: term, mode: 'insensitive' } },
+        ],
+      });
     }
+    if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =
       sortBy === 'customerName'
@@ -387,135 +400,7 @@ export class PaymentsService {
     customerId: string,
     shopId: string,
   ): Promise<CustomerReceivableDto> {
-    const customer = await this.prisma.customer.findFirst({
-      where: { id: customerId, shopId },
-      select: { id: true, name: true, openingBalance: true },
-    });
-    if (!customer) {
-      throw new NotFoundException(resourceNotFound('Customer', customerId));
-    }
-
-    const [sales, payments, returns, refundRows] = await Promise.all([
-      this.prisma.sale.findMany({
-        where: {
-          shopId,
-          customerId,
-          status: RecordStatus.ACTIVE,
-        },
-        orderBy: [{ saleDate: 'asc' }, { id: 'asc' }],
-        select: {
-          id: true,
-          saleNo: true,
-          saleDate: true,
-          totalAmount: true,
-        },
-      }),
-      this.prisma.payment.findMany({
-        where: { shopId, customerId, status: RecordStatus.ACTIVE },
-        select: { saleId: true, amount: true },
-      }),
-      this.prisma.saleReturn.groupBy({
-        by: ['saleId'],
-        where: {
-          shopId,
-          customerId,
-          status: RecordStatus.ACTIVE,
-        },
-        _sum: { returnAmount: true },
-      }),
-      this.prisma.refund.findMany({
-        where: {
-          shopId,
-          saleReturn: {
-            customerId,
-            status: RecordStatus.ACTIVE,
-          },
-        },
-        select: {
-          amount: true,
-          saleReturn: { select: { saleId: true } },
-        },
-      }),
-    ]);
-
-    let totalSales = 0n;
-    let totalPaid = 0n;
-    let paidOnOpening = 0n;
-    const paidBySale = new Map<string, bigint>();
-    for (const sale of sales) totalSales += sale.totalAmount;
-    for (const pay of payments) {
-      totalPaid += pay.amount;
-      if (pay.saleId === null) paidOnOpening += pay.amount;
-      else {
-        paidBySale.set(
-          pay.saleId,
-          (paidBySale.get(pay.saleId) ?? 0n) + pay.amount,
-        );
-      }
-    }
-
-    const returnedBySale = new Map<string, bigint>();
-    for (const row of returns) {
-      returnedBySale.set(row.saleId, row._sum.returnAmount ?? 0n);
-    }
-    const refundedBySale = new Map<string, bigint>();
-    let totalRefunds = 0n;
-    for (const row of refundRows) {
-      totalRefunds += row.amount;
-      const saleId = row.saleReturn.saleId;
-      refundedBySale.set(
-        saleId,
-        (refundedBySale.get(saleId) ?? 0n) + row.amount,
-      );
-    }
-
-    let totalReturns = 0n;
-    for (const amount of returnedBySale.values()) totalReturns += amount;
-
-    const openingRemainingRaw = customer.openingBalance - paidOnOpening;
-    const openingRemaining =
-      openingRemainingRaw > 0n ? openingRemainingRaw : 0n;
-
-    const unpaidSales: UnpaidSaleDto[] = sales
-      .map((sale) => {
-        const paidAmount = paidBySale.get(sale.id) ?? 0n;
-        const remainingRaw =
-          sale.totalAmount -
-          (returnedBySale.get(sale.id) ?? 0n) -
-          paidAmount +
-          (refundedBySale.get(sale.id) ?? 0n);
-        const remaining = remainingRaw > 0n ? remainingRaw : 0n;
-        return {
-          id: sale.id,
-          saleNo: sale.saleNo,
-          saleDate:
-            sale.saleDate instanceof Date
-              ? sale.saleDate.toISOString().slice(0, 10)
-              : String(sale.saleDate).slice(0, 10),
-          totalAmount: Number(sale.totalAmount),
-          paidAmount: Number(paidAmount),
-          remaining: Number(remaining),
-        };
-      })
-      .filter((sale) => sale.remaining > 0);
-
-    const receivable =
-      customer.openingBalance +
-      totalSales -
-      totalPaid -
-      totalReturns +
-      totalRefunds;
-
-    return {
-      customerId: customer.id,
-      customerName: customer.name,
-      openingBalance: Number(customer.openingBalance),
-      openingRemaining: Number(openingRemaining),
-      totalSales: Number(totalSales),
-      totalPaid: Number(totalPaid),
-      receivable: Number(receivable > 0n ? receivable : 0n),
-      unpaidSales,
-    };
+    return getCustomerReceivable(this.prisma, customerId, shopId);
   }
 
   private toResponse(row: PaymentWithRefs): ResponsePaymentDto {

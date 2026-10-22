@@ -530,6 +530,13 @@ describe('ReportsService', () => {
       SHOP_ID,
     );
     expect(byCost.items.map((row) => row.id)).toEqual(['ph']);
+
+    await service.getInventoryReport({ productId: 'ph' }, SHOP_ID);
+    expect(prismaStub.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'ph' }),
+      }),
+    );
   });
 
   // ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ import {
 import {
   buildPurchaseListWhere,
   buildPurchaseMoneyFilterSql,
+  buildPurchaseMoneyOrderedIdsSql,
   purchaseListNeedsMoneyJoin,
 } from '../helpers/purchase-list-where.helper.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
@@ -248,19 +249,58 @@ export class PurchasesService {
     const sortOrder = query.sortOrder ?? 'desc';
 
     let where = buildPurchaseListWhere(query, shopId);
+    const moneySort =
+      sortBy === 'paid' || sortBy === 'outstanding' ? sortBy : null;
+
     if (purchaseListNeedsMoneyJoin(query)) {
       const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
-        buildPurchaseMoneyFilterSql(query, shopId),
+        moneySort
+          ? buildPurchaseMoneyOrderedIdsSql(query, shopId, moneySort, sortOrder)
+          : buildPurchaseMoneyFilterSql(query, shopId),
       );
-      where = { shopId, id: { in: matched.map((row) => row.id) } };
+      const orderedIds = matched.map((row) => row.id);
+      where = { shopId, id: { in: orderedIds } };
+
+      if (moneySort) {
+        const total = orderedIds.length;
+        const pageIds = orderedIds.slice(
+          getSkipNumber(page, pageSize),
+          getSkipNumber(page, pageSize) + pageSize,
+        );
+        if (pageIds.length === 0) {
+          return new PaginatedResponseDTO<ResponsePurchaseDto>(
+            [],
+            total,
+            page,
+            pageSize,
+          );
+        }
+        const rows = await this.prisma.purchase.findMany({
+          where: { shopId, id: { in: pageIds } },
+          include: PURCHASE_INCLUDE,
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return new PaginatedResponseDTO<ResponsePurchaseDto>(
+          pageIds
+            .map((id) => byId.get(id))
+            .filter((row): row is NonNullable<typeof row> => row != null)
+            .map((row) => mapPurchaseToResponse(row)),
+          total,
+          page,
+          pageSize,
+        );
+      }
     }
+
+    const prismaSortBy =
+      sortBy === 'paid' || sortBy === 'outstanding' ? 'purchaseDate' : sortBy;
 
     const [rows, total] = await Promise.all([
       this.prisma.purchase.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [prismaSortBy]: sortOrder },
         include: PURCHASE_INCLUDE,
       }),
       this.prisma.purchase.count({ where }),

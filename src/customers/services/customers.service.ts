@@ -21,10 +21,7 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import {
-  normalizePhone,
-  normalizePhoneOrRaw,
-} from '../../helpers/phone.helper.js';
+import { normalizePhoneOrRaw } from '../../helpers/phone.helper.js';
 import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import {
   loginPhoneAlreadyTaken,
@@ -32,6 +29,11 @@ import {
   resourceNotFound,
 } from '../../errors/error.builder.js';
 import { customerCurrentBalances } from '../../helpers/party-current-balance.helper.js';
+import {
+  buildCustomerCurrentBalanceFilterSql,
+  buildCustomerListWhere,
+  customerListNeedsCurrentBalanceJoin,
+} from '../helpers/customer-list-where.helper.js';
 
 @Injectable()
 export class CustomersService {
@@ -75,22 +77,16 @@ export class CustomersService {
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.CustomerWhereInput = { shopId };
-    const search = query.search?.trim();
-    if (search) {
-      const branches: Prisma.CustomerWhereInput[] = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search } },
-      ];
+    let where = buildCustomerListWhere(query, shopId);
 
-      const canonical = normalizePhone(search);
-      if (canonical && canonical !== search) {
-        branches.push({ phone: { contains: canonical } });
-      }
-      where.OR = branches;
-    }
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
+    if (customerListNeedsCurrentBalanceJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildCustomerCurrentBalanceFilterSql(query, shopId),
+      );
+      where = {
+        ...where,
+        id: { in: matched.map((row) => row.id) },
+      };
     }
 
     const [items, total] = await Promise.all([

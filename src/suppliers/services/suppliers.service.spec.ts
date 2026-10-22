@@ -24,6 +24,7 @@ const prismaStub = {
   customer: { findFirst: jest.fn() },
   purchase: { findMany: jest.fn(), groupBy: jest.fn() },
   supplierPayment: { findMany: jest.fn(), groupBy: jest.fn() },
+  $queryRaw: jest.fn(),
 };
 
 function baseSupplierRow(overrides: Record<string, unknown> = {}) {
@@ -204,11 +205,15 @@ describe('SuppliersService', () => {
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
       expect(where.shopId).toBe(SHOP_ID);
-      expect(where.OR).toEqual([
-        { name: { contains: 'abc', mode: 'insensitive' } },
-        { phone: { contains: 'abc', mode: 'insensitive' } },
-        { cnic: { contains: 'abc', mode: 'insensitive' } },
-        { address: { contains: 'abc', mode: 'insensitive' } },
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { name: { contains: 'abc', mode: 'insensitive' } },
+            { phone: { contains: 'abc', mode: 'insensitive' } },
+            { cnic: { contains: 'abc', mode: 'insensitive' } },
+            { address: { contains: 'abc', mode: 'insensitive' } },
+          ],
+        },
       ]);
     });
 
@@ -222,12 +227,16 @@ describe('SuppliersService', () => {
       );
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
-      expect(where.OR).toEqual([
-        { name: { contains: '0300-1234567', mode: 'insensitive' } },
-        { phone: { contains: '0300-1234567', mode: 'insensitive' } },
-        { cnic: { contains: '0300-1234567', mode: 'insensitive' } },
-        { address: { contains: '0300-1234567', mode: 'insensitive' } },
-        { phone: { contains: '923001234567', mode: 'insensitive' } },
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { name: { contains: '0300-1234567', mode: 'insensitive' } },
+            { phone: { contains: '0300-1234567', mode: 'insensitive' } },
+            { cnic: { contains: '0300-1234567', mode: 'insensitive' } },
+            { address: { contains: '0300-1234567', mode: 'insensitive' } },
+            { phone: { contains: '923001234567', mode: 'insensitive' } },
+          ],
+        },
       ]);
       expect(where.shopId).toBe(SHOP_ID);
     });
@@ -242,7 +251,7 @@ describe('SuppliersService', () => {
       );
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
-      expect(where.OR).toHaveLength(4);
+      expect(where.AND[0].OR).toHaveLength(4);
     });
 
     it('passes the isActive filter through', async () => {

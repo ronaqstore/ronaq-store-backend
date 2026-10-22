@@ -40,6 +40,7 @@ import {
   paymentExceedsOutstanding,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 
 export type CreateSupplierPaymentResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
@@ -185,20 +186,41 @@ export class SupplierPaymentsService {
     if (query.purchaseId) where.purchaseId = query.purchaseId;
     if (query.status) where.status = query.status;
 
-    const dateFilters: Prisma.SupplierPaymentWhereInput[] = [];
+    const andFilters: Prisma.SupplierPaymentWhereInput[] = [];
     if (query.from)
-      dateFilters.push({ paymentDate: { gte: new Date(query.from) } });
-    if (query.to)
-      dateFilters.push({ paymentDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
-
+      andFilters.push({ paymentDate: { gte: new Date(query.from) } });
+    if (query.to) andFilters.push({ paymentDate: { lte: new Date(query.to) } });
+    const amountFilter = buildAmountRangeFilter(
+      query.minAmount,
+      query.maxAmount,
+    );
+    if (amountFilter) andFilters.push({ amount: amountFilter });
+    const notes = query.notes?.trim();
+    if (notes) {
+      andFilters.push({ notes: { contains: notes, mode: 'insensitive' } });
+    }
+    const purchaseNo = query.purchaseNo?.trim();
+    if (purchaseNo) {
+      andFilters.push({
+        purchase: {
+          purchaseNo: { contains: purchaseNo, mode: 'insensitive' },
+        },
+      });
+    }
     if (query.search?.trim()) {
       const term = query.search.trim();
-      where.OR = [
-        { supplier: { name: { contains: term, mode: 'insensitive' } } },
-        { purchase: { purchaseNo: { contains: term, mode: 'insensitive' } } },
-      ];
+      andFilters.push({
+        OR: [
+          { supplier: { name: { contains: term, mode: 'insensitive' } } },
+          {
+            purchase: {
+              purchaseNo: { contains: term, mode: 'insensitive' },
+            },
+          },
+        ],
+      });
     }
+    if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =
       sortBy === 'supplierName'

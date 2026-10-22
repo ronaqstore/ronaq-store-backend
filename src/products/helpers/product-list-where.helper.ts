@@ -56,3 +56,37 @@ export function buildProductListWhere(
 
   return where;
 }
+
+export function productListNeedsStockJoin(
+  query: ProductQueryFilterDto,
+): boolean {
+  return query.quantityOnHand !== undefined;
+}
+
+export function buildProductStockFilterSql(
+  query: ProductQueryFilterDto,
+  shopId: string,
+): Prisma.Sql {
+  const qty = query.quantityOnHand ?? 0;
+  return Prisma.sql`
+    SELECT p.id
+    FROM products p
+    LEFT JOIN stock_levels sl ON sl.product_id = p.id
+    WHERE p.shop_id = ${shopId}::uuid
+      AND (
+        (
+          p.tracking_type = 'QUANTITY'
+          AND COALESCE(sl.quantity_on_hand, 0) = ${qty}
+        )
+        OR (
+          p.tracking_type = 'SERIALIZED'
+          AND (
+            SELECT COUNT(*)::int
+            FROM inventory_units u
+            WHERE u.product_id = p.id
+              AND u.status = 'IN_STOCK'
+          ) = ${qty}
+        )
+      )
+  `;
+}

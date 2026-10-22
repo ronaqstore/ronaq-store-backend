@@ -35,7 +35,11 @@ import {
   mapProductToResponse,
 } from '../helpers/product.mapper.js';
 import { assertNoDuplicateVariant } from '../helpers/product-variant-uniqueness.helper.js';
-import { buildProductListWhere } from '../helpers/product-list-where.helper.js';
+import {
+  buildProductListWhere,
+  buildProductStockFilterSql,
+  productListNeedsStockJoin,
+} from '../helpers/product-list-where.helper.js';
 
 @Injectable()
 export class ProductsService {
@@ -150,7 +154,17 @@ export class ProductsService {
     );
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
-    const where = buildProductListWhere(query, shopId);
+    let where = buildProductListWhere(query, shopId);
+
+    if (productListNeedsStockJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildProductStockFilterSql(query, shopId),
+      );
+      where = {
+        ...where,
+        id: { in: matched.map((row) => row.id) },
+      };
+    }
 
     const [rows, total] = await Promise.all([
       this.prisma.product.findMany({

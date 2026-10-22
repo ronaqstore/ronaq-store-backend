@@ -21,6 +21,7 @@ import {
 } from '../../helpers/paginate-helper.js';
 import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
 import { openingCashAlreadySet } from '../../errors/error.builder.js';
+import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 
 const CREATED = 'Opening cash recorded successfully';
 const INVESTED = 'Owner investment recorded successfully';
@@ -167,6 +168,17 @@ export class CashService {
       andFilters.push({
         movementDate: { lt: businessDayRange(query.to).end },
       });
+
+    const amountFilter = buildAmountRangeFilter(
+      query.minAmount,
+      query.maxAmount,
+    );
+    if (amountFilter) andFilters.push({ amount: amountFilter });
+
+    const note = query.note?.trim();
+    if (note) {
+      andFilters.push({ note: { contains: note, mode: 'insensitive' } });
+    }
 
     const term = query.search?.trim();
     if (term) {

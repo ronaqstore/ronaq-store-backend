@@ -1,5 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
+import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { AmountRangeQueryFilterDto } from '../../common-dto/query/amount-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -8,7 +9,7 @@ import {
   SortOrderPeriodQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export class ExpenseQueryFilterDto extends ListPaginationQueryFilterDto {
+class ExpenseQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
     'electricity',
     'Case-insensitive contains search on description or category name.',
@@ -22,6 +23,14 @@ export class ExpenseQueryFilterDto extends ListPaginationQueryFilterDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
+
+  @ApiPropertyOptional({
+    example: 'bill',
+    description: 'Case-insensitive contains filter on description.',
+  })
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @ApiPropertyOptional({
     example: 'ACTIVE',
@@ -66,3 +75,8 @@ export class ExpenseQueryFilterDto extends ListPaginationQueryFilterDto {
   @SortOrderPeriodQueryProperty('asc or desc.')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class ExpenseQueryFilterDto extends IntersectionType(
+  ExpenseQueryFilterBaseDto,
+  AmountRangeQueryFilterDto,
+) {}
