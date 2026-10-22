@@ -6,6 +6,8 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
 import { BadRequestException } from '@nestjs/common';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const prismaStub = { $transaction: jest.fn() };
 
@@ -24,6 +26,10 @@ describe('InventoryController', () => {
       providers: [
         InventoryService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
         {
           provide: AuthGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },

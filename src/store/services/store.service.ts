@@ -14,6 +14,7 @@ import { ResponseStoreSettingsDto } from '../dto/response-store-settings.dto.js'
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import type { ExistingStoreSettingsWhatsapp } from './store.service.types.js';
 import { StoreCacheService } from './store-cache.service.js';
+import { StorefrontRevalidateService } from './storefront-revalidate.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 import {
   resourceNotFound,
@@ -50,6 +51,7 @@ export class StoreService {
     private readonly prisma: PrismaService,
     private readonly cache: StoreCacheService,
     private readonly r2: R2StorageService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async getSettings(shopId: string): Promise<ResponseStoreSettingsDto> {
@@ -141,6 +143,7 @@ export class StoreService {
     }
 
     this.cache.clear();
+    this.storefrontRevalidate.invalidateShopById(shopId);
 
     const verb = existing ? 'updated' : 'created';
     let message = `Store ${verb} successfully`;
@@ -222,6 +225,7 @@ export class StoreService {
     }
 
     this.cache.clear();
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(
       true,
       `Store slug updated to "${normalized}"`,

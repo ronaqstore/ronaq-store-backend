@@ -40,12 +40,16 @@ import {
   buildProductStockFilterSql,
   productListNeedsStockJoin,
 } from '../helpers/product-list-where.helper.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
+  ) {}
 
   async createProduct(
     dto: CreateProductDto,
@@ -136,6 +140,7 @@ export class ProductsService {
       throw this.mapDuplicate(error, sku, barcode);
     }
 
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(
       true,
       'Product created successfully',
@@ -373,6 +378,7 @@ export class ProductsService {
       throw this.mapDuplicate(error, newSku, newBarcode);
     }
 
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Product updated successfully');
   }
 
@@ -389,6 +395,7 @@ export class ProductsService {
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Product', id));
     }
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Product deactivated successfully');
   }
 
@@ -426,6 +433,7 @@ export class ProductsService {
 
     const count = products.length;
     const word = `${count} product${count === 1 ? '' : 's'}`;
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(
       true,
       `${word} ${dto.isPublished ? 'published' : 'unpublished'} successfully`,

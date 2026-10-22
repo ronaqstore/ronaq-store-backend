@@ -6,6 +6,7 @@ import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-res
 import { resourceNotFound } from '../../errors/error.builder.js';
 import { processStoreImage } from '../helpers/store-image-process.helper.js';
 import { StoreCacheService } from './store-cache.service.js';
+import { StorefrontRevalidateService } from './storefront-revalidate.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 
 const MAX_LOGO_EDGE = 512;
@@ -18,6 +19,7 @@ export class StoreBrandingService {
     private readonly prisma: PrismaService,
     private readonly cache: StoreCacheService,
     private readonly r2: R2StorageService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async uploadShopLogo(
@@ -55,6 +57,7 @@ export class StoreBrandingService {
     }
 
     this.cache.clear();
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Shop logo uploaded successfully');
   }
 
@@ -77,6 +80,7 @@ export class StoreBrandingService {
     }
 
     this.cache.clear();
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Shop logo removed successfully');
   }
 
@@ -116,6 +120,7 @@ export class StoreBrandingService {
     }
 
     this.cache.clear();
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Shop banner uploaded successfully');
   }
 
@@ -138,6 +143,7 @@ export class StoreBrandingService {
     }
 
     this.cache.clear();
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Shop banner removed successfully');
   }
 }

@@ -10,6 +10,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const prismaStub = {
   product: {
@@ -33,12 +35,6 @@ const prismaStub = {
   $transaction: jest.fn(),
 };
 
-/**
- * Smoke test: verifies Nest can construct the ProductsController + ProductsService.
- * Guards and their heavy dependencies (JwtService, AppConfigurationService)
- * are swapped out so the spec stays lightweight. Real behavior (including
- * guard enforcement) is verified via e2e tests under test/.
- */
 describe('ProductsController', () => {
   let controller: ProductsController;
   let productsService: ProductsService;
@@ -50,6 +46,10 @@ describe('ProductsController', () => {
       providers: [
         ProductsService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
         {
           provide: AuthGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },
@@ -88,8 +88,8 @@ describe('ProductsController', () => {
         categoryId: 'cat-1',
         brandId: 'brand-1',
         trackingType: 'QUANTITY',
-      } as any,
-      { user: { shopId: 'shop-from-jwt', userId: 'user-1' } } as any,
+      } as never,
+      { user: { shopId: 'shop-from-jwt', userId: 'user-1' } } as never,
     );
 
     expect(spy).toHaveBeenCalledWith(
@@ -107,7 +107,7 @@ describe('ProductsController', () => {
     await expect(
       controller.getProductById('missing-id', {
         user: { shopId: 'shop-1' },
-      } as any),
+      } as never),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -118,8 +118,8 @@ describe('ProductsController', () => {
 
     await expect(
       controller.createProduct(
-        {} as any,
-        { user: { shopId: 'shop-1' } } as any,
+        {} as never,
+        { user: { shopId: 'shop-1' } } as never,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -132,7 +132,7 @@ describe('ProductsController', () => {
     await expect(
       controller.getProductById('prod-1', {
         user: { shopId: 'shop-1' },
-      } as any),
+      } as never),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 
@@ -146,7 +146,7 @@ describe('ProductsController', () => {
 
     const res = await controller.getProducts({ page: 1 }, {
       user: { shopId: 'shop-1' },
-    } as any);
+    } as never);
 
     expect(res.message).toBe('Products fetched successfully');
     expect(res.data).toEqual({ page: 1, pageSize: 10, total: 0, items: [] });

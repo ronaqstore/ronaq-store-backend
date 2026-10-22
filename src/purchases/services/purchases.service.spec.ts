@@ -5,6 +5,8 @@ import { PurchasesService } from './purchases.service.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
 import { PurchasesCancelService } from './purchases-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const SHOP_ID = 'shop-1';
 const USER_ID = 'user-1';
@@ -156,6 +158,10 @@ describe('PurchasesService', () => {
         PurchasesWriteService,
         PurchasesCancelService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
       ],
     }).compile();
 

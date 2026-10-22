@@ -7,6 +7,8 @@ import { StoreService } from './store.service.js';
 import { StoreCacheService } from './store-cache.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
+import { StorefrontRevalidateService } from './storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const makeJpegFile = async (withExif = false): Promise<UploadedImageFile> => {
   let image = sharp({
@@ -75,6 +77,11 @@ describe('StoreService (owner surface)', () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
+
         StoreService,
         StoreCacheService,
         {

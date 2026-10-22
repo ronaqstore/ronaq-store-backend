@@ -45,6 +45,7 @@ import {
 } from '../helpers/purchase-list-where.helper.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
 import { PurchasesCancelService } from './purchases-cancel.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 export type CreatePurchaseResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
@@ -60,6 +61,7 @@ export class PurchasesService {
     private readonly prisma: PrismaService,
     private readonly writeFlow: PurchasesWriteService,
     private readonly cancelFlow: PurchasesCancelService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async createPurchase(
@@ -184,6 +186,7 @@ export class PurchasesService {
       if (outcome.kind === 'overdraft') {
         return new PurchaseOverdraftResponseDto(outcome.shortfall);
       }
+      this.storefrontRevalidate.invalidateShopById(shopId);
       return new StatusBaseResponseDTO(true, CREATED);
     } catch (error) {
       if (
@@ -220,13 +223,20 @@ export class PurchasesService {
     }
   }
 
-  cancelPurchase(
+  async cancelPurchase(
     id: string,
     dto: CancelPurchaseDto,
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    return this.cancelFlow.cancelPurchase(id, dto, shopId, userId);
+    const result = await this.cancelFlow.cancelPurchase(
+      id,
+      dto,
+      shopId,
+      userId,
+    );
+    this.storefrontRevalidate.invalidateShopById(shopId);
+    return result;
   }
 
   getCancelImpact(

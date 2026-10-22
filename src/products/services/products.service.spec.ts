@@ -3,6 +3,8 @@ import { ProductsService } from './products.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const CATEGORY_ID = '01924f0a-0000-7000-8000-0000000000c1';
 const BRAND_ID = '01924f0a-0000-7000-8000-0000000000b1';
@@ -133,6 +135,10 @@ describe('ProductsService', () => {
       providers: [
         ProductsService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
       ],
     }).compile();
 

@@ -49,6 +49,7 @@ import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
 import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { StoreService } from '../../store/services/store.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import {
   storeSlugBase,
@@ -63,6 +64,7 @@ export class PlatformAdminService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly storeService: StoreService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async getOverview(): Promise<PlatformOverviewResponseDto> {
@@ -310,6 +312,8 @@ export class PlatformAdminService {
           setupLinkExpiresAt: result.link.expiresAt.toISOString(),
         },
       );
+
+      this.storefrontRevalidate.invalidateStoresDirectory();
 
       return {
         shopId: result.shop.id,

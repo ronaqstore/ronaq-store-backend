@@ -4,10 +4,11 @@ import { PurchasesService } from './services/purchases.service.js';
 import { PurchasesWriteService } from './services/purchases-write.service.js';
 import { PurchasesCancelService } from './services/purchases-cancel.service.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { StoreModule } from '../store/store.module.js';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, StoreModule],
   controllers: [PurchasesController],
   providers: [
     PurchasesService,

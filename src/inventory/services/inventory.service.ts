@@ -21,19 +21,15 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import {
-  adjustmentNotAllowedForSerialized,
   countedQuantityRequired,
   insufficientStock,
   quantityRequired,
   resourceNotFound,
-  unitIdRequired,
   unitNotInStock,
-  unwantedAdjustmentField,
 } from '../../errors/error.builder.js';
-import type {
-  InventoryAdjustmentProductShape,
-  InventoryProductRef,
-} from './inventory.service.types.js';
+import type { InventoryProductRef } from './inventory.service.types.js';
+import { assertInventoryAdjustmentShape } from '../helpers/inventory-adjustment-shape.helper.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 const CREATED = 'Stock change recorded successfully';
 const NO_CHANGE = 'Counted matches the system — no change recorded';
@@ -58,7 +54,10 @@ const MANUAL_TYPES: InventoryMovementType[] = [
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
+  ) {}
 
   async listUnits(
     query: InventoryUnitQueryFilterDto,
@@ -221,85 +220,39 @@ export class InventoryService {
       throw new NotFoundException(resourceNotFound('Product', dto.productId));
     }
 
-    this.assertShape(product, dto);
+    assertInventoryAdjustmentShape(product, dto);
 
+    let outcome: InventoryAdjustmentOutcome;
     if (dto.type === 'ADJUSTMENT') {
       const countedQuantity = dto.countedQuantity;
       if (countedQuantity === undefined) {
         throw new BadRequestException(countedQuantityRequired(product.name));
       }
-      return this.adjustStock(product, countedQuantity, dto.reason, shopId);
-    }
-    if (product.trackingType === 'SERIALIZED') {
-      return this.damagePhone(product, dto, shopId);
-    }
-    const quantity = dto.quantity;
-    if (quantity === undefined) {
-      throw new BadRequestException(quantityRequired(product.name));
-    }
-    return this.damageQuantity(product, quantity, dto.type, dto.reason, shopId);
-  }
-
-  private assertShape(
-    product: InventoryAdjustmentProductShape,
-    dto: CreateInventoryAdjustmentDto,
-  ): void {
-    if (dto.type === 'ADJUSTMENT') {
-      if (product.trackingType === 'SERIALIZED') {
-        throw new BadRequestException(
-          adjustmentNotAllowedForSerialized(product.name),
-        );
+      outcome = await this.adjustStock(
+        product,
+        countedQuantity,
+        dto.reason,
+        shopId,
+      );
+    } else if (product.trackingType === 'SERIALIZED') {
+      outcome = await this.damagePhone(product, dto, shopId);
+    } else {
+      const quantity = dto.quantity;
+      if (quantity === undefined) {
+        throw new BadRequestException(quantityRequired(product.name));
       }
-      if (dto.countedQuantity === undefined) {
-        throw new BadRequestException(countedQuantityRequired(product.name));
-      }
-      if (dto.quantity !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(product.name, 'ADJUSTMENT', 'quantity'),
-        );
-      }
-      if (dto.inventoryUnitId !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(
-            product.name,
-            'ADJUSTMENT',
-            'inventoryUnitId',
-          ),
-        );
-      }
-      return;
-    }
-
-    if (product.trackingType === 'SERIALIZED') {
-      if (dto.inventoryUnitId === undefined) {
-        throw new BadRequestException(unitIdRequired(product.name));
-      }
-      if (dto.quantity !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(product.name, dto.type, 'quantity'),
-        );
-      }
-      if (dto.countedQuantity !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(product.name, dto.type, 'countedQuantity'),
-        );
-      }
-      return;
-    }
-
-    if (dto.quantity === undefined) {
-      throw new BadRequestException(quantityRequired(product.name));
-    }
-    if (dto.countedQuantity !== undefined) {
-      throw new BadRequestException(
-        unwantedAdjustmentField(product.name, dto.type, 'countedQuantity'),
+      outcome = await this.damageQuantity(
+        product,
+        quantity,
+        dto.type,
+        dto.reason,
+        shopId,
       );
     }
-    if (dto.inventoryUnitId !== undefined) {
-      throw new BadRequestException(
-        unwantedAdjustmentField(product.name, dto.type, 'inventoryUnitId'),
-      );
+    if (outcome.kind === 'created') {
+      this.storefrontRevalidate.invalidateShopById(shopId);
     }
+    return outcome;
   }
 
   private async adjustStock(

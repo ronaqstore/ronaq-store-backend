@@ -7,6 +7,8 @@ import { R2StorageService } from '../services/r2-storage.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
+import { StorefrontRevalidateService } from '../services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const prismaStub = {
   shopStoreSettings: {
@@ -33,6 +35,11 @@ describe('StoreBrandingController', () => {
           },
         },
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
+
         {
           provide: AuthGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },

@@ -33,7 +33,8 @@ import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { StorefrontService } from '../services/storefront.service.js';
 
-const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+const CACHE_CONTROL =
+  'public, max-age=0, s-maxage=15, stale-while-revalidate=60';
 
 @ApiTags('storefront')
 @Controller('public/stores')

@@ -150,6 +150,11 @@ describe('PlatformAdminService', () => {
       prismaStub as unknown as PrismaService,
       authStub as unknown as AuthService,
       storeStub as any,
+      {
+        invalidateStoresDirectory: jest.fn(),
+        invalidateShopById: jest.fn(),
+        invalidateShopRef: jest.fn(),
+      } as any,
     );
   });
 

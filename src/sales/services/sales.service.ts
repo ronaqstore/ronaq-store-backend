@@ -45,6 +45,7 @@ import {
   SalesCancelService,
   type CancelSaleResult,
 } from './sales-cancel.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 export type { CancelSaleResult } from './sales-cancel.service.js';
 
@@ -57,6 +58,7 @@ export class SalesService {
     private readonly prisma: PrismaService,
     private readonly lineWriter: SalesLineWriterService,
     private readonly cancelFlow: SalesCancelService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async createSale(
@@ -189,16 +191,19 @@ export class SalesService {
       throw error;
     }
 
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, CREATED);
   }
 
-  cancelSale(
+  async cancelSale(
     id: string,
     dto: CancelSaleDto,
     shopId: string,
     userId: string,
   ): Promise<CancelSaleResult> {
-    return this.cancelFlow.cancelSale(id, dto, shopId, userId);
+    const result = await this.cancelFlow.cancelSale(id, dto, shopId, userId);
+    this.storefrontRevalidate.invalidateShopById(shopId);
+    return result;
   }
 
   getCancelImpact(
