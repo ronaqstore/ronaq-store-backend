@@ -549,6 +549,83 @@ describe('PlatformAdminService', () => {
       );
     });
 
+    it('searches shop name, address, owner name, and phone variants', async () => {
+      prismaStub.shop.findMany.mockResolvedValue([]);
+      prismaStub.shop.count.mockResolvedValue(0);
+
+      await service.listShops({
+        page: 1,
+        pageSize: 10,
+        search: '03020000120',
+      });
+
+      expect(prismaStub.shop.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              { name: { contains: '03020000120', mode: 'insensitive' } },
+              { address: { contains: '03020000120', mode: 'insensitive' } },
+              {
+                users: {
+                  some: {
+                    name: { contains: '03020000120', mode: 'insensitive' },
+                  },
+                },
+              },
+              {
+                phone: { contains: '923020000120', mode: 'insensitive' },
+              },
+              {
+                users: {
+                  some: {
+                    phone: { contains: '923020000120', mode: 'insensitive' },
+                  },
+                },
+              },
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('filters by subscription and created date ranges', async () => {
+      prismaStub.shop.findMany.mockResolvedValue([]);
+      prismaStub.shop.count.mockResolvedValue(0);
+
+      await service.listShops({
+        page: 1,
+        pageSize: 10,
+        subscriptionFrom: '2026-10-01',
+        subscriptionTo: '2026-10-31',
+        createdFrom: '2026-01-01',
+        createdTo: '2026-01-31',
+        sortBy: 'name',
+        sortOrder: 'asc',
+      });
+
+      expect(prismaStub.shop.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              {
+                subscriptionEndsAt: {
+                  gte: new Date('2026-10-01T00:00:00.000Z'),
+                  lt: new Date('2026-11-01T00:00:00.000Z'),
+                },
+              },
+              {
+                createdAt: {
+                  gte: new Date('2026-01-01T00:00:00.000Z'),
+                  lt: new Date('2026-02-01T00:00:00.000Z'),
+                },
+              },
+            ]),
+          }),
+          orderBy: { name: 'asc' },
+        }),
+      );
+    });
+
     it('maps owner + derived accessStatus onto each row', async () => {
       const future = new Date(Date.now() + 86_400_000);
       prismaStub.shop.findMany.mockResolvedValue([

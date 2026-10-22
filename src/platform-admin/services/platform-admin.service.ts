@@ -12,10 +12,12 @@ import {
   normalizePhone,
   normalizePhoneOrRaw,
 } from '../../helpers/phone.helper.js';
+import { phoneSearchVariants } from '../../helpers/phone-search.helper.js';
 import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
 import { logInfo } from '../../helpers/logger-helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
+import { dateColumnRange } from '../../helpers/date.helper.js';
 import {
   getSkipNumber,
   normalizePagination,
@@ -123,27 +125,20 @@ export class PlatformAdminService {
         (token) => {
           const branches: Prisma.ShopWhereInput[] = [
             { name: { contains: token, mode: 'insensitive' } },
-            { phone: { contains: token, mode: 'insensitive' } },
             { address: { contains: token, mode: 'insensitive' } },
             {
               users: {
                 some: { name: { contains: token, mode: 'insensitive' } },
               },
             },
-            {
-              users: {
-                some: { phone: { contains: token, mode: 'insensitive' } },
-              },
-            },
           ];
-          const canonical = normalizePhone(token);
-          if (canonical && canonical !== token) {
+          for (const phone of phoneSearchVariants(token)) {
             branches.push({
-              phone: { contains: canonical, mode: 'insensitive' },
+              phone: { contains: phone, mode: 'insensitive' },
             });
             branches.push({
               users: {
-                some: { phone: { contains: canonical, mode: 'insensitive' } },
+                some: { phone: { contains: phone, mode: 'insensitive' } },
               },
             });
           }
@@ -151,6 +146,18 @@ export class PlatformAdminService {
         },
       ),
     );
+
+    if (query.subscriptionFrom || query.subscriptionTo) {
+      const from = query.subscriptionFrom ?? '1970-01-01';
+      const to = query.subscriptionTo ?? '9999-12-31';
+      andParts.push({ subscriptionEndsAt: dateColumnRange(from, to) });
+    }
+
+    if (query.createdFrom || query.createdTo) {
+      const from = query.createdFrom ?? '1970-01-01';
+      const to = query.createdTo ?? '9999-12-31';
+      andParts.push({ createdAt: dateColumnRange(from, to) });
+    }
 
     const where: Prisma.ShopWhereInput =
       andParts.length === 0

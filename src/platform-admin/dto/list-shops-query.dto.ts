@@ -3,7 +3,11 @@ import { BadRequestException } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional } from 'class-validator';
 import { PaginatedListQueryFilterDto } from '../../common-dto/query/paginated-list-query.filter.dto.js';
-import { OptionalSearchQueryProperty } from '../../helpers/query-filter.decorators.js';
+import {
+  InclusiveDateFromQueryProperty,
+  InclusiveDateToQueryProperty,
+  OptionalSearchQueryProperty,
+} from '../../helpers/query-filter.decorators.js';
 
 export type PlatformShopAccessStatus = 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
 
@@ -51,6 +55,26 @@ export class ListShopsQueryDto extends PaginatedListQueryFilterDto {
   @IsOptional()
   @Transform(({ value }) => parseAccessStatuses(value))
   accessStatus?: PlatformShopAccessStatus[];
+
+  @InclusiveDateFromQueryProperty(
+    'Inclusive lower bound on subscriptionEndsAt, YYYY-MM-DD.',
+  )
+  subscriptionFrom?: string;
+
+  @InclusiveDateToQueryProperty(
+    'Inclusive upper bound on subscriptionEndsAt, YYYY-MM-DD.',
+  )
+  subscriptionTo?: string;
+
+  @InclusiveDateFromQueryProperty(
+    'Inclusive lower bound on createdAt, YYYY-MM-DD.',
+  )
+  createdFrom?: string;
+
+  @InclusiveDateToQueryProperty(
+    'Inclusive upper bound on createdAt, YYYY-MM-DD.',
+  )
+  createdTo?: string;
 
   @ApiPropertyOptional({
     example: 'createdAt',
