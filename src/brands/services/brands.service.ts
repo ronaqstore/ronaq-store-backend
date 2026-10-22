@@ -72,7 +72,7 @@ export class BrandsService {
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: [{ [sortBy]: sortOrder }, { id: 'asc' }],
       }),
       this.prisma.brand.count({ where }),
     ]);

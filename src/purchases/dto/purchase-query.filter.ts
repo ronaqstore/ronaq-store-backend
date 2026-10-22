@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -27,11 +34,20 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'ACTIVE',
-    description: 'ACTIVE (default) or CANCELLED. Omit for both.',
+    description: 'ACTIVE or CANCELLED document status. Omit for both.',
   })
   @IsOptional()
   @IsIn(['ACTIVE', 'CANCELLED'])
   status?: 'ACTIVE' | 'CANCELLED';
+
+  @ApiPropertyOptional({
+    example: 'PAYABLE',
+    description:
+      'Payment state filter: PAID | PARTIAL | PAYABLE (due) | CANCELLED. CANCELLED matches document status.',
+  })
+  @IsOptional()
+  @IsIn(['PAID', 'PARTIAL', 'PAYABLE', 'CANCELLED'])
+  payStatus?: 'PAID' | 'PARTIAL' | 'PAYABLE' | 'CANCELLED';
 
   @ApiPropertyOptional({
     example: 'true',
@@ -53,6 +69,66 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
     'Inclusive upper bound on purchaseDate, YYYY-MM-DD.',
   )
   to?: string;
+
+  @ApiPropertyOptional({
+    example: 1000000,
+    description: 'Minimum total amount in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minTotalAmount?: number;
+
+  @ApiPropertyOptional({
+    example: 50000000,
+    description: 'Maximum total amount in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxTotalAmount?: number;
+
+  @ApiPropertyOptional({
+    example: 0,
+    description: 'Minimum paid amount in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minPaidAmount?: number;
+
+  @ApiPropertyOptional({
+    example: 10000000,
+    description: 'Maximum paid amount in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxPaidAmount?: number;
+
+  @ApiPropertyOptional({
+    example: 0,
+    description: 'Minimum outstanding amount in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minOutstandingAmount?: number;
+
+  @ApiPropertyOptional({
+    example: 5000000,
+    description: 'Maximum outstanding amount in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxOutstandingAmount?: number;
 
   @ApiPropertyOptional({
     example: 'purchaseDate',

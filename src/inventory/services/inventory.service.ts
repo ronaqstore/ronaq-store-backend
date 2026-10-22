@@ -455,12 +455,31 @@ export class InventoryService {
       where.type = { in: MANUAL_TYPES };
     }
     if (query.productId) where.productId = query.productId;
+    if (query.quantityChange !== undefined) {
+      where.quantityChange = query.quantityChange;
+    }
 
-    const dateFilters: Prisma.InventoryMovementWhereInput[] = [];
+    const andFilters: Prisma.InventoryMovementWhereInput[] = [];
     if (query.from)
-      dateFilters.push({ createdAt: { gte: new Date(query.from) } });
-    if (query.to) dateFilters.push({ createdAt: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
+      andFilters.push({ createdAt: { gte: new Date(query.from) } });
+    if (query.to) andFilters.push({ createdAt: { lte: new Date(query.to) } });
+
+    if (query.reason?.trim()) {
+      const words = query.reason.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 1) {
+        andFilters.push({
+          reason: { contains: words[0], mode: 'insensitive' },
+        });
+      } else if (words.length > 1) {
+        andFilters.push({
+          OR: words.map((word) => ({
+            reason: { contains: word, mode: 'insensitive' as const },
+          })),
+        });
+      }
+    }
+
+    if (andFilters.length > 0) where.AND = andFilters;
 
     if (query.search?.trim()) {
       const term = query.search.trim();

@@ -182,7 +182,7 @@ export class PurchasesController {
   @ApiOperation({
     summary: 'List purchases',
     description:
-      'Paginated list scoped to the shop in the JWT. Filter by supplier, status, opening-stock flag and a purchaseDate range; search matches the purchase number, the supplier invoice reference and the supplier name.',
+      'Paginated list scoped to the shop in the JWT. Filter by supplier, document status, payment status, total/paid/outstanding amount ranges (paisa), opening-stock flag and a purchaseDate range; search matches the purchase number, the supplier invoice reference and the supplier name.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Purchases fetched successfully'),

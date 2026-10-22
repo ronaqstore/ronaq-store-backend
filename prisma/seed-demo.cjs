@@ -3,7 +3,8 @@
  *
  * Creates shops with realistic multi-tenant data: brands, categories, products
  * (new + used phones, accessories), images, suppliers, customers, purchases,
- * sales, payments, expenses, and cash movements.
+ * sales, stock adjustments (ADJUSTMENT / DAMAGED / LOST), payments, expenses,
+ * and cash movements. Adjustments update live stock_levels / inventory_units.
  *
  * Env (defaults in parentheses):
  *   SEED_SHOP_COUNT (120)
@@ -12,6 +13,7 @@
  *   SEED_SUPPLIERS_PER_SHOP (40)
  *   SEED_PURCHASES_PER_SHOP (48)
  *   SEED_SALES_PER_SHOP (48)
+ *   SEED_ADJUSTMENTS_PER_SHOP (36)
  *   SEED_EXPENSES_PER_SHOP (40)
  *   SEED_OWNER_PASSWORD (admin@123)
  *   SEED_OWNER_PHONE — used as login for shop #1
@@ -113,6 +115,30 @@ const EXPENSE_NOTES = [
   'Misc stationery',
   'Generator fuel',
   'Cleaning supplies',
+];
+
+const ADJUSTMENT_REASONS = [
+  'Physical count correction after festival rush',
+  'Shelf recount — system qty was wrong',
+  'Opening stock recount',
+  'Transferred display unit back to shelf',
+  'Found missing carton in store room',
+];
+
+const DAMAGE_REASONS = [
+  'Water damage in transit',
+  'Screen cracked on display unit',
+  'Customer return — board short',
+  'Packaging crushed — unit unusable',
+  'Charging port damaged on demo piece',
+];
+
+const LOST_REASONS = [
+  'Missing after weekly stocktake',
+  'Theft suspected from display shelf',
+  'Lost in delivery — courier claim pending',
+  'Unit not found after shop renovation',
+  'IMEI mismatch — written off as lost',
 ];
 
 function envInt(name, fallback) {
@@ -258,7 +284,10 @@ async function ensureShopBundle(prisma, {
     const productCount = await prisma.product.count({ where: { shopId: existing.shopId } });
     const expectedProducts = cfg.productsPerCategory * DEFAULT_CATEGORIES.length;
     if (productCount >= expectedProducts) {
-      console.log(`  ↪ Shop ${shopIndex + 1} already seeded (${existing.shop.name}) — skip`);
+      const adjustmentsNow = await seedManualAdjustments(prisma, existing.shop, cfg);
+      console.log(
+        `  ↪ Shop ${shopIndex + 1} already seeded (${existing.shop.name}) — adjustments=${adjustmentsNow}`,
+      );
       return { shop: existing.shop, owner: existing, skipped: true };
     }
     console.log(`  ↪ Shop ${shopIndex + 1} exists but incomplete — filling data…`);
@@ -876,6 +905,8 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
     }
   }
 
+  await seedManualAdjustments(prisma, shop, cfg);
+
   const expenseCount = await prisma.expense.count({ where: { shopId: shop.id } });
   if (expenseCount < cfg.expensesPerShop && expenseCats.length > 0) {
     const need = cfg.expensesPerShop - expenseCount;
@@ -918,11 +949,129 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
     },
   });
 
+  const adjustmentsNow = await prisma.inventoryMovement.count({
+    where: {
+      shopId: shop.id,
+      type: { in: ['ADJUSTMENT', 'DAMAGED', 'LOST'] },
+    },
+  });
+
   console.log(
-    `  ✓ Shop ${shopIndex + 1}: ${shop.name} | products=${products.length} | customers=${customers.length} | suppliers=${suppliers.length + (walkIn ? 1 : 0)}`,
+    `  ✓ Shop ${shopIndex + 1}: ${shop.name} | products=${products.length} | customers=${customers.length} | suppliers=${suppliers.length + (walkIn ? 1 : 0)} | adjustments=${adjustmentsNow}`,
   );
 
   return { shop, owner, skipped: false };
+}
+
+/**
+ * Seeds ADJUSTMENT / DAMAGED / LOST movements against live stock.
+ * QUANTITY: updates stock_levels. SERIALIZED phones: marks units DAMAGED/LOST.
+ */
+async function seedManualAdjustments(prisma, shop, cfg) {
+  const manualAdjustmentCount = await prisma.inventoryMovement.count({
+    where: {
+      shopId: shop.id,
+      type: { in: ['ADJUSTMENT', 'DAMAGED', 'LOST'] },
+    },
+  });
+  if (manualAdjustmentCount >= cfg.adjustmentsPerShop) {
+    return manualAdjustmentCount;
+  }
+
+  const need = cfg.adjustmentsPerShop - manualAdjustmentCount;
+  const qtyLevels = await prisma.stockLevel.findMany({
+    where: { shopId: shop.id, quantityOnHand: { gt: 0 } },
+    orderBy: { updatedAt: 'asc' },
+    take: 80,
+  });
+  let phoneUnits = await prisma.inventoryUnit.findMany({
+    where: { shopId: shop.id, status: 'IN_STOCK' },
+    orderBy: { createdAt: 'asc' },
+    take: 80,
+  });
+
+  for (let a = 0; a < need; a += 1) {
+    const kind = a % 3; // 0 ADJUSTMENT, 1 DAMAGED, 2 LOST
+    const createdAt = daysAgo(28 - (a % 25));
+
+    if (kind === 0 && qtyLevels.length > 0) {
+      const level = pick(qtyLevels, a);
+      const delta = a % 2 === 0 ? 1 + (a % 3) : -(1 + (a % 2));
+      const nextQty = Math.max(0, level.quantityOnHand + delta);
+      const change = nextQty - level.quantityOnHand;
+      if (change === 0) continue;
+
+      await prisma.stockLevel.update({
+        where: { productId: level.productId },
+        data: { quantityOnHand: nextQty },
+      });
+      level.quantityOnHand = nextQty;
+      await prisma.inventoryMovement.create({
+        data: {
+          shopId: shop.id,
+          productId: level.productId,
+          type: 'ADJUSTMENT',
+          quantityChange: change,
+          reason: pick(ADJUSTMENT_REASONS, a),
+          createdAt,
+        },
+      });
+      continue;
+    }
+
+    if ((kind === 1 || kind === 2) && phoneUnits.length > 0 && a % 2 === 0) {
+      const unitIdx = a % phoneUnits.length;
+      const unit = phoneUnits[unitIdx];
+      if (!unit || unit.status !== 'IN_STOCK') continue;
+      const type = kind === 1 ? 'DAMAGED' : 'LOST';
+      await prisma.inventoryUnit.update({
+        where: { id: unit.id },
+        data: { status: type },
+      });
+      phoneUnits.splice(unitIdx, 1);
+      await prisma.inventoryMovement.create({
+        data: {
+          shopId: shop.id,
+          productId: unit.productId,
+          inventoryUnitId: unit.id,
+          type,
+          quantityChange: -1,
+          reason: pick(kind === 1 ? DAMAGE_REASONS : LOST_REASONS, a),
+          createdAt,
+        },
+      });
+      continue;
+    }
+
+    const writable = qtyLevels.filter((l) => l.quantityOnHand > 0);
+    if (writable.length === 0) continue;
+    const level = pick(writable, a);
+    const writeOff = Math.min(level.quantityOnHand, 1 + (a % 3));
+    if (writeOff <= 0) continue;
+    const type = kind === 2 ? 'LOST' : 'DAMAGED';
+    await prisma.stockLevel.update({
+      where: { productId: level.productId },
+      data: { quantityOnHand: { decrement: writeOff } },
+    });
+    level.quantityOnHand -= writeOff;
+    await prisma.inventoryMovement.create({
+      data: {
+        shopId: shop.id,
+        productId: level.productId,
+        type,
+        quantityChange: -writeOff,
+        reason: pick(type === 'LOST' ? LOST_REASONS : DAMAGE_REASONS, a),
+        createdAt,
+      },
+    });
+  }
+
+  return prisma.inventoryMovement.count({
+    where: {
+      shopId: shop.id,
+      type: { in: ['ADJUSTMENT', 'DAMAGED', 'LOST'] },
+    },
+  });
 }
 
 async function seedDemoData(prisma) {
@@ -933,6 +1082,7 @@ async function seedDemoData(prisma) {
     suppliersPerShop: envInt('SEED_SUPPLIERS_PER_SHOP', 40),
     purchasesPerShop: envInt('SEED_PURCHASES_PER_SHOP', 48),
     salesPerShop: envInt('SEED_SALES_PER_SHOP', 48),
+    adjustmentsPerShop: envInt('SEED_ADJUSTMENTS_PER_SHOP', 36),
     expensesPerShop: envInt('SEED_EXPENSES_PER_SHOP', 40),
   };
 
@@ -945,7 +1095,7 @@ async function seedDemoData(prisma) {
   console.log('🏪 Demo seed configuration:');
   console.log(`   shops=${cfg.shopCount} products/category=${cfg.productsPerCategory}`);
   console.log(
-    `   customers=${cfg.customersPerShop} suppliers=${cfg.suppliersPerShop} purchases=${cfg.purchasesPerShop} sales=${cfg.salesPerShop} expenses=${cfg.expensesPerShop}`,
+    `   customers=${cfg.customersPerShop} suppliers=${cfg.suppliersPerShop} purchases=${cfg.purchasesPerShop} sales=${cfg.salesPerShop} adjustments=${cfg.adjustmentsPerShop} expenses=${cfg.expensesPerShop}`,
   );
   console.log('');
 

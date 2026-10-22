@@ -5,7 +5,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma } from '../../generated/prisma/client.js';
 import {
   CashDirection,
   CashMovementType,
@@ -38,6 +37,11 @@ import {
   PURCHASE_INCLUDE,
   mapPurchaseToResponse,
 } from '../helpers/purchase.mapper.js';
+import {
+  buildPurchaseListWhere,
+  buildPurchaseMoneyFilterSql,
+  purchaseListNeedsMoneyJoin,
+} from '../helpers/purchase-list-where.helper.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
 import { PurchasesCancelService } from './purchases-cancel.service.js';
 
@@ -243,25 +247,12 @@ export class PurchasesService {
     const sortBy = query.sortBy ?? 'purchaseDate';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.PurchaseWhereInput = { shopId };
-    if (query.supplierId) where.supplierId = query.supplierId;
-    if (query.status) where.status = query.status;
-    if (query.isOpeningStock !== undefined && query.isOpeningStock !== null) {
-      where.isOpeningStock = query.isOpeningStock;
-    }
-    const dateFilters: Prisma.PurchaseWhereInput[] = [];
-    if (query.from)
-      dateFilters.push({ purchaseDate: { gte: new Date(query.from) } });
-    if (query.to)
-      dateFilters.push({ purchaseDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { purchaseNo: { contains: term, mode: 'insensitive' } },
-        { supplierInvoiceRef: { contains: term, mode: 'insensitive' } },
-        { supplier: { name: { contains: term, mode: 'insensitive' } } },
-      ];
+    let where = buildPurchaseListWhere(query, shopId);
+    if (purchaseListNeedsMoneyJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildPurchaseMoneyFilterSql(query, shopId),
+      );
+      where = { shopId, id: { in: matched.map((row) => row.id) } };
     }
 
     const [rows, total] = await Promise.all([

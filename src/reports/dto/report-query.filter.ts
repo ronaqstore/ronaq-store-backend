@@ -4,9 +4,11 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Min,
 } from 'class-validator';
 import { OptionalListPaginationQueryFilterDto } from '../../common-dto/query/optional-list-pagination-query.filter.dto.js';
 import type { ReportPeriod } from '../../helpers/date.helper.js';
@@ -91,4 +93,37 @@ export class ReportQueryFilterDto extends OptionalListPaginationQueryFilterDto {
   })
   @IsBoolean()
   lowStock?: boolean;
+
+  @ApiPropertyOptional({
+    example: 100000,
+    description:
+      'Inventory report only. Minimum stock value (cost) in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minStockValue?: number;
+
+  @ApiPropertyOptional({
+    example: 50000000,
+    description:
+      'Inventory report only. Maximum stock value (cost) in PAISA (inclusive).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxStockValue?: number;
+
+  @ApiPropertyOptional({
+    example: 5,
+    description:
+      'Inventory report only. Exact on-hand quantity to match (QUANTITY qty or SERIALIZED unit count).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  inStock?: number;
 }

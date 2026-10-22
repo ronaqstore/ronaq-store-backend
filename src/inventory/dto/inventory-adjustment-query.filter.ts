@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -48,6 +49,25 @@ export class InventoryAdjustmentQueryFilterDto extends ListPaginationQueryFilter
     | 'SALE_CANCEL'
     | 'PURCHASE_CANCEL'
     | 'CUSTOMER_RETURN';
+
+  @ApiPropertyOptional({
+    example: -2,
+    description:
+      'Exact quantityChange match (signed). Use negative values for write-offs.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  quantityChange?: number;
+
+  @ApiPropertyOptional({
+    example: 'water damage',
+    description:
+      'Case-insensitive reason filter. Any whitespace-separated word that appears in the reason matches the row.',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 
   @ApiPropertyOptional({
     example: 'all',

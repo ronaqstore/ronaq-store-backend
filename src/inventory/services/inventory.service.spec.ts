@@ -480,6 +480,29 @@ describe('InventoryService', () => {
       expect(call.orderBy).toEqual({ quantityChange: 'asc' });
     });
 
+    it('applies productId, exact quantityChange and reason word match', async () => {
+      await service.getInventoryMovements(
+        {
+          productId: PRODUCT_ID,
+          quantityChange: -2,
+          reason: 'water screen',
+        },
+        SHOP_ID,
+      );
+
+      const call = prismaStub.inventoryMovement.findMany.mock.calls[0][0];
+      expect(call.where.productId).toBe(PRODUCT_ID);
+      expect(call.where.quantityChange).toBe(-2);
+      expect(call.where.AND).toEqual([
+        {
+          OR: [
+            { reason: { contains: 'water', mode: 'insensitive' } },
+            { reason: { contains: 'screen', mode: 'insensitive' } },
+          ],
+        },
+      ]);
+    });
+
     it('scope=all omits the manual-type restriction', async () => {
       await service.getInventoryMovements({ scope: 'all' } as any, SHOP_ID);
 

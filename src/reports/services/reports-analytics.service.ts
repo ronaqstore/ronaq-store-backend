@@ -256,6 +256,18 @@ export class ReportsAnalyticsService {
     if (typeof query.lowStock === 'boolean') {
       rows = rows.filter((row) => row.lowStock === query.lowStock);
     }
+    if (query.minStockValue !== undefined) {
+      const minStockValue = query.minStockValue;
+      rows = rows.filter((row) => row.stockValue >= minStockValue);
+    }
+    if (query.maxStockValue !== undefined) {
+      const maxStockValue = query.maxStockValue;
+      rows = rows.filter((row) => row.stockValue <= maxStockValue);
+    }
+    if (query.inStock !== undefined) {
+      const inStock = query.inStock;
+      rows = rows.filter((row) => row.inStock === inStock);
+    }
 
     return this.query.pageSnapshot(
       rows,

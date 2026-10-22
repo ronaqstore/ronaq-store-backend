@@ -140,7 +140,7 @@ export class InventoryController {
     description:
       'Paginated history of stock adjustments and write-offs, scoped to the shop in the JWT. ' +
       'Defaults to manual changes (ADJUSTMENT/DAMAGED/LOST) only — purchase and sale movements belong to the ledger, not this screen. ' +
-      'Filter by type, product, a createdAt date range and/or a search term that matches the product name or the reason.',
+      'Filter by type, productId, exact quantityChange, reason (any word contains match), a createdAt date range and/or a search term that matches the product name or the reason.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
