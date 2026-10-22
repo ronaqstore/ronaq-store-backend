@@ -40,6 +40,10 @@ import { PaymentsAllocationService } from './payments-allocation.service.js';
 import { PaymentsCancelService } from './payments-cancel.service.js';
 import { getCustomerReceivable } from '../helpers/customer-receivable.helper.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
+import {
+  buildTokenizedSearchAnd,
+  stripDocSearchPrefix,
+} from '../../helpers/tokenized-search.helper.js';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { name: true } },
@@ -343,21 +347,19 @@ export class PaymentsService {
       query.maxAmount,
     );
     if (amountFilter) andFilters.push({ amount: amountFilter });
-    const saleNo = query.saleNo?.trim();
-    if (saleNo) {
-      andFilters.push({
-        sale: { saleNo: { contains: saleNo, mode: 'insensitive' } },
-      });
-    }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      andFilters.push({
-        OR: [
-          { customer: { name: { contains: term, mode: 'insensitive' } } },
-          { notes: { contains: term, mode: 'insensitive' } },
-        ],
-      });
-    }
+    andFilters.push(
+      ...buildTokenizedSearchAnd<Prisma.PaymentWhereInput>(
+        query.search,
+        (token) => {
+          const saleTerm = stripDocSearchPrefix(token);
+          return [
+            { customer: { name: { contains: token, mode: 'insensitive' } } },
+            { notes: { contains: token, mode: 'insensitive' } },
+            { sale: { saleNo: { contains: saleTerm, mode: 'insensitive' } } },
+          ];
+        },
+      ),
+    );
     if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =

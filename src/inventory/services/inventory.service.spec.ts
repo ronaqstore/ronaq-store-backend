@@ -470,10 +470,12 @@ describe('InventoryService', () => {
       expect(call.where.AND).toEqual([
         { createdAt: { gte: new Date('2026-10-01') } },
         { createdAt: { lte: new Date('2026-10-31') } },
-      ]);
-      expect(call.where.OR).toEqual([
-        { product: { name: { contains: 'cable', mode: 'insensitive' } } },
-        { reason: { contains: 'cable', mode: 'insensitive' } },
+        {
+          OR: [
+            { product: { name: { contains: 'cable', mode: 'insensitive' } } },
+            { reason: { contains: 'cable', mode: 'insensitive' } },
+          ],
+        },
       ]);
       expect(call.skip).toBe(25);
       expect(call.take).toBe(25);

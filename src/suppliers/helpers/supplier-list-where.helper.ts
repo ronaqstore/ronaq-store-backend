@@ -1,55 +1,54 @@
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { normalizeCnicOrNull } from '../../helpers/cnic.helper.js';
 import { normalizePhone } from '../../helpers/phone.helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import type { SupplierQueryFilterDto } from '../dto/supplier-query.filter.js';
+
+function supplierSearchBranches(token: string): Prisma.SupplierWhereInput[] {
+  const branches: Prisma.SupplierWhereInput[] = [
+    { name: { contains: token, mode: 'insensitive' } },
+    { phone: { contains: token, mode: 'insensitive' } },
+    { cnic: { contains: token, mode: 'insensitive' } },
+    { address: { contains: token, mode: 'insensitive' } },
+  ];
+  const canonicalPhone = normalizePhone(token);
+  if (canonicalPhone && canonicalPhone !== token) {
+    branches.push({
+      phone: { contains: canonicalPhone, mode: 'insensitive' },
+    });
+  }
+  const digits = token.replace(/\D/g, '');
+  if (digits && digits !== token) {
+    branches.push({
+      cnic: { contains: digits, mode: 'insensitive' },
+    });
+  }
+  const formattedCnic = normalizeCnicOrNull(token);
+  if (
+    typeof formattedCnic === 'string' &&
+    formattedCnic &&
+    formattedCnic !== token &&
+    formattedCnic !== digits
+  ) {
+    branches.push({
+      cnic: { contains: formattedCnic, mode: 'insensitive' },
+    });
+  }
+  return branches;
+}
 
 export function buildSupplierListWhere(
   query: SupplierQueryFilterDto,
   shopId: string,
 ): Prisma.SupplierWhereInput {
   const where: Prisma.SupplierWhereInput = { shopId };
-  const and: Prisma.SupplierWhereInput[] = [];
-
-  const search = query.search?.trim();
-  if (search) {
-    const branches: Prisma.SupplierWhereInput[] = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { phone: { contains: search, mode: 'insensitive' } },
-      { cnic: { contains: search, mode: 'insensitive' } },
-      { address: { contains: search, mode: 'insensitive' } },
-    ];
-    const canonical = normalizePhone(search);
-    if (canonical && canonical !== search) {
-      branches.push({
-        phone: { contains: canonical, mode: 'insensitive' },
-      });
-    }
-    and.push({ OR: branches });
-  }
-
-  const phone = query.phone?.trim();
-  if (phone) {
-    const branches: Prisma.SupplierWhereInput[] = [
-      { phone: { contains: phone, mode: 'insensitive' } },
-    ];
-    const canonical = normalizePhone(phone);
-    if (canonical && canonical !== phone) {
-      branches.push({
-        phone: { contains: canonical, mode: 'insensitive' },
-      });
-    }
-    and.push({ OR: branches });
-  }
-
-  const address = query.address?.trim();
-  if (address) {
-    and.push({ address: { contains: address, mode: 'insensitive' } });
-  }
-
-  const cnic = query.cnic?.trim();
-  if (cnic) {
-    and.push({ cnic: { contains: cnic, mode: 'insensitive' } });
-  }
+  const and: Prisma.SupplierWhereInput[] = [
+    ...buildTokenizedSearchAnd<Prisma.SupplierWhereInput>(
+      query.search,
+      supplierSearchBranches,
+    ),
+  ];
 
   const openingBalance = buildAmountRangeFilter(
     query.minOpeningBalance,

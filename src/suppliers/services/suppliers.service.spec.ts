@@ -194,7 +194,7 @@ describe('SuppliersService', () => {
       });
     });
 
-    it('ANDs the search across name, phone and address without widening shop scope', async () => {
+    it('ANDs the search across name, phone, CNIC and address without widening shop scope', async () => {
       prismaStub.supplier.findMany.mockResolvedValue([]);
       prismaStub.supplier.count.mockResolvedValue(0);
 
@@ -217,7 +217,26 @@ describe('SuppliersService', () => {
       ]);
     });
 
-    it('also matches the canonical phone when the owner types a local number', async () => {
+    it('tokenizes multi-word search so each word must match', async () => {
+      prismaStub.supplier.findMany.mockResolvedValue([]);
+      prismaStub.supplier.count.mockResolvedValue(0);
+
+      await service.getSuppliers(
+        { page: 1, pageSize: 10, search: 'clear old' },
+        SHOP_ID,
+      );
+
+      const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0].OR[0]).toEqual({
+        name: { contains: 'clear', mode: 'insensitive' },
+      });
+      expect(where.AND[1].OR[0]).toEqual({
+        name: { contains: 'old', mode: 'insensitive' },
+      });
+    });
+
+    it('also matches the canonical phone (and digit-only CNIC) when the owner types a local number', async () => {
       prismaStub.supplier.findMany.mockResolvedValue([]);
       prismaStub.supplier.count.mockResolvedValue(0);
 
@@ -235,10 +254,29 @@ describe('SuppliersService', () => {
             { cnic: { contains: '0300-1234567', mode: 'insensitive' } },
             { address: { contains: '0300-1234567', mode: 'insensitive' } },
             { phone: { contains: '923001234567', mode: 'insensitive' } },
+            { cnic: { contains: '03001234567', mode: 'insensitive' } },
           ],
         },
       ]);
       expect(where.shopId).toBe(SHOP_ID);
+    });
+
+    it('matches formatted CNIC when the owner types digits only', async () => {
+      prismaStub.supplier.findMany.mockResolvedValue([]);
+      prismaStub.supplier.count.mockResolvedValue(0);
+
+      await service.getSuppliers(
+        { page: 1, pageSize: 10, search: '1730112345671' },
+        SHOP_ID,
+      );
+
+      const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
+      expect(where.AND[0].OR).toEqual(
+        expect.arrayContaining([
+          { cnic: { contains: '1730112345671', mode: 'insensitive' } },
+          { cnic: { contains: '17301-1234567-1', mode: 'insensitive' } },
+        ]),
+      );
     });
 
     it('adds no extra branch when the search term is already canonical', async () => {

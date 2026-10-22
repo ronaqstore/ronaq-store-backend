@@ -626,8 +626,35 @@ describe('PaymentsService', () => {
 
       const where = prismaStub.payment.findMany.mock.calls[0][0].where;
       expect(where.AND).toHaveLength(3);
-      expect(where.AND[2].OR).toHaveLength(2);
+      expect(where.AND[2].OR).toEqual([
+        { customer: { name: { contains: 'ali', mode: 'insensitive' } } },
+        { notes: { contains: 'ali', mode: 'insensitive' } },
+        { sale: { saleNo: { contains: 'ali', mode: 'insensitive' } } },
+      ]);
       expect(where.shopId).toBe(SHOP_ID);
+    });
+
+    it('tokenizes multi-word search so notes like Cleared old payable match', async () => {
+      prismaStub.payment.findMany.mockResolvedValue([]);
+      prismaStub.payment.count.mockResolvedValue(0);
+
+      await service.getPayments(
+        { page: 1, pageSize: 10, search: 'clear old' },
+        SHOP_ID,
+      );
+
+      const where = prismaStub.payment.findMany.mock.calls[0][0].where;
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0].OR).toEqual(
+        expect.arrayContaining([
+          { notes: { contains: 'clear', mode: 'insensitive' } },
+        ]),
+      );
+      expect(where.AND[1].OR).toEqual(
+        expect.arrayContaining([
+          { notes: { contains: 'old', mode: 'insensitive' } },
+        ]),
+      );
     });
   });
 

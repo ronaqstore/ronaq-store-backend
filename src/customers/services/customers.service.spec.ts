@@ -183,7 +183,7 @@ describe('CustomersService', () => {
       expect(result.items[0].currentBalance).toBe(5000000);
     });
 
-    it('searches name and phone', async () => {
+    it('searches name, phone and address', async () => {
       prismaStub.customer.findMany.mockResolvedValue([]);
       prismaStub.customer.count.mockResolvedValue(0);
 
@@ -199,6 +199,7 @@ describe('CustomersService', () => {
                 OR: [
                   { name: { contains: 'ali', mode: 'insensitive' } },
                   { phone: { contains: 'ali' } },
+                  { address: { contains: 'ali', mode: 'insensitive' } },
                 ],
               },
             ],
@@ -207,15 +208,33 @@ describe('CustomersService', () => {
       );
     });
 
-    it('filters phone, address, opening balance and current credit', async () => {
+    it('tokenizes multi-word search against name/phone/address', async () => {
+      prismaStub.customer.findMany.mockResolvedValue([]);
+      prismaStub.customer.count.mockResolvedValue(0);
+
+      await service.getCustomers({ search: 'clear old' }, 'shop-1');
+
+      const where = prismaStub.customer.findMany.mock.calls[0][0].where;
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0].OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'clear', mode: 'insensitive' } },
+        ]),
+      );
+      expect(where.AND[1].OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'old', mode: 'insensitive' } },
+        ]),
+      );
+    });
+
+    it('filters opening balance and current credit ranges', async () => {
       prismaStub.$queryRaw.mockResolvedValue([{ id: 'cust-1' }]);
       prismaStub.customer.findMany.mockResolvedValue([customerRow()]);
       prismaStub.customer.count.mockResolvedValue(1);
 
       await service.getCustomers(
         {
-          phone: '0300',
-          address: 'Lahore',
           minOpeningBalance: 0,
           maxOpeningBalance: 10_000_000,
           minCurrentBalance: 1000,
@@ -231,10 +250,6 @@ describe('CustomersService', () => {
             shopId: 'shop-1',
             id: { in: ['cust-1'] },
             AND: expect.arrayContaining([
-              { OR: [{ phone: { contains: '0300' } }] },
-              {
-                address: { contains: 'Lahore', mode: 'insensitive' },
-              },
               {
                 openingBalance: {
                   gte: 0n,

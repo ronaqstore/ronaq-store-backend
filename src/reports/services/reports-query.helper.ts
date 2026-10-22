@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { periodRange, businessToday } from '../../helpers/date.helper.js';
 import { normalizePagination } from '../../helpers/paginate-helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   invalidReportRange,
   reportPeriodTooLong,
@@ -37,25 +38,31 @@ export class ReportsQueryHelper {
     query: ReportQueryFilterDto,
     fields: string[],
   ): Record<string, unknown> {
-    const term = query.search?.trim();
-    if (!term) return {};
-    const contains = { contains: term, mode: 'insensitive' as const };
-    const or = fields.map((field) => {
-      if (field === 'customerName') {
-        return { customer: { name: contains } };
-      }
-      if (field === 'supplierName') {
-        return { supplier: { name: contains } };
-      }
-      if (field === 'categoryName') {
-        return { category: { name: contains } };
-      }
-      if (field === 'productName') {
-        return { product: { name: contains } };
-      }
-      return { [field]: contains };
-    });
-    return { OR: or };
+    const and = buildTokenizedSearchAnd<Record<string, unknown>>(
+      query.search,
+      (token) => {
+        const contains = { contains: token, mode: 'insensitive' as const };
+        return fields.map((field) => {
+          if (field === 'customerName') {
+            return { customer: { name: contains } };
+          }
+          if (field === 'supplierName') {
+            return { supplier: { name: contains } };
+          }
+          if (field === 'categoryName') {
+            return { category: { name: contains } };
+          }
+          if (field === 'productName') {
+            return { product: { name: contains } };
+          }
+          return { [field]: contains };
+        });
+      },
+    );
+    const first = and[0];
+    if (!first) return {};
+    if (and.length === 1) return first;
+    return { AND: and };
   }
 
   orderBy(

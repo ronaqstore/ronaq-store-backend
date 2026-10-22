@@ -29,6 +29,10 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import { businessDayRange } from '../../helpers/date.helper.js';
+import {
+  buildTokenizedSearchAnd,
+  stripDocSearchPrefix,
+} from '../../helpers/tokenized-search.helper.js';
 import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import { lockShopForUpdate } from '../../helpers/shop-lock.helper.js';
 import {
@@ -266,12 +270,26 @@ export class ReturnsService {
     if (query.to)
       dateFilters.push({ returnDate: { lt: businessDayRange(query.to).end } });
     if (dateFilters.length > 0) where.AND = dateFilters;
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { sale: { saleNo: { contains: term, mode: 'insensitive' } } },
-        { customer: { name: { contains: term, mode: 'insensitive' } } },
-        { reason: { contains: term, mode: 'insensitive' } },
+    const returnSearchAnd =
+      buildTokenizedSearchAnd<Prisma.SaleReturnWhereInput>(
+        query.search,
+        (token) => {
+          const saleTerm = stripDocSearchPrefix(token);
+          return [
+            { sale: { saleNo: { contains: saleTerm, mode: 'insensitive' } } },
+            { customer: { name: { contains: token, mode: 'insensitive' } } },
+            { reason: { contains: token, mode: 'insensitive' } },
+          ];
+        },
+      );
+    if (returnSearchAnd.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND)
+          ? where.AND
+          : where.AND
+            ? [where.AND]
+            : []),
+        ...returnSearchAnd,
       ];
     }
 

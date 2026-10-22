@@ -201,7 +201,7 @@ export class SupplierPaymentsController {
   @ApiOperation({
     summary: 'List supplier payments',
     description:
-      'Paginated list scoped to the shop in the JWT. Filter by supplier, purchase, status and a paymentDate range; search matches the supplier name and the purchase number.',
+      'Paginated list scoped to the shop in the JWT. Filter by supplier, purchase id, status and a paymentDate range; search matches supplier name, notes and purchase / bill number.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(

@@ -15,6 +15,7 @@ import {
 import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
 import { logInfo } from '../../helpers/logger-helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   getSkipNumber,
   normalizePagination,
@@ -114,26 +115,40 @@ export class PlatformAdminService {
       );
     }
 
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      const branches: Prisma.ShopWhereInput[] = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { phone: { contains: term, mode: 'insensitive' } },
-        { address: { contains: term, mode: 'insensitive' } },
-        { users: { some: { name: { contains: term, mode: 'insensitive' } } } },
-        { users: { some: { phone: { contains: term, mode: 'insensitive' } } } },
-      ];
-      const canonical = normalizePhone(term);
-      if (canonical && canonical !== term) {
-        branches.push({ phone: { contains: canonical, mode: 'insensitive' } });
-        branches.push({
-          users: {
-            some: { phone: { contains: canonical, mode: 'insensitive' } },
-          },
-        });
-      }
-      andParts.push({ OR: branches });
-    }
+    andParts.push(
+      ...buildTokenizedSearchAnd<Prisma.ShopWhereInput>(
+        query.search,
+        (token) => {
+          const branches: Prisma.ShopWhereInput[] = [
+            { name: { contains: token, mode: 'insensitive' } },
+            { phone: { contains: token, mode: 'insensitive' } },
+            { address: { contains: token, mode: 'insensitive' } },
+            {
+              users: {
+                some: { name: { contains: token, mode: 'insensitive' } },
+              },
+            },
+            {
+              users: {
+                some: { phone: { contains: token, mode: 'insensitive' } },
+              },
+            },
+          ];
+          const canonical = normalizePhone(token);
+          if (canonical && canonical !== token) {
+            branches.push({
+              phone: { contains: canonical, mode: 'insensitive' },
+            });
+            branches.push({
+              users: {
+                some: { phone: { contains: canonical, mode: 'insensitive' } },
+              },
+            });
+          }
+          return branches;
+        },
+      ),
+    );
 
     const where: Prisma.ShopWhereInput =
       andParts.length === 0

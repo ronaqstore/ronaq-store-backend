@@ -80,7 +80,7 @@ export class CustomersController {
   @ApiOperation({
     summary: 'List customers',
     description:
-      'Paginated list scoped to the shop in the JWT. Supports name/phone search, phone, address, opening/current balance ranges, isActive filter and sorting.',
+      'Paginated list scoped to the shop in the JWT. Supports name/phone/address search, opening/current balance ranges, isActive filter and sorting.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Customers fetched successfully'),

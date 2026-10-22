@@ -1,44 +1,33 @@
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { normalizePhone } from '../../helpers/phone.helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import type { CustomerQueryFilterDto } from '../dto/customer-query.filter.js';
+
+function customerSearchBranches(token: string): Prisma.CustomerWhereInput[] {
+  const branches: Prisma.CustomerWhereInput[] = [
+    { name: { contains: token, mode: 'insensitive' } },
+    { phone: { contains: token } },
+    { address: { contains: token, mode: 'insensitive' } },
+  ];
+  const canonical = normalizePhone(token);
+  if (canonical && canonical !== token) {
+    branches.push({ phone: { contains: canonical } });
+  }
+  return branches;
+}
 
 export function buildCustomerListWhere(
   query: CustomerQueryFilterDto,
   shopId: string,
 ): Prisma.CustomerWhereInput {
   const where: Prisma.CustomerWhereInput = { shopId };
-  const and: Prisma.CustomerWhereInput[] = [];
-
-  const search = query.search?.trim();
-  if (search) {
-    const branches: Prisma.CustomerWhereInput[] = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { phone: { contains: search } },
-    ];
-    const canonical = normalizePhone(search);
-    if (canonical && canonical !== search) {
-      branches.push({ phone: { contains: canonical } });
-    }
-    and.push({ OR: branches });
-  }
-
-  const phone = query.phone?.trim();
-  if (phone) {
-    const branches: Prisma.CustomerWhereInput[] = [
-      { phone: { contains: phone } },
-    ];
-    const canonical = normalizePhone(phone);
-    if (canonical && canonical !== phone) {
-      branches.push({ phone: { contains: canonical } });
-    }
-    and.push({ OR: branches });
-  }
-
-  const address = query.address?.trim();
-  if (address) {
-    and.push({ address: { contains: address, mode: 'insensitive' } });
-  }
+  const and: Prisma.CustomerWhereInput[] = [
+    ...buildTokenizedSearchAnd<Prisma.CustomerWhereInput>(
+      query.search,
+      customerSearchBranches,
+    ),
+  ];
 
   const openingBalance = buildAmountRangeFilter(
     query.minOpeningBalance,

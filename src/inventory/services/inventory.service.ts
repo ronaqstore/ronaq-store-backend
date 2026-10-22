@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   InventoryMovementType,
   UnitStatus,
@@ -82,11 +83,17 @@ export class InventoryService {
       where.status = UnitStatus.IN_STOCK;
     }
 
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { imei1: { contains: term, mode: 'insensitive' } },
-        { imei2: { contains: term, mode: 'insensitive' } },
+    const searchAnd = buildTokenizedSearchAnd<Prisma.InventoryUnitWhereInput>(
+      query.search,
+      (token) => [
+        { imei1: { contains: token, mode: 'insensitive' } },
+        { imei2: { contains: token, mode: 'insensitive' } },
+      ],
+    );
+    if (searchAnd.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        ...searchAnd,
       ];
     }
 
@@ -481,11 +488,18 @@ export class InventoryService {
 
     if (andFilters.length > 0) where.AND = andFilters;
 
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { product: { name: { contains: term, mode: 'insensitive' } } },
-        { reason: { contains: term, mode: 'insensitive' } },
+    const movementSearchAnd =
+      buildTokenizedSearchAnd<Prisma.InventoryMovementWhereInput>(
+        query.search,
+        (token) => [
+          { product: { name: { contains: token, mode: 'insensitive' } } },
+          { reason: { contains: token, mode: 'insensitive' } },
+        ],
+      );
+    if (movementSearchAnd.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        ...movementSearchAnd,
       ];
     }
 

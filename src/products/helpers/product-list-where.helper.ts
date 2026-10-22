@@ -1,4 +1,5 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import type { ProductQueryFilterDto } from '../dto/product-query.filter.js';
 
 export function buildProductListWhere(
@@ -27,31 +28,36 @@ export function buildProductListWhere(
       where.defaultSellingPrice.lte = query.maxSellingPrice;
     }
   }
-  if (query.search?.trim()) {
-    const term = query.search.trim();
-    where.OR = [
-      { name: { contains: term, mode: 'insensitive' } },
-      { model: { contains: term, mode: 'insensitive' } },
-      { sku: { contains: term, mode: 'insensitive' } },
-      { barcode: { contains: term, mode: 'insensitive' } },
-    ];
-  }
+
+  const and: Prisma.ProductWhereInput[] = [
+    ...buildTokenizedSearchAnd<Prisma.ProductWhereInput>(
+      query.search,
+      (token) => [
+        { name: { contains: token, mode: 'insensitive' } },
+        { model: { contains: token, mode: 'insensitive' } },
+        { sku: { contains: token, mode: 'insensitive' } },
+        { barcode: { contains: token, mode: 'insensitive' } },
+      ],
+    ),
+  ];
 
   if (query.inStockOnly) {
-    where.AND = [
-      {
-        OR: [
-          {
-            trackingType: 'QUANTITY',
-            stockLevel: { quantityOnHand: { gt: 0 } },
-          },
-          {
-            trackingType: 'SERIALIZED',
-            inventoryUnits: { some: { status: 'IN_STOCK' } },
-          },
-        ],
-      },
-    ];
+    and.push({
+      OR: [
+        {
+          trackingType: 'QUANTITY',
+          stockLevel: { quantityOnHand: { gt: 0 } },
+        },
+        {
+          trackingType: 'SERIALIZED',
+          inventoryUnits: { some: { status: 'IN_STOCK' } },
+        },
+      ],
+    });
+  }
+
+  if (and.length > 0) {
+    where.AND = and;
   }
 
   return where;

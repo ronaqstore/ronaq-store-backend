@@ -1,4 +1,9 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import {
+  buildTokenizedSearchAnd,
+  splitSearchTokens,
+  stripDocSearchPrefix,
+} from '../../helpers/tokenized-search.helper.js';
 import type { SaleQueryFilterDto } from '../dto/sale-query.filter.js';
 
 export function buildSaleListWhere(
@@ -25,22 +30,23 @@ export function buildSaleListWhere(
     }
   }
 
-  const dateFilters: Prisma.SaleWhereInput[] = [];
+  const andFilters: Prisma.SaleWhereInput[] = [];
   if (query.from) {
-    dateFilters.push({ saleDate: { gte: new Date(query.from) } });
+    andFilters.push({ saleDate: { gte: new Date(query.from) } });
   }
   if (query.to) {
-    dateFilters.push({ saleDate: { lte: new Date(query.to) } });
+    andFilters.push({ saleDate: { lte: new Date(query.to) } });
   }
-  if (dateFilters.length > 0) where.AND = dateFilters;
-
-  if (query.search?.trim()) {
-    const term = query.search.trim();
-    where.OR = [
-      { saleNo: { contains: term, mode: 'insensitive' } },
-      { customer: { name: { contains: term, mode: 'insensitive' } } },
-    ];
-  }
+  andFilters.push(
+    ...buildTokenizedSearchAnd<Prisma.SaleWhereInput>(query.search, (token) => {
+      const saleTerm = stripDocSearchPrefix(token);
+      return [
+        { saleNo: { contains: saleTerm, mode: 'insensitive' } },
+        { customer: { name: { contains: token, mode: 'insensitive' } } },
+      ];
+    }),
+  );
+  if (andFilters.length > 0) where.AND = andFilters;
 
   return where;
 }
@@ -130,14 +136,15 @@ function buildSaleMoneyConditions(
     conditions.push(Prisma.sql`s.status = 'CANCELLED'`);
   }
 
-  if (query.search?.trim()) {
-    const term = `%${query.search.trim()}%`;
+  for (const token of splitSearchTokens(query.search)) {
+    const saleTerm = `%${stripDocSearchPrefix(token)}%`;
+    const nameTerm = `%${token}%`;
     conditions.push(Prisma.sql`
       (
-        s.sale_no ILIKE ${term}
+        s.sale_no ILIKE ${saleTerm}
         OR EXISTS (
           SELECT 1 FROM customers c
-          WHERE c.id = s.customer_id AND c.name ILIKE ${term}
+          WHERE c.id = s.customer_id AND c.name ILIKE ${nameTerm}
         )
       )
     `);

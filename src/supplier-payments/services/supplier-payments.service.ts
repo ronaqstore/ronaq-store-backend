@@ -35,6 +35,10 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
+import {
+  buildTokenizedSearchAnd,
+  stripDocSearchPrefix,
+} from '../../helpers/tokenized-search.helper.js';
 import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import {
   paymentExceedsOutstanding,
@@ -195,31 +199,23 @@ export class SupplierPaymentsService {
       query.maxAmount,
     );
     if (amountFilter) andFilters.push({ amount: amountFilter });
-    const notes = query.notes?.trim();
-    if (notes) {
-      andFilters.push({ notes: { contains: notes, mode: 'insensitive' } });
-    }
-    const purchaseNo = query.purchaseNo?.trim();
-    if (purchaseNo) {
-      andFilters.push({
-        purchase: {
-          purchaseNo: { contains: purchaseNo, mode: 'insensitive' },
-        },
-      });
-    }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      andFilters.push({
-        OR: [
-          { supplier: { name: { contains: term, mode: 'insensitive' } } },
-          {
-            purchase: {
-              purchaseNo: { contains: term, mode: 'insensitive' },
+    andFilters.push(
+      ...buildTokenizedSearchAnd<Prisma.SupplierPaymentWhereInput>(
+        query.search,
+        (token) => {
+          const billTerm = stripDocSearchPrefix(token);
+          return [
+            { supplier: { name: { contains: token, mode: 'insensitive' } } },
+            { notes: { contains: token, mode: 'insensitive' } },
+            {
+              purchase: {
+                purchaseNo: { contains: billTerm, mode: 'insensitive' },
+              },
             },
-          },
-        ],
-      });
-    }
+          ];
+        },
+      ),
+    );
     if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =

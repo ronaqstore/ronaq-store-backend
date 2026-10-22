@@ -1,4 +1,9 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import {
+  buildTokenizedSearchAnd,
+  splitSearchTokens,
+  stripDocSearchPrefix,
+} from '../../helpers/tokenized-search.helper.js';
 import type { PurchaseQueryFilterDto } from '../dto/purchase-query.filter.js';
 
 export function buildPurchaseListWhere(
@@ -28,23 +33,27 @@ export function buildPurchaseListWhere(
     }
   }
 
-  const dateFilters: Prisma.PurchaseWhereInput[] = [];
+  const andFilters: Prisma.PurchaseWhereInput[] = [];
   if (query.from) {
-    dateFilters.push({ purchaseDate: { gte: new Date(query.from) } });
+    andFilters.push({ purchaseDate: { gte: new Date(query.from) } });
   }
   if (query.to) {
-    dateFilters.push({ purchaseDate: { lte: new Date(query.to) } });
+    andFilters.push({ purchaseDate: { lte: new Date(query.to) } });
   }
-  if (dateFilters.length > 0) where.AND = dateFilters;
-
-  if (query.search?.trim()) {
-    const term = query.search.trim();
-    where.OR = [
-      { purchaseNo: { contains: term, mode: 'insensitive' } },
-      { supplierInvoiceRef: { contains: term, mode: 'insensitive' } },
-      { supplier: { name: { contains: term, mode: 'insensitive' } } },
-    ];
-  }
+  andFilters.push(
+    ...buildTokenizedSearchAnd<Prisma.PurchaseWhereInput>(
+      query.search,
+      (token) => {
+        const billTerm = stripDocSearchPrefix(token);
+        return [
+          { purchaseNo: { contains: billTerm, mode: 'insensitive' } },
+          { supplierInvoiceRef: { contains: token, mode: 'insensitive' } },
+          { supplier: { name: { contains: token, mode: 'insensitive' } } },
+        ];
+      },
+    ),
+  );
+  if (andFilters.length > 0) where.AND = andFilters;
 
   return where;
 }
@@ -146,15 +155,16 @@ function buildPurchaseMoneyConditions(
     conditions.push(Prisma.sql`p.status = 'CANCELLED'`);
   }
 
-  if (query.search?.trim()) {
-    const term = `%${query.search.trim()}%`;
+  for (const token of splitSearchTokens(query.search)) {
+    const billTerm = `%${stripDocSearchPrefix(token)}%`;
+    const nameTerm = `%${token}%`;
     conditions.push(Prisma.sql`
       (
-        p.purchase_no ILIKE ${term}
-        OR COALESCE(p.supplier_invoice_ref, '') ILIKE ${term}
+        p.purchase_no ILIKE ${billTerm}
+        OR COALESCE(p.supplier_invoice_ref, '') ILIKE ${nameTerm}
         OR EXISTS (
           SELECT 1 FROM suppliers s
-          WHERE s.id = p.supplier_id AND s.name ILIKE ${term}
+          WHERE s.id = p.supplier_id AND s.name ILIKE ${nameTerm}
         )
       )
     `);

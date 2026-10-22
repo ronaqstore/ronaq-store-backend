@@ -81,7 +81,7 @@ export class SuppliersController {
   @ApiOperation({
     summary: 'List suppliers',
     description:
-      'Paginated list scoped to the shop in the JWT. Supports a contains search across name, phone and address, an isActive filter, sorting and paging.',
+      'Paginated list scoped to the shop in the JWT. Supports a contains search across name, phone, CNIC and address, balance ranges, an isActive filter, sorting and paging.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Suppliers fetched successfully'),

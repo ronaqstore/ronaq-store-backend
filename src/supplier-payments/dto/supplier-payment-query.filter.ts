@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsOptional, IsUUID } from 'class-validator';
 import { AmountRangeQueryFilterDto } from '../../common-dto/query/amount-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
@@ -11,8 +11,8 @@ import {
 
 class SupplierPaymentQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
-    'ABC Mobiles',
-    'Case-insensitive contains search across the supplier name and the purchase number the payment was made against.',
+    'P-0047',
+    'Case-insensitive contains search across supplier name, notes and linked purchase / bill number.',
   )
   search?: string;
 
@@ -31,22 +31,6 @@ class SupplierPaymentQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @IsOptional()
   @IsUUID()
   purchaseId?: string;
-
-  @ApiPropertyOptional({
-    example: 'P-0047',
-    description: 'Contains filter on linked purchase / bill number.',
-  })
-  @IsOptional()
-  @IsString()
-  purchaseNo?: string;
-
-  @ApiPropertyOptional({
-    example: 'Partial',
-    description: 'Case-insensitive contains filter on notes.',
-  })
-  @IsOptional()
-  @IsString()
-  notes?: string;
 
   @ApiPropertyOptional({
     example: 'ACTIVE',

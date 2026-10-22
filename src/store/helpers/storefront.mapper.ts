@@ -9,6 +9,7 @@ import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
 import type { StorefrontSettingsProfile } from '../services/storefront.service.types.js';
 import { toLocalPkPhone } from '../../helpers/phone.helper.js';
 import { toModelKey } from '../../helpers/slug.helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 
 export const STOREFRONT_SELLABLE_STATUS = 'IN_STOCK';
 
@@ -95,12 +96,24 @@ export function storefrontCatalogWhere(
     publishedAt: { not: null },
   };
   if (query?.q) {
-    const term = query.q;
-    where.OR = [
-      { name: { contains: term, mode: 'insensitive' } },
-      { sku: { contains: term, mode: 'insensitive' } },
-      { brand: { name: { contains: term, mode: 'insensitive' } } },
-    ];
+    const searchAnd = buildTokenizedSearchAnd<Prisma.ProductWhereInput>(
+      query.q,
+      (token) => [
+        { name: { contains: token, mode: 'insensitive' } },
+        { sku: { contains: token, mode: 'insensitive' } },
+        { brand: { name: { contains: token, mode: 'insensitive' } } },
+      ],
+    );
+    if (searchAnd.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND)
+          ? where.AND
+          : where.AND
+            ? [where.AND]
+            : []),
+        ...searchAnd,
+      ];
+    }
   }
   if (query?.category) {
     where.category = UUID_RE.test(query.category)

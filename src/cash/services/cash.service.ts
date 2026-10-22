@@ -22,6 +22,7 @@ import {
 import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
 import { openingCashAlreadySet } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
+import { splitSearchTokens } from '../../helpers/tokenized-search.helper.js';
 
 const CREATED = 'Opening cash recorded successfully';
 const INVESTED = 'Owner investment recorded successfully';
@@ -180,13 +181,12 @@ export class CashService {
       andFilters.push({ note: { contains: note, mode: 'insensitive' } });
     }
 
-    const term = query.search?.trim();
-    if (term) {
+    for (const token of splitSearchTokens(query.search)) {
       const searchOr: Prisma.CashMovementWhereInput[] = [
-        { note: { contains: term, mode: 'insensitive' } },
+        { note: { contains: token, mode: 'insensitive' } },
       ];
 
-      const digits = extractCashSearchDigits(term);
+      const digits = extractCashSearchDigits(token);
       if (digits) {
         const amountHits = await this.prisma.$queryRaw<{ id: string }[]>`
           SELECT id

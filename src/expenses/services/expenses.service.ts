@@ -29,6 +29,7 @@ import {
   resourceNotFound,
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 
 const EXPENSE_INCLUDE = {
   category: { select: { name: true } },
@@ -239,15 +240,15 @@ export class ExpensesService {
         description: { contains: description, mode: 'insensitive' },
       });
     }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      andFilters.push({
-        OR: [
-          { description: { contains: term, mode: 'insensitive' } },
-          { category: { name: { contains: term, mode: 'insensitive' } } },
+    andFilters.push(
+      ...buildTokenizedSearchAnd<Prisma.ExpenseWhereInput>(
+        query.search,
+        (token) => [
+          { description: { contains: token, mode: 'insensitive' } },
+          { category: { name: { contains: token, mode: 'insensitive' } } },
         ],
-      });
-    }
+      ),
+    );
     if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =

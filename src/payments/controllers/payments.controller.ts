@@ -175,7 +175,7 @@ export class PaymentsController {
   @ApiOperation({
     summary: 'List customer payments',
     description:
-      'Paginated list scoped to the shop in the JWT. Filter by customer, sale, receipt group, status and a paymentDate range; search matches the customer name and notes. Cancelled rows stay visible unless you filter by status.',
+      'Paginated list scoped to the shop in the JWT. Filter by customer, sale id, receipt group, method, status and a paymentDate range; search matches customer name, notes and sale number. Cancelled rows stay visible unless you filter by status.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Payments fetched successfully'),

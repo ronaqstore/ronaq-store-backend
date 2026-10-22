@@ -338,11 +338,15 @@ describe('ProductsService', () => {
 
       const { where } = prismaStub.product.findMany.mock.calls[0][0];
       expect(where.shopId).toBe(SHOP_ID);
-      expect(where.OR).toEqual([
-        { name: { contains: 'a15', mode: 'insensitive' } },
-        { model: { contains: 'a15', mode: 'insensitive' } },
-        { sku: { contains: 'a15', mode: 'insensitive' } },
-        { barcode: { contains: 'a15', mode: 'insensitive' } },
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { name: { contains: 'a15', mode: 'insensitive' } },
+            { model: { contains: 'a15', mode: 'insensitive' } },
+            { sku: { contains: 'a15', mode: 'insensitive' } },
+            { barcode: { contains: 'a15', mode: 'insensitive' } },
+          ],
+        },
       ]);
     });
 
