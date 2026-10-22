@@ -729,7 +729,10 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
         shopId: shop.id,
         name,
         phone: normalizePhone(supplierPhoneLocal(shopIndex, i)),
-        cnic: `${String(3000000000000 + shopIndex * 1000 + i + 1)}`,
+        cnic: (() => {
+          const digits = String(3000000000000 + shopIndex * 1000 + i + 1);
+          return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+        })(),
         address: `${pick(CITIES, i).area}, ${pick(CITIES, i).city}`,
         notes: pick(SUPPLIER_NOTES, i),
         openingBalance: i % 7 === 0 ? paisa(5000 + i * 100) : 0n,
