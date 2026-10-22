@@ -37,6 +37,258 @@ const {
 
 const SERIALIZED_CATEGORIES = new Set(['Mobile Phones', 'Tablets & iPads']);
 
+const PAYMENT_METHODS = ['CASH', 'JAZZCASH', 'EASYPAISA', 'BANK'];
+
+const CUSTOMER_PAYMENT_NOTES = [
+  'Paid in full at counter',
+  'Partial / udhar remaining',
+  'JazzCash received — SMS confirmed',
+  'EasyPaisa transfer',
+  'Bank deposit slip attached',
+  'Advance against next bill',
+  'Cleared opening balance',
+  'Customer paid after return adjustment',
+];
+
+const SUPPLIER_PAYMENT_NOTES = [
+  'Partial supplier payment',
+  'Full settlement this week',
+  'Advance against next invoice',
+  'Bank transfer — receipt filed',
+  'Cash paid at warehouse',
+  'Cleared old payable',
+  'Discount adjusted in notes',
+  'Paid against multiple bills',
+];
+
+const CUSTOMER_NOTES = [
+  'Regular customer',
+  'Prefers JazzCash',
+  'Wholesale buyer',
+  'Walk-in / cash only',
+  'Corporate account',
+  null,
+  'Needs invoice copy',
+  'Good payment history',
+];
+
+const SUPPLIER_NOTES = [
+  'Wholesale distributor',
+  'Local supplier',
+  'Karachi warehouse',
+  'Credit terms 15 days',
+  'Cash on delivery only',
+  'Preferred for used stock',
+  null,
+  'Sends weekly price list',
+];
+
+const SALE_NOTES = [
+  'Counter sale',
+  'Display unit sold',
+  'Online inquiry → store pickup',
+  'Bulk order for shop',
+  'Exchange deal',
+  null,
+  'Warranty card issued',
+  'Gift wrap requested',
+];
+
+const PURCHASE_NOTES = [
+  'Fresh wholesale stock',
+  'Used / trade-in stock',
+  'Festival stock refill',
+  'Urgent restock',
+  'Opening stock entry',
+  'Supplier promo lot',
+  null,
+  'Damaged carton claim pending',
+];
+
+async function updateInBatches(items, batchSize, updateOne) {
+  for (let start = 0; start < items.length; start += batchSize) {
+    const slice = items.slice(start, start + batchSize);
+    await Promise.all(slice.map((item, offset) => updateOne(item, start + offset)));
+  }
+}
+
+function cancelledFields(isCancelled, cancelledById) {
+  if (!isCancelled) {
+    return {
+      status: 'ACTIVE',
+      cancelledAt: null,
+      cancelReason: null,
+      cancelledById: null,
+    };
+  }
+  return {
+    status: 'CANCELLED',
+    cancelledAt: new Date(),
+    cancelReason: 'Demo seed — sample cancelled row',
+    cancelledById,
+  };
+}
+
+async function mixupShopDemoData(prisma, shopId) {
+  const summary = {
+    payments: 0,
+    supplierPayments: 0,
+    expenses: 0,
+    customers: 0,
+    suppliers: 0,
+    products: 0,
+    sales: 0,
+    purchases: 0,
+  };
+
+  const actor =
+    (await prisma.user.findFirst({
+      where: { shopId, status: 'ACTIVE' },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    })) ??
+    (await prisma.user.findFirst({
+      where: { shopId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    }));
+  const cancelledById = actor?.id ?? null;
+  if (!cancelledById) {
+    return summary;
+  }
+
+  const payments = await prisma.payment.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(payments, 40, (row, i) =>
+    prisma.payment.update({
+      where: { id: row.id },
+      data: {
+        method: PAYMENT_METHODS[i % PAYMENT_METHODS.length],
+        notes: pick(CUSTOMER_PAYMENT_NOTES, i),
+        ...cancelledFields(i % 5 === 0, cancelledById),
+      },
+    }),
+  );
+  summary.payments = payments.length;
+
+  const supplierPayments = await prisma.supplierPayment.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(supplierPayments, 40, (row, i) =>
+    prisma.supplierPayment.update({
+      where: { id: row.id },
+      data: {
+        notes: pick(SUPPLIER_PAYMENT_NOTES, i),
+        ...cancelledFields(i % 5 === 0, cancelledById),
+      },
+    }),
+  );
+  summary.supplierPayments = supplierPayments.length;
+
+  const expenses = await prisma.expense.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(expenses, 40, (row, i) =>
+    prisma.expense.update({
+      where: { id: row.id },
+      data: {
+        description: pick(EXPENSE_NOTES, i),
+        ...cancelledFields(i % 6 === 0, cancelledById),
+      },
+    }),
+  );
+  summary.expenses = expenses.length;
+
+  const customers = await prisma.customer.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(customers, 40, (row, i) =>
+    prisma.customer.update({
+      where: { id: row.id },
+      data: {
+        notes: pick(CUSTOMER_NOTES, i),
+        isActive: i % 6 !== 0,
+      },
+    }),
+  );
+  summary.customers = customers.length;
+
+  const suppliers = await prisma.supplier.findMany({
+    where: { shopId, isSystem: false },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(suppliers, 40, (row, i) =>
+    prisma.supplier.update({
+      where: { id: row.id },
+      data: {
+        notes: pick(SUPPLIER_NOTES, i),
+        isActive: i % 7 !== 0,
+      },
+    }),
+  );
+  summary.suppliers = suppliers.length;
+
+  const products = await prisma.product.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(products, 50, (row, i) =>
+    prisma.product.update({
+      where: { id: row.id },
+      data: {
+        isActive: i % 6 !== 0,
+        isPublished: i % 4 !== 0,
+      },
+    }),
+  );
+  summary.products = products.length;
+
+  const sales = await prisma.sale.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(sales, 40, (row, i) =>
+    prisma.sale.update({
+      where: { id: row.id },
+      data: {
+        notes: pick(SALE_NOTES, i),
+        ...cancelledFields(i % 8 === 0, cancelledById),
+      },
+    }),
+  );
+  summary.sales = sales.length;
+
+  const purchases = await prisma.purchase.findMany({
+    where: { shopId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  await updateInBatches(purchases, 40, (row, i) =>
+    prisma.purchase.update({
+      where: { id: row.id },
+      data: {
+        notes: pick(PURCHASE_NOTES, i),
+        ...cancelledFields(i % 9 === 0, cancelledById),
+      },
+    }),
+  );
+  summary.purchases = purchases.length;
+
+  return summary;
+}
+
 const CITIES = [
   { city: 'Lahore', area: 'Hall Road', lat: 31.5656, lng: 74.3142 },
   { city: 'Karachi', area: 'Saddar', lat: 24.8615, lng: 67.0099 },
@@ -253,7 +505,7 @@ function buildProductRow({
     defaultPurchasePrice: paisa(purchaseRs),
     defaultSellingPrice: paisa(sellRs),
     lowStockThreshold: isSerialized ? 1 : 5,
-    isActive: true,
+    isActive: index % 6 !== 0,
     isPublished: index % 4 !== 0,
     publishedAt: index % 4 !== 0 ? daysAgo(index % 20) : null,
     contactForPrice: false,
@@ -285,8 +537,9 @@ async function ensureShopBundle(prisma, {
     const expectedProducts = cfg.productsPerCategory * DEFAULT_CATEGORIES.length;
     if (productCount >= expectedProducts) {
       const adjustmentsNow = await seedManualAdjustments(prisma, existing.shop, cfg);
+      const mixed = await mixupShopDemoData(prisma, existing.shopId);
       console.log(
-        `  ↪ Shop ${shopIndex + 1} already seeded (${existing.shop.name}) — adjustments=${adjustmentsNow}`,
+        `  ↪ Shop ${shopIndex + 1} already seeded (${existing.shop.name}) — adjustments=${adjustmentsNow} mixed payments=${mixed.payments} supplierPayments=${mixed.supplierPayments}`,
       );
       return { shop: existing.shop, owner: existing, skipped: true };
     }
@@ -478,10 +731,10 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
         phone: normalizePhone(supplierPhoneLocal(shopIndex, i)),
         cnic: `${String(3000000000000 + shopIndex * 1000 + i + 1)}`,
         address: `${pick(CITIES, i).area}, ${pick(CITIES, i).city}`,
-        notes: i % 5 === 0 ? 'Wholesale distributor' : 'Local supplier',
+        notes: pick(SUPPLIER_NOTES, i),
         openingBalance: i % 7 === 0 ? paisa(5000 + i * 100) : 0n,
         isSystem: false,
-        isActive: true,
+        isActive: i % 7 !== 0,
       });
     }
     await prisma.supplier.createMany({ data: rows });
@@ -496,9 +749,9 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
         name: `${pick(FIRST_NAMES, i + 5)} ${pick(LAST_NAMES, i + 8)}`,
         phone: normalizePhone(customerPhoneLocal(shopIndex, i)),
         address: `${10 + i} Street, ${pick(CITIES, i).city}`,
-        notes: i % 4 === 0 ? 'Regular customer' : null,
+        notes: pick(CUSTOMER_NOTES, i),
         openingBalance: i % 9 === 0 ? paisa(1000 + i * 50) : 0n,
-        isActive: true,
+        isActive: i % 6 !== 0,
       });
     }
     await prisma.customer.createMany({ data: rows });
@@ -595,9 +848,9 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
           purchaseDate,
           totalAmount,
           isOpeningStock: p === 0,
-          status: 'ACTIVE',
+          ...cancelledFields(p % 9 === 0, owner.id),
           clientRequestId: crypto.randomUUID(),
-          notes: isUsedLot ? 'Used / trade-in stock' : 'Fresh wholesale stock',
+          notes: pick(PURCHASE_NOTES, p),
           createdById: owner.id,
         },
       });
@@ -708,8 +961,8 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
               purchaseId: purchase.id,
               amount: payAmount,
               paymentDate: purchaseDate,
-              status: 'ACTIVE',
-              notes: 'Partial supplier payment',
+              ...cancelledFields(p % 5 === 0, owner.id),
+              notes: pick(SUPPLIER_PAYMENT_NOTES, p),
               createdById: owner.id,
             },
           });
@@ -722,7 +975,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
               movementDate: daysAgo(70 - (p % 65)),
               referenceType: 'SUPPLIER_PAYMENT',
               referenceId: sp.id,
-              note: `Paid ${supplier.name} for ${purchaseNo}`,
+              note: `${pick(SUPPLIER_PAYMENT_NOTES, p)} — ${supplier.name} / ${purchaseNo}`,
               createdById: owner.id,
             },
           });
@@ -815,9 +1068,9 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
           subtotal,
           discount,
           totalAmount,
-          status: 'ACTIVE',
+          ...cancelledFields(s % 8 === 0, owner.id),
           clientRequestId: crypto.randomUUID(),
-          notes: s % 5 === 0 ? 'Counter sale' : null,
+          notes: pick(SALE_NOTES, s),
           createdById: owner.id,
         },
       });
@@ -873,6 +1126,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
 
       const paidFully = s % 4 !== 3;
       const payAmount = paidFully ? totalAmount : (totalAmount * 60n) / 100n;
+      const paymentMethod = PAYMENT_METHODS[s % PAYMENT_METHODS.length];
       if (payAmount > 0n) {
         const payment = await prisma.payment.create({
           data: {
@@ -881,10 +1135,10 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
             saleId: sale.id,
             amount: payAmount,
             paymentDate: saleDate,
-            method: 'CASH',
-            status: 'ACTIVE',
+            method: paymentMethod,
+            ...cancelledFields(s % 5 === 0, owner.id),
             clientRequestId: crypto.randomUUID(),
-            notes: paidFully ? 'Paid in full' : 'Partial / udhar remaining',
+            notes: pick(CUSTOMER_PAYMENT_NOTES, s),
             createdById: owner.id,
           },
         });
@@ -897,7 +1151,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
             movementDate: saleDate,
             referenceType: 'PAYMENT',
             referenceId: payment.id,
-            note: `Received from ${customer.name} for ${saleNo}`,
+            note: `Received (${paymentMethod}) from ${customer.name} for ${saleNo}`,
             createdById: owner.id,
           },
         });
@@ -905,6 +1159,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
     }
   }
 
+  await mixupShopDemoData(prisma, shop.id);
   await seedManualAdjustments(prisma, shop, cfg);
 
   const expenseCount = await prisma.expense.count({ where: { shopId: shop.id } });
@@ -921,7 +1176,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
           amount,
           expenseDate,
           description: pick(EXPENSE_NOTES, e),
-          status: 'ACTIVE',
+          ...cancelledFields(e % 6 === 0, owner.id),
           createdById: owner.id,
         },
       });
@@ -1135,4 +1390,4 @@ async function seedDemoData(prisma) {
   console.log('──────────────────────────────────────────────────');
 }
 
-module.exports = { seedDemoData };
+module.exports = { seedDemoData, mixupShopDemoData };

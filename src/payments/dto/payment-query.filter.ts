@@ -51,11 +51,11 @@ class PaymentQueryFilterBaseDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'CASH',
-    description: 'Payment method filter. Currently CASH.',
+    description: 'Payment method filter: CASH | JAZZCASH | EASYPAISA | BANK.',
   })
   @IsOptional()
-  @IsIn(['CASH'])
-  method?: 'CASH';
+  @IsIn(['CASH', 'JAZZCASH', 'EASYPAISA', 'BANK'])
+  method?: 'CASH' | 'JAZZCASH' | 'EASYPAISA' | 'BANK';
 
   @ApiPropertyOptional({
     example: 'ACTIVE',

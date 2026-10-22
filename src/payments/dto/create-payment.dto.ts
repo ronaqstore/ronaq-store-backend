@@ -66,13 +66,13 @@ export class CreatePaymentDto {
 
   @ApiPropertyOptional({
     description:
-      'How the money arrived. Only CASH exists in the MVP — omit to take the default.',
-    enum: ['CASH'],
+      'How the money arrived. CASH | JAZZCASH | EASYPAISA | BANK. Omit for CASH.',
+    enum: ['CASH', 'JAZZCASH', 'EASYPAISA', 'BANK'],
     default: 'CASH',
   })
   @IsOptional()
-  @IsIn(['CASH'])
-  method?: 'CASH';
+  @IsIn(['CASH', 'JAZZCASH', 'EASYPAISA', 'BANK'])
+  method?: 'CASH' | 'JAZZCASH' | 'EASYPAISA' | 'BANK';
 
   @ApiPropertyOptional({
     example: 'Part of the laptop money',

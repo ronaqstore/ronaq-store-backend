@@ -50,7 +50,9 @@ enum RecordStatus {
 
 enum PaymentMethod {
   CASH
-  // later: JAZZCASH, EASYPAISA, BANK, CARD
+  JAZZCASH
+  EASYPAISA
+  BANK
 }
 
 enum CashDirection {

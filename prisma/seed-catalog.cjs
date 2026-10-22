@@ -556,10 +556,10 @@ async function main() {
         saleId: sale.id,
         amount: salePrice,
         paymentDate: new Date(),
-        method: 'CASH',
+        method: 'JAZZCASH',
         status: 'ACTIVE',
         clientRequestId: crypto.randomUUID(),
-        notes: 'Paid in full cash at counter',
+        notes: 'Paid in full via JazzCash',
         createdById: user.id,
       },
     });
@@ -573,7 +573,7 @@ async function main() {
         movementDate: new Date(),
         referenceType: 'PAYMENT',
         referenceId: payment.id,
-        note: `Cash received from ${customer.name} for Sale S-0001`,
+        note: `JazzCash received from ${customer.name} for Sale S-0001`,
         createdById: user.id,
       },
     });

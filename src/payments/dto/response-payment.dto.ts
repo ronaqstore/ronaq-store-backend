@@ -46,7 +46,10 @@ export class ResponsePaymentDto {
   @ApiProperty({ example: '2026-10-07T00:00:00.000Z' })
   paymentDate: Date;
 
-  @ApiProperty({ example: 'CASH' })
+  @ApiProperty({
+    example: 'CASH',
+    enum: ['CASH', 'JAZZCASH', 'EASYPAISA', 'BANK'],
+  })
   method: string;
 
   @ApiProperty({ example: 'ACTIVE' })
