@@ -375,6 +375,35 @@ describe('ProductsService', () => {
       );
     });
 
+    it('filters by isPublished and selling price range in paisa', async () => {
+      prismaStub.product.findMany.mockResolvedValue([]);
+      prismaStub.product.count.mockResolvedValue(0);
+
+      await service.getProducts(
+        {
+          page: 1,
+          pageSize: 10,
+          isPublished: true,
+          minSellingPrice: 5_000_000,
+          maxSellingPrice: 15_000_000,
+        },
+        SHOP_ID,
+      );
+
+      expect(prismaStub.product.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            shopId: SHOP_ID,
+            isPublished: true,
+            defaultSellingPrice: {
+              gte: 5_000_000,
+              lte: 15_000_000,
+            },
+          },
+        }),
+      );
+    });
+
     it('filters to in-stock products when inStockOnly is true', async () => {
       prismaStub.product.findMany.mockResolvedValue([]);
       prismaStub.product.count.mockResolvedValue(0);

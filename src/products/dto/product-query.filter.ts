@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { PaginatedListQueryFilterDto } from '../../common-dto/query/paginated-list-query.filter.dto.js';
 import {
   OptionalBooleanQueryProperty,
@@ -45,10 +46,38 @@ export class ProductQueryFilterDto extends PaginatedListQueryFilterDto {
   isActive?: boolean;
 
   @OptionalBooleanQueryProperty(
+    'isPublished',
+    '"true" returns only products published to the online store. "false" returns only unpublished. Omit for both.',
+  )
+  isPublished?: boolean;
+
+  @OptionalBooleanQueryProperty(
     'inStockOnly',
     '"true" returns only products with quantity on hand (QUANTITY stock_levels > 0, or SERIALIZED units in IN_STOCK). Omit for all.',
   )
   inStockOnly?: boolean;
+
+  @ApiPropertyOptional({
+    example: 5000000,
+    description:
+      'Minimum default selling price in PAISA (inclusive). Rs 50,000 = 5000000.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minSellingPrice?: number;
+
+  @ApiPropertyOptional({
+    example: 15000000,
+    description:
+      'Maximum default selling price in PAISA (inclusive). Rs 150,000 = 15000000.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxSellingPrice?: number;
 
   @ApiPropertyOptional({
     example: 'name',

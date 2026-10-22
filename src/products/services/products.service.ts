@@ -35,6 +35,7 @@ import {
   mapProductToResponse,
 } from '../helpers/product.mapper.js';
 import { assertNoDuplicateVariant } from '../helpers/product-variant-uniqueness.helper.js';
+import { buildProductListWhere } from '../helpers/product-list-where.helper.js';
 
 @Injectable()
 export class ProductsService {
@@ -149,41 +150,7 @@ export class ProductsService {
     );
     const sortBy = query.sortBy ?? 'createdAt';
     const sortOrder = query.sortOrder ?? 'desc';
-
-    const where: Prisma.ProductWhereInput = { shopId };
-    if (query.categoryId) where.categoryId = query.categoryId;
-    if (query.brandId) where.brandId = query.brandId;
-    if (query.trackingType) where.trackingType = query.trackingType;
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
-    }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-
-      where.OR = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { model: { contains: term, mode: 'insensitive' } },
-        { sku: { contains: term, mode: 'insensitive' } },
-        { barcode: { contains: term, mode: 'insensitive' } },
-      ];
-    }
-
-    if (query.inStockOnly) {
-      where.AND = [
-        {
-          OR: [
-            {
-              trackingType: 'QUANTITY',
-              stockLevel: { quantityOnHand: { gt: 0 } },
-            },
-            {
-              trackingType: 'SERIALIZED',
-              inventoryUnits: { some: { status: 'IN_STOCK' } },
-            },
-          ],
-        },
-      ];
-    }
+    const where = buildProductListWhere(query, shopId);
 
     const [rows, total] = await Promise.all([
       this.prisma.product.findMany({
