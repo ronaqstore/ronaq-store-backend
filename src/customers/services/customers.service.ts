@@ -74,7 +74,7 @@ export class CustomersService {
       query.pageSize,
       100,
     );
-    const sortBy = query.sortBy ?? 'createdAt';
+    const sortBy = query.sortBy ?? 'name';
     const sortOrder = query.sortOrder ?? 'desc';
 
     let where = buildCustomerListWhere(query, shopId);

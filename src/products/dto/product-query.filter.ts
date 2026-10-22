@@ -92,11 +92,9 @@ export class ProductQueryFilterDto extends PaginatedListQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'name',
-    description:
-      'Field to sort by. name | createdAt | updatedAt | defaultSellingPrice.',
+    description: 'Field to sort by. name | defaultSellingPrice.',
   })
   @IsOptional()
-  @IsIn(['name', 'createdAt', 'updatedAt', 'defaultSellingPrice'])
-  sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'defaultSellingPrice' =
-    'createdAt';
+  @IsIn(['name', 'defaultSellingPrice'])
+  sortBy?: 'name' | 'defaultSellingPrice' = 'name';
 }

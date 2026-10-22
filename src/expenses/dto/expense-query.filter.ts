@@ -52,25 +52,11 @@ class ExpenseQueryFilterBaseDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'expenseDate',
-    description:
-      'expenseDate | amount | createdAt | categoryName | status | description.',
+    description: 'expenseDate | amount | categoryName.',
   })
   @IsOptional()
-  @IsIn([
-    'expenseDate',
-    'amount',
-    'createdAt',
-    'categoryName',
-    'status',
-    'description',
-  ])
-  sortBy?:
-    | 'expenseDate'
-    | 'amount'
-    | 'createdAt'
-    | 'categoryName'
-    | 'status'
-    | 'description' = 'expenseDate';
+  @IsIn(['expenseDate', 'amount', 'categoryName'])
+  sortBy?: 'expenseDate' | 'amount' | 'categoryName' = 'expenseDate';
 
   @SortOrderPeriodQueryProperty('asc or desc.')
   sortOrder?: 'asc' | 'desc' = 'desc';

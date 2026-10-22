@@ -177,7 +177,7 @@ describe('Supplier query filter', () => {
     await expect(validate(dto, pipeOptions)).resolves.toEqual([]);
     expect(dto.page).toBe(1);
     expect(dto.pageSize).toBe(10);
-    expect(dto.sortBy).toBe('createdAt');
+    expect(dto.sortBy).toBe('name');
     expect(dto.sortOrder).toBe('desc');
   });
 

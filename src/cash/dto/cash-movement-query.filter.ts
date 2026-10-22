@@ -67,11 +67,11 @@ class CashMovementQueryFilterBaseDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'movementDate',
-    description: 'movementDate | amount | createdAt.',
+    description: 'movementDate | amount.',
   })
   @IsOptional()
-  @IsIn(['movementDate', 'amount', 'createdAt'])
-  sortBy?: 'movementDate' | 'amount' | 'createdAt' = 'movementDate';
+  @IsIn(['movementDate', 'amount'])
+  sortBy?: 'movementDate' | 'amount' = 'movementDate';
 
   @SortOrderPeriodQueryProperty('asc or desc.')
   sortOrder?: 'asc' | 'desc' = 'desc';

@@ -53,29 +53,12 @@ class SaleQueryFilterBaseDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'saleDate',
-    description:
-      'saleDate | saleNo | totalAmount | paid | outstanding | status | createdAt | updatedAt.',
+    description: 'saleDate | saleNo | totalAmount | paid | outstanding.',
   })
   @IsOptional()
-  @IsIn([
-    'saleDate',
-    'saleNo',
-    'totalAmount',
-    'paid',
-    'outstanding',
-    'status',
-    'createdAt',
-    'updatedAt',
-  ])
-  sortBy?:
-    | 'saleDate'
-    | 'saleNo'
-    | 'totalAmount'
-    | 'paid'
-    | 'outstanding'
-    | 'status'
-    | 'createdAt'
-    | 'updatedAt' = 'saleDate';
+  @IsIn(['saleDate', 'saleNo', 'totalAmount', 'paid', 'outstanding'])
+  sortBy?: 'saleDate' | 'saleNo' | 'totalAmount' | 'paid' | 'outstanding' =
+    'saleDate';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';

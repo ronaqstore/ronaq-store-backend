@@ -21,25 +21,11 @@ class SupplierQueryFilterBaseDto extends PaginatedListQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'name',
-    description:
-      'Field to sort by. name | phone | createdAt | updatedAt | openingBalance | isActive.',
+    description: 'Field to sort by. name | openingBalance.',
   })
   @IsOptional()
-  @IsIn([
-    'name',
-    'phone',
-    'createdAt',
-    'updatedAt',
-    'openingBalance',
-    'isActive',
-  ])
-  sortBy?:
-    | 'name'
-    | 'phone'
-    | 'createdAt'
-    | 'updatedAt'
-    | 'openingBalance'
-    | 'isActive' = 'createdAt';
+  @IsIn(['name', 'openingBalance'])
+  sortBy?: 'name' | 'openingBalance' = 'name';
 }
 
 export class SupplierQueryFilterDto extends IntersectionType(

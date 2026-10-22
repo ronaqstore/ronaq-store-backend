@@ -23,7 +23,7 @@ describe('Expense category DTO validation', () => {
     ).toThrow(BadRequestException);
   });
 
-  it('rejects a sortBy field outside name, createdAt and updatedAt', async () => {
+  it('rejects a sortBy field outside name and createdAt', async () => {
     const dto = plainToInstance(ExpenseCategoryQueryFilterDto, {
       sortBy: 'shopId',
     });
@@ -33,15 +33,12 @@ describe('Expense category DTO validation', () => {
     );
   });
 
-  it.each(['name', 'createdAt', 'updatedAt'])(
-    'accepts sortBy=%s',
-    async (sortBy) => {
-      const dto = plainToInstance(ExpenseCategoryQueryFilterDto, { sortBy });
+  it.each(['name', 'createdAt'])('accepts sortBy=%s', async (sortBy) => {
+    const dto = plainToInstance(ExpenseCategoryQueryFilterDto, { sortBy });
 
-      const errors = await validate(dto);
-      expect(errors.filter((error) => error.property === 'sortBy')).toEqual([]);
-    },
-  );
+    const errors = await validate(dto);
+    expect(errors.filter((error) => error.property === 'sortBy')).toEqual([]);
+  });
 
   it.each([
     ['true', true],

@@ -176,7 +176,7 @@ describe('CustomersService', () => {
       expect(prismaStub.customer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { shopId: 'shop-1' },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { name: 'desc' },
         }),
       );
       expect(result.items[0].openingBalance).toBe(5000000);

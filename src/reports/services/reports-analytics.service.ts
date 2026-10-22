@@ -274,7 +274,7 @@ export class ReportsAnalyticsService {
       rows,
       query,
       'name',
-      ['name', 'inStock', 'stockValue', 'trackingType', 'lowStock'],
+      ['name', 'inStock', 'stockValue'],
       {
         countProducts: rows.length,
         countLowStock: rows.filter((r) => r.lowStock).length,
