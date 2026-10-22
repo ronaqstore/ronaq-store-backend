@@ -178,7 +178,7 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Update a product',
     description:
-      'Partial update. Only the fields you send are changed. trackingType may change only while the product has no purchase and no sale history; switching to SERIALIZED additionally requires an empty stock counter. Release 1.2 also accepts isPublished, publicDescription, contactForPrice and ptaStatus.',
+      'Partial update. Only the fields you send are changed. trackingType may change only while the product has no purchase and no sale history; switching to SERIALIZED additionally requires an empty stock counter. Release 1.2 also accepts isPublished, publicDescription and ptaStatus.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(StatusBaseResponseDTO, 'Product updated successfully'),

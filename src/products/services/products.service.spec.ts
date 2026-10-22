@@ -659,7 +659,6 @@ describe('ProductsService', () => {
         {
           isPublished: true,
           publicDescription: '  Box pack.  ',
-          contactForPrice: true,
           ptaStatus: 'NON_PTA',
         },
         SHOP_ID,
@@ -671,7 +670,6 @@ describe('ProductsService', () => {
           data: expect.objectContaining({
             isPublished: true,
             publicDescription: 'Box pack.',
-            contactForPrice: true,
             ptaStatus: 'NON_PTA',
           }),
         }),

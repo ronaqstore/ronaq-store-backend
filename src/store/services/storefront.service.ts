@@ -249,7 +249,7 @@ export class StorefrontService {
         [row],
       );
       product.units = unitsByProduct.get(row.id) ?? [];
-      applyUnitMinPrice(product, row.contactForPrice);
+      applyUnitMinPrice(product);
     }
     return product;
   }
@@ -391,7 +391,7 @@ export class StorefrontService {
       variants: variants.map((row) => {
         const product = toStorefrontProduct(row, settings.showExactStock);
         product.units = unitsByProduct.get(row.id) ?? [];
-        applyUnitMinPrice(product, row.contactForPrice);
+        applyUnitMinPrice(product);
         return product;
       }),
     };
@@ -405,13 +405,7 @@ export class StorefrontService {
     if (ids.length === 0) return new Map();
 
     const defaults = new Map(
-      products.map((p) => [
-        p.id,
-        {
-          defaultPrice: Number(p.defaultSellingPrice),
-          contactForPrice: p.contactForPrice,
-        },
-      ]),
+      products.map((p) => [p.id, Number(p.defaultSellingPrice)]),
     );
 
     const rows = await this.prisma.inventoryUnit.findMany({
@@ -448,8 +442,7 @@ export class StorefrontService {
           batteryHealth: row.batteryHealth,
           askingPrice: row.askingPrice,
           defectNotes: row.defectNotes,
-          defaultPrice: meta?.defaultPrice ?? 0,
-          contactForPrice: meta?.contactForPrice ?? false,
+          defaultPrice: meta ?? 0,
         }),
       );
       map.set(row.productId, list);

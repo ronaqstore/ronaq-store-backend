@@ -165,8 +165,7 @@ export function toStorefrontProduct(
       row.trackingType === 'SERIALIZED'
         ? toModelKey(row.brand.name, modelLabel)
         : null,
-    price: row.contactForPrice ? null : Number(row.defaultSellingPrice),
-    contactForPrice: row.contactForPrice,
+    price: Number(row.defaultSellingPrice),
     availability: storefrontAvailability(quantityOnHand, row.lowStockThreshold),
     stockCount: showExactStock ? quantityOnHand : null,
     ptaStatus: row.ptaStatus,
@@ -192,16 +191,13 @@ export type StorefrontUnitRowInput = {
   askingPrice: unknown;
   defectNotes: string | null;
   defaultPrice: number;
-  contactForPrice: boolean;
 };
 
 export function mapStorefrontUnitRow(
   input: StorefrontUnitRowInput,
 ): ResponseStoreUnitDto {
   const ask = input.askingPrice != null ? Number(input.askingPrice) : null;
-  const price = input.contactForPrice
-    ? null
-    : (ask ?? input.defaultPrice ?? null);
+  const price = ask ?? input.defaultPrice ?? null;
   return {
     id: input.id,
     imeiMasked: maskStorefrontImei(input.imei1),
@@ -212,14 +208,11 @@ export function mapStorefrontUnitRow(
   };
 }
 
-export function applyUnitMinPrice(
-  product: ResponseStoreProductDto,
-  contactForPrice: boolean,
-): void {
+export function applyUnitMinPrice(product: ResponseStoreProductDto): void {
   const unitPrices = (product.units ?? [])
     .map((u) => u.price)
     .filter((p): p is number => typeof p === 'number');
-  if (unitPrices.length > 0 && !contactForPrice) {
+  if (unitPrices.length > 0) {
     product.price = Math.min(...unitPrices);
   }
 }

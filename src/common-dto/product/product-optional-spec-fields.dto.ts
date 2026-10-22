@@ -92,15 +92,6 @@ export class ProductOptionalSpecFieldsDto {
 
   @ApiPropertyOptional({
     description:
-      'true hides the selling price on the store and shows "Contact for price" instead.',
-    example: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  contactForPrice?: boolean;
-
-  @ApiPropertyOptional({
-    description:
       'PTA status shown to customers. null clears it (accessories have none). ' +
       'Android: PTA_APPROVED | NON_PTA. iPhone may also use JV | BYPASS | MDM_BYPASS.',
     enum: ['PTA_APPROVED', 'NON_PTA', 'JV', 'BYPASS', 'MDM_BYPASS'],

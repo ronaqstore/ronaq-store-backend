@@ -68,11 +68,6 @@ describe('E2E — Online Store (R1.2)', () => {
       await shop.api.get('/products').query({ page: 1, pageSize: 1 })
     ).body.data.items[0].id;
 
-    const patch = await shop.api
-      .patch(`/products/${productId}`)
-      .send({ contactForPrice: true });
-    expect(patch.status).toBe(200);
-
     const publish = await shop.api.post(`/store/products/${productId}/publish`);
     expect(publish.status).toBe(201);
   });
@@ -203,8 +198,7 @@ describe('E2E — Online Store (R1.2)', () => {
     expect(row.sku).toBeUndefined();
     expect(row.trackingType).toBeUndefined();
     expect(row.condition).toBeUndefined();
-    expect(row.contactForPrice).toBe(true);
-    expect(row.price).toBeNull();
+    expect(row.price).toBe(4_500_000);
     expect(typeof row.stockCount).toBe('number');
 
     const one = await shop.api.get(

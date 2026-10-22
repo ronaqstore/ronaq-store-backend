@@ -55,7 +55,6 @@ export function mapProductToResponse(row: ProductRow): ResponseProductDto {
     isActive: row.isActive,
     isPublished: row.isPublished,
     publicDescription: row.publicDescription,
-    contactForPrice: row.contactForPrice,
     ptaStatus: row.ptaStatus,
     authenticity: row.authenticity,
     quantityOnHand,

@@ -81,17 +81,10 @@ export class ResponseStoreProductDto {
   modelKey?: string | null;
 
   @ApiProperty({
-    description:
-      'Selling price in paisa, or null when contactForPrice is true. Rs 45,000 = 4500000.',
+    description: 'Selling price in paisa. Rs 45,000 = 4500000.',
     example: 4500000,
   })
   price: number | null;
-
-  @ApiProperty({
-    description: 'true = customers must message the owner to learn the price.',
-    example: false,
-  })
-  contactForPrice: boolean;
 
   @ApiProperty({
     description: 'IN_STOCK | LOW_STOCK | OUT_OF_STOCK.',
@@ -205,8 +198,7 @@ export class ResponseStoreModelDto {
   coverImage?: string | null;
 
   @ApiPropertyOptional({
-    description:
-      'Lowest selling price among variants (paisa), or null if all contact-for-price.',
+    description: 'Lowest selling price among variants (paisa).',
     example: 4500000,
   })
   fromPrice?: number | null;

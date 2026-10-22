@@ -61,7 +61,6 @@ model Product {
   isPublished       Boolean    @default(false) @map("is_published") // false = never public by accident
   publishedAt       DateTime?  @map("published_at") @db.Timestamptz(3) // set automatically by a trigger
   publicDescription String?    @map("public_description") // what customers read; `description` stays private
-  contactForPrice   Boolean    @default(false) @map("contact_for_price") // hide the price, show "Contact for price"
   ptaStatus         PtaStatus? @map("pta_status")
   // QUANTITY accessories only: ORIGINAL vs COPY. Null for phones / unset.
   authenticity      ProductAuthenticity? @map("authenticity")

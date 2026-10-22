@@ -111,13 +111,6 @@ export class ResponseProductDto {
   })
   publicDescription?: string | null;
 
-  @ApiProperty({
-    description:
-      'When true the public store hides the price and shows "Contact for price".',
-    example: false,
-  })
-  contactForPrice: boolean;
-
   @ApiPropertyOptional({
     description:
       'PTA approval status for phones (PTA_APPROVED / NON_PTA). Null for accessories.',

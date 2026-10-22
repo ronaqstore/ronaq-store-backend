@@ -508,7 +508,6 @@ function buildProductRow({
     isActive: index % 6 !== 0,
     isPublished: index % 4 !== 0,
     publishedAt: index % 4 !== 0 ? daysAgo(index % 20) : null,
-    contactForPrice: false,
     ptaStatus,
     authenticity,
   };

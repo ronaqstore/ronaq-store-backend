@@ -37,7 +37,6 @@ function productRow(
     category: { id: 'cat-1', name: 'Mobile Phones' },
     trackingType: 'SERIALIZED',
     publicDescription: 'Genuine.',
-    contactForPrice: false,
     defaultSellingPrice: 699900n,
     lowStockThreshold: 2,
     ptaStatus: 'PTA_APPROVED',
@@ -276,13 +275,7 @@ describe('StorefrontService (public catalog)', () => {
       return res.items[0];
     };
 
-    it('hides the price when contactForPrice is on', async () => {
-      const item = await firstItem({ contactForPrice: true });
-      expect(item.price).toBeNull();
-      expect(item.contactForPrice).toBe(true);
-    });
-
-    it('shows the price in paisa when contactForPrice is off', async () => {
+    it('shows the price in paisa', async () => {
       const item = await firstItem();
       expect(item.price).toBe(699900);
     });

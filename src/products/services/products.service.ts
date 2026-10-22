@@ -113,7 +113,6 @@ export class ProductsService {
               isActive: willBeActive,
               isPublished: dto.isPublished ?? false,
               publicDescription: dto.publicDescription?.trim() || null,
-              contactForPrice: dto.contactForPrice ?? false,
               ptaStatus,
               authenticity,
             },
@@ -333,9 +332,6 @@ export class ProductsService {
     if (dto.isPublished !== undefined) data.isPublished = dto.isPublished;
     if (dto.publicDescription !== undefined) {
       data.publicDescription = dto.publicDescription?.trim() || null;
-    }
-    if (dto.contactForPrice !== undefined) {
-      data.contactForPrice = dto.contactForPrice;
     }
     if (dto.ptaStatus !== undefined) {
       data.ptaStatus = nextTracking === 'SERIALIZED' ? dto.ptaStatus : null;
