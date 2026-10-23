@@ -1,11 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsNumber,
   IsOptional,
   IsString,
   Length,
   Matches,
+  Max,
+  Min,
+  ValidateIf,
 } from 'class-validator';
 
 const HTTP_URL_PATTERN = new RegExp('^https?:\\/\\/', 'i');
@@ -60,8 +64,8 @@ export class UpdateStoreSettingsDto {
 
   @ApiPropertyOptional({
     description:
-      'WhatsApp number in international digits: 923001234567 (10–15 digits).',
-    example: '923001234567',
+      'WhatsApp mobile in local Pakistani form: 03XXXXXXXXX (also accepts 923…).',
+    example: '03001234567',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
@@ -69,8 +73,9 @@ export class UpdateStoreSettingsDto {
   whatsappNumber?: string | null;
 
   @ApiPropertyOptional({
-    description: 'Display phone number (free text allowed).',
-    example: '0300-1234567',
+    description:
+      'Public contact mobile in local Pakistani form: 03XXXXXXXXX. Rejected if the number is already in use.',
+    example: '03001234567',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
@@ -79,13 +84,14 @@ export class UpdateStoreSettingsDto {
   phoneNumber?: string | null;
 
   @ApiPropertyOptional({
-    description: 'Street address shown on the storefront.',
-    example: 'Shop 12, Shahra-e-Faisal, Karachi',
+    description:
+      'Full street address from Google Places (Pakistan). Shown on the storefront.',
+    example: 'Zab Plaza, Timergara, Lower Dir, Khyber Pakhtunkhwa, Pakistan',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
-  @Length(1, 300)
+  @Length(1, 500)
   address?: string | null;
 
   @ApiPropertyOptional({ description: 'City.', example: 'Karachi' })
@@ -96,11 +102,54 @@ export class UpdateStoreSettingsDto {
   city?: string | null;
 
   @ApiPropertyOptional({
-    description: 'Google Maps link for directions. http(s) only.',
-    example: 'https://example.com/maps?q=24.86,67.03',
+    description:
+      'Map pin latitude from Places (Pakistan ≈ 23.5–37.2). Send with longitude, or null to clear.',
+    example: 34.8266,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(23.5)
+  @Max(37.2)
+  latitude?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Map pin longitude from Places (Pakistan ≈ 60.8–77.9). Send with latitude, or null to clear.',
+    example: 71.8441,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(60.8)
+  @Max(77.9)
+  longitude?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Human-readable place name from Google Places (shown in admin).',
+    example: 'Pakistan Post Office Timergara',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  mapPlaceName?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional Maps link. Prefer latitude/longitude — the API auto-fills this from the pin.',
+    example: 'https://www.google.com/maps/search/?api=1&query=34.8266,71.8441',
+    nullable: true,
+  })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @Matches(HTTP_URL_PATTERN)
   googleMapsUrl?: string | null;
 

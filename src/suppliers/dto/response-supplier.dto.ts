@@ -24,6 +24,12 @@ export class ResponseSupplierDto {
   })
   phone?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Pakistani CNIC of the supplier / seller (XXXXX-XXXXXXX-X).',
+    example: '17301-1234567-1',
+  })
+  cnic?: string | null;
+
   @ApiPropertyOptional({ example: 'Suite 4, Hall Road, Lahore' })
   address?: string | null;
 
@@ -36,6 +42,13 @@ export class ResponseSupplierDto {
     example: 5000000,
   })
   openingBalance: number;
+
+  @ApiProperty({
+    description:
+      'Live payable in PAISA: openingBalance + Σ ACTIVE non-opening purchases − Σ ACTIVE supplier payments. Derived on read; never stored.',
+    example: 7500000,
+  })
+  currentBalance: number;
 
   @ApiProperty({
     description:

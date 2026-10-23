@@ -10,6 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { OptionalSupplierPhoneProperty } from '../../helpers/supplier-profile.decorators.js';
 
 export class CreateCustomerDto {
   @ApiProperty({
@@ -22,16 +23,7 @@ export class CreateCustomerDto {
   @Length(2, 100)
   name: string;
 
-  @ApiProperty({
-    description:
-      'Customer phone. Optional, stored in canonical form (03001234567 → 923001234567) so search finds it either way.',
-    example: '03001234567',
-    required: false,
-  })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  @IsOptional()
-  @IsString()
-  @Length(7, 20)
+  @OptionalSupplierPhoneProperty('03001234567')
   phone?: string;
 
   @ApiProperty({

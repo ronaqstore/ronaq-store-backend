@@ -5,7 +5,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { Prisma } from '../../generated/prisma/client.js';
 import {
   CashDirection,
   CashMovementType,
@@ -38,8 +37,15 @@ import {
   PURCHASE_INCLUDE,
   mapPurchaseToResponse,
 } from '../helpers/purchase.mapper.js';
+import {
+  buildPurchaseListWhere,
+  buildPurchaseMoneyFilterSql,
+  buildPurchaseMoneyOrderedIdsSql,
+  purchaseListNeedsMoneyJoin,
+} from '../helpers/purchase-list-where.helper.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
 import { PurchasesCancelService } from './purchases-cancel.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 export type CreatePurchaseResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
@@ -55,6 +61,7 @@ export class PurchasesService {
     private readonly prisma: PrismaService,
     private readonly writeFlow: PurchasesWriteService,
     private readonly cancelFlow: PurchasesCancelService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async createPurchase(
@@ -179,6 +186,7 @@ export class PurchasesService {
       if (outcome.kind === 'overdraft') {
         return new PurchaseOverdraftResponseDto(outcome.shortfall);
       }
+      this.storefrontRevalidate.invalidateShopById(shopId);
       return new StatusBaseResponseDTO(true, CREATED);
     } catch (error) {
       if (
@@ -189,30 +197,46 @@ export class PurchasesService {
       }
       if (
         isUniqueConstraintViolation(error) &&
-        violatedColumn(error, 'imei1')
+        (violatedColumn(error, 'imei1') || violatedColumn(error, 'imei2'))
       ) {
         const allImeis = [
-          ...new Set(dto.items.flatMap((line) => line.imeis ?? [])),
+          ...new Set(
+            dto.items.flatMap((line) =>
+              (line.phoneUnits ?? []).flatMap((u) => [u.imei1, u.imei2]),
+            ),
+          ),
         ];
         const inUse = await this.prisma.inventoryUnit.findFirst({
-          where: { shopId, imei1: { in: allImeis } },
-          select: { imei1: true },
+          where: {
+            shopId,
+            OR: [{ imei1: { in: allImeis } }, { imei2: { in: allImeis } }],
+          },
+          select: { imei1: true, imei2: true },
         });
-        throw new BadRequestException(
-          duplicateImei(inUse?.imei1 ?? allImeis[0] ?? 'that IMEI'),
-        );
+        const hit =
+          allImeis.find((v) => v === inUse?.imei1 || v === inUse?.imei2) ??
+          allImeis[0] ??
+          'that IMEI';
+        throw new BadRequestException(duplicateImei(hit));
       }
       throw error;
     }
   }
 
-  cancelPurchase(
+  async cancelPurchase(
     id: string,
     dto: CancelPurchaseDto,
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    return this.cancelFlow.cancelPurchase(id, dto, shopId, userId);
+    const result = await this.cancelFlow.cancelPurchase(
+      id,
+      dto,
+      shopId,
+      userId,
+    );
+    this.storefrontRevalidate.invalidateShopById(shopId);
+    return result;
   }
 
   getCancelImpact(
@@ -234,33 +258,59 @@ export class PurchasesService {
     const sortBy = query.sortBy ?? 'purchaseDate';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.PurchaseWhereInput = { shopId };
-    if (query.supplierId) where.supplierId = query.supplierId;
-    if (query.status) where.status = query.status;
-    if (query.isOpeningStock !== undefined && query.isOpeningStock !== null) {
-      where.isOpeningStock = query.isOpeningStock;
+    let where = buildPurchaseListWhere(query, shopId);
+    const moneySort =
+      sortBy === 'paid' || sortBy === 'outstanding' ? sortBy : null;
+
+    if (purchaseListNeedsMoneyJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        moneySort
+          ? buildPurchaseMoneyOrderedIdsSql(query, shopId, moneySort, sortOrder)
+          : buildPurchaseMoneyFilterSql(query, shopId),
+      );
+      const orderedIds = matched.map((row) => row.id);
+      where = { shopId, id: { in: orderedIds } };
+
+      if (moneySort) {
+        const total = orderedIds.length;
+        const pageIds = orderedIds.slice(
+          getSkipNumber(page, pageSize),
+          getSkipNumber(page, pageSize) + pageSize,
+        );
+        if (pageIds.length === 0) {
+          return new PaginatedResponseDTO<ResponsePurchaseDto>(
+            [],
+            total,
+            page,
+            pageSize,
+          );
+        }
+        const rows = await this.prisma.purchase.findMany({
+          where: { shopId, id: { in: pageIds } },
+          include: PURCHASE_INCLUDE,
+        });
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        return new PaginatedResponseDTO<ResponsePurchaseDto>(
+          pageIds
+            .map((id) => byId.get(id))
+            .filter((row): row is NonNullable<typeof row> => row != null)
+            .map((row) => mapPurchaseToResponse(row)),
+          total,
+          page,
+          pageSize,
+        );
+      }
     }
-    const dateFilters: Prisma.PurchaseWhereInput[] = [];
-    if (query.from)
-      dateFilters.push({ purchaseDate: { gte: new Date(query.from) } });
-    if (query.to)
-      dateFilters.push({ purchaseDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { purchaseNo: { contains: term, mode: 'insensitive' } },
-        { supplierInvoiceRef: { contains: term, mode: 'insensitive' } },
-        { supplier: { name: { contains: term, mode: 'insensitive' } } },
-      ];
-    }
+
+    const prismaSortBy =
+      sortBy === 'paid' || sortBy === 'outstanding' ? 'purchaseDate' : sortBy;
 
     const [rows, total] = await Promise.all([
       this.prisma.purchase.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [prismaSortBy]: sortOrder },
         include: PURCHASE_INCLUDE,
       }),
       this.prisma.purchase.count({ where }),

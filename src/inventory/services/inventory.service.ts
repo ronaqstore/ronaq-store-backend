@@ -5,10 +5,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   InventoryMovementType,
   UnitStatus,
 } from '../../generated/prisma/enums.js';
+import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
 import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
@@ -19,19 +21,15 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import {
-  adjustmentNotAllowedForSerialized,
   countedQuantityRequired,
   insufficientStock,
   quantityRequired,
   resourceNotFound,
-  unitIdRequired,
   unitNotInStock,
-  unwantedAdjustmentField,
 } from '../../errors/error.builder.js';
-import type {
-  InventoryAdjustmentProductShape,
-  InventoryProductRef,
-} from './inventory.service.types.js';
+import type { InventoryProductRef } from './inventory.service.types.js';
+import { assertInventoryAdjustmentShape } from '../helpers/inventory-adjustment-shape.helper.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 const CREATED = 'Stock change recorded successfully';
 const NO_CHANGE = 'Counted matches the system — no change recorded';
@@ -56,41 +54,158 @@ const MANUAL_TYPES: InventoryMovementType[] = [
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
+  ) {}
+
+  async listUnits(
+    query: InventoryUnitQueryFilterDto,
+    shopId: string,
+  ): Promise<PaginatedResponseDTO<ResponseInventoryUnitDto>> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: query.productId, shopId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new NotFoundException(resourceNotFound('Product', query.productId));
+    }
+
+    const where: Prisma.InventoryUnitWhereInput = {
+      shopId,
+      productId: query.productId,
+    };
+
+    if (query.status && query.status !== 'ALL') {
+      where.status = query.status as UnitStatus;
+    } else if (!query.status) {
+      where.status = UnitStatus.IN_STOCK;
+    }
+
+    const searchAnd = buildTokenizedSearchAnd<Prisma.InventoryUnitWhereInput>(
+      query.search,
+      (token) => [
+        { imei1: { contains: token, mode: 'insensitive' } },
+        { imei2: { contains: token, mode: 'insensitive' } },
+      ],
+    );
+    if (searchAnd.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        ...searchAnd,
+      ];
+    }
+
+    if (query.condition) {
+      where.condition = query.condition;
+    }
+
+    if (query.batteryMin != null) {
+      where.batteryHealth = { gte: query.batteryMin };
+    }
+
+    const { page, pageSize } = normalizePagination(
+      query.page,
+      query.pageSize,
+      100,
+    );
+    const skip = getSkipNumber(page, pageSize);
+
+    const include = {
+      product: {
+        select: {
+          defaultSellingPrice: true,
+          brand: { select: { name: true } },
+        },
+      },
+      purchaseItem: {
+        include: {
+          purchase: {
+            include: {
+              supplier: {
+                select: { name: true, phone: true },
+              },
+            },
+          },
+        },
+      },
+      saleItems: {
+        include: {
+          sale: {
+            include: {
+              customer: {
+                select: { name: true, phone: true },
+              },
+            },
+          },
+        },
+        take: 1,
+        orderBy: { id: 'desc' as const },
+      },
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.inventoryUnit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+        include,
+      }),
+      this.prisma.inventoryUnit.count({ where }),
+    ]);
+
+    const items = rows.map((row) => {
+      const purchase = row.purchaseItem?.purchase;
+      const supplier = purchase?.supplier;
+      const latestSaleItem = row.saleItems?.[0];
+      const sale = latestSaleItem?.sale;
+      const customer = sale?.customer;
+      const defaultSell = Number(row.product.defaultSellingPrice);
+      const asking = row.askingPrice != null ? Number(row.askingPrice) : null;
+
+      return {
+        id: row.id,
+        productId: row.productId,
+        imei1: row.imei1,
+        imei2: row.imei2,
+        condition: row.condition,
+        status: row.status,
+        unitCost: Number(row.unitCost),
+        batteryHealth: row.batteryHealth,
+        askingPrice: asking,
+        defectNotes: row.defectNotes,
+        effectivePrice: asking ?? defaultSell,
+        createdAt: row.createdAt,
+        purchaseNo: purchase?.purchaseNo ?? null,
+        purchaseDate: purchase?.purchaseDate
+          ? purchase.purchaseDate.toISOString().slice(0, 10)
+          : null,
+        supplierInvoiceRef: purchase?.supplierInvoiceRef ?? null,
+        supplierName: supplier?.name ?? null,
+        supplierPhone: supplier?.phone ?? null,
+        saleNo: sale?.saleNo ?? null,
+        saleDate: sale?.saleDate
+          ? sale.saleDate.toISOString().slice(0, 10)
+          : null,
+        customerName: customer?.name ?? null,
+        customerPhone: customer?.phone ?? null,
+        salePrice: latestSaleItem ? Number(latestSaleItem.unitPrice) : null,
+      };
+    });
+
+    return new PaginatedResponseDTO(items, total, page, pageSize);
+  }
 
   async listInStockUnits(
     productId: string,
     shopId: string,
   ): Promise<ResponseInventoryUnitDto[]> {
-    const product = await this.prisma.product.findFirst({
-      where: { id: productId, shopId },
-      select: { id: true },
-    });
-    if (!product) {
-      throw new NotFoundException(resourceNotFound('Product', productId));
-    }
-
-    const rows = await this.prisma.inventoryUnit.findMany({
-      where: { shopId, productId, status: UnitStatus.IN_STOCK },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        productId: true,
-        imei1: true,
-        imei2: true,
-        condition: true,
-        status: true,
-      },
-    });
-
-    return rows.map((row) => ({
-      id: row.id,
-      productId: row.productId,
-      imei1: row.imei1,
-      imei2: row.imei2,
-      condition: row.condition,
-      status: row.status,
-    }));
+    const page = await this.listUnits(
+      { productId, status: UnitStatus.IN_STOCK, page: 1, pageSize: 100 },
+      shopId,
+    );
+    return page.items;
   }
 
   async createAdjustment(
@@ -105,85 +220,39 @@ export class InventoryService {
       throw new NotFoundException(resourceNotFound('Product', dto.productId));
     }
 
-    this.assertShape(product, dto);
+    assertInventoryAdjustmentShape(product, dto);
 
+    let outcome: InventoryAdjustmentOutcome;
     if (dto.type === 'ADJUSTMENT') {
       const countedQuantity = dto.countedQuantity;
       if (countedQuantity === undefined) {
         throw new BadRequestException(countedQuantityRequired(product.name));
       }
-      return this.adjustStock(product, countedQuantity, dto.reason, shopId);
-    }
-    if (product.trackingType === 'SERIALIZED') {
-      return this.damagePhone(product, dto, shopId);
-    }
-    const quantity = dto.quantity;
-    if (quantity === undefined) {
-      throw new BadRequestException(quantityRequired(product.name));
-    }
-    return this.damageQuantity(product, quantity, dto.type, dto.reason, shopId);
-  }
-
-  private assertShape(
-    product: InventoryAdjustmentProductShape,
-    dto: CreateInventoryAdjustmentDto,
-  ): void {
-    if (dto.type === 'ADJUSTMENT') {
-      if (product.trackingType === 'SERIALIZED') {
-        throw new BadRequestException(
-          adjustmentNotAllowedForSerialized(product.name),
-        );
+      outcome = await this.adjustStock(
+        product,
+        countedQuantity,
+        dto.reason,
+        shopId,
+      );
+    } else if (product.trackingType === 'SERIALIZED') {
+      outcome = await this.damagePhone(product, dto, shopId);
+    } else {
+      const quantity = dto.quantity;
+      if (quantity === undefined) {
+        throw new BadRequestException(quantityRequired(product.name));
       }
-      if (dto.countedQuantity === undefined) {
-        throw new BadRequestException(countedQuantityRequired(product.name));
-      }
-      if (dto.quantity !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(product.name, 'ADJUSTMENT', 'quantity'),
-        );
-      }
-      if (dto.inventoryUnitId !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(
-            product.name,
-            'ADJUSTMENT',
-            'inventoryUnitId',
-          ),
-        );
-      }
-      return;
-    }
-
-    if (product.trackingType === 'SERIALIZED') {
-      if (dto.inventoryUnitId === undefined) {
-        throw new BadRequestException(unitIdRequired(product.name));
-      }
-      if (dto.quantity !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(product.name, dto.type, 'quantity'),
-        );
-      }
-      if (dto.countedQuantity !== undefined) {
-        throw new BadRequestException(
-          unwantedAdjustmentField(product.name, dto.type, 'countedQuantity'),
-        );
-      }
-      return;
-    }
-
-    if (dto.quantity === undefined) {
-      throw new BadRequestException(quantityRequired(product.name));
-    }
-    if (dto.countedQuantity !== undefined) {
-      throw new BadRequestException(
-        unwantedAdjustmentField(product.name, dto.type, 'countedQuantity'),
+      outcome = await this.damageQuantity(
+        product,
+        quantity,
+        dto.type,
+        dto.reason,
+        shopId,
       );
     }
-    if (dto.inventoryUnitId !== undefined) {
-      throw new BadRequestException(
-        unwantedAdjustmentField(product.name, dto.type, 'inventoryUnitId'),
-      );
+    if (outcome.kind === 'created') {
+      this.storefrontRevalidate.invalidateShopById(shopId);
     }
+    return outcome;
   }
 
   private async adjustStock(
@@ -340,20 +409,50 @@ export class InventoryService {
 
     const where: Prisma.InventoryMovementWhereInput = { shopId };
 
-    where.type = query.type ?? { in: MANUAL_TYPES };
+    if (query.type) {
+      where.type = query.type;
+    } else if (query.scope !== 'all') {
+      where.type = { in: MANUAL_TYPES };
+    }
     if (query.productId) where.productId = query.productId;
+    if (query.quantityChange !== undefined) {
+      where.quantityChange = query.quantityChange;
+    }
 
-    const dateFilters: Prisma.InventoryMovementWhereInput[] = [];
+    const andFilters: Prisma.InventoryMovementWhereInput[] = [];
     if (query.from)
-      dateFilters.push({ createdAt: { gte: new Date(query.from) } });
-    if (query.to) dateFilters.push({ createdAt: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
+      andFilters.push({ createdAt: { gte: new Date(query.from) } });
+    if (query.to) andFilters.push({ createdAt: { lte: new Date(query.to) } });
 
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { product: { name: { contains: term, mode: 'insensitive' } } },
-        { reason: { contains: term, mode: 'insensitive' } },
+    if (query.reason?.trim()) {
+      const words = query.reason.trim().split(/\s+/).filter(Boolean);
+      if (words.length === 1) {
+        andFilters.push({
+          reason: { contains: words[0], mode: 'insensitive' },
+        });
+      } else if (words.length > 1) {
+        andFilters.push({
+          OR: words.map((word) => ({
+            reason: { contains: word, mode: 'insensitive' as const },
+          })),
+        });
+      }
+    }
+
+    if (andFilters.length > 0) where.AND = andFilters;
+
+    const movementSearchAnd =
+      buildTokenizedSearchAnd<Prisma.InventoryMovementWhereInput>(
+        query.search,
+        (token) => [
+          { product: { name: { contains: token, mode: 'insensitive' } } },
+          { reason: { contains: token, mode: 'insensitive' } },
+        ],
+      );
+    if (movementSearchAnd.length > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        ...movementSearchAnd,
       ];
     }
 

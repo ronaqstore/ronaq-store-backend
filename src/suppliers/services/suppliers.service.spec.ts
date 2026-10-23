@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SuppliersService } from './suppliers.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 const SHOP_ID = 'shop-1';
 const SUPPLIER_ID = '01924f0a-0000-7000-8000-0000000000a1';
@@ -15,8 +19,12 @@ const prismaStub = {
     updateMany: jest.fn(),
     count: jest.fn(),
   },
-  purchase: { findMany: jest.fn() },
-  supplierPayment: { findMany: jest.fn() },
+  user: { findFirst: jest.fn() },
+  platformAdmin: { findFirst: jest.fn() },
+  customer: { findFirst: jest.fn() },
+  purchase: { findMany: jest.fn(), groupBy: jest.fn() },
+  supplierPayment: { findMany: jest.fn(), groupBy: jest.fn() },
+  $queryRaw: jest.fn(),
 };
 
 function baseSupplierRow(overrides: Record<string, unknown> = {}) {
@@ -52,6 +60,12 @@ describe('SuppliersService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prismaStub.user.findFirst.mockResolvedValue(null);
+    prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+    prismaStub.customer.findFirst.mockResolvedValue(null);
+    prismaStub.supplier.findFirst.mockResolvedValue(null);
+    prismaStub.purchase.groupBy.mockResolvedValue([]);
+    prismaStub.supplierPayment.groupBy.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -123,6 +137,46 @@ describe('SuppliersService', () => {
 
       expect(prismaStub.supplier.create).toHaveBeenCalledTimes(2);
     });
+
+    it('rejects a phone already used by a platform admin', async () => {
+      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+
+      await expect(
+        service.createSupplier(
+          { name: 'ABC Mobiles', phone: '03029825213' },
+          SHOP_ID,
+          'u1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.supplier.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a CNIC already used by another supplier in the shop', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue({ id: 'other-supplier' });
+
+      await expect(
+        service.createSupplier(
+          { name: 'ABC Mobiles', cnic: '17301-1234567-1' },
+          SHOP_ID,
+          'u1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.supplier.create).not.toHaveBeenCalled();
+    });
+
+    it('stores a free phone in E.164 form', async () => {
+      prismaStub.supplier.create.mockResolvedValue({ id: SUPPLIER_ID });
+
+      await service.createSupplier(
+        { name: 'ABC Mobiles', phone: '03001234567' },
+        SHOP_ID,
+        'u1',
+      );
+
+      expect(prismaStub.supplier.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ phone: '923001234567' }),
+      });
+    });
   });
 
   describe('getSuppliers', () => {
@@ -140,7 +194,7 @@ describe('SuppliersService', () => {
       });
     });
 
-    it('ANDs the search across name, phone and address without widening shop scope', async () => {
+    it('ANDs the search across name, phone, CNIC and address without widening shop scope', async () => {
       prismaStub.supplier.findMany.mockResolvedValue([]);
       prismaStub.supplier.count.mockResolvedValue(0);
 
@@ -151,14 +205,38 @@ describe('SuppliersService', () => {
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
       expect(where.shopId).toBe(SHOP_ID);
-      expect(where.OR).toEqual([
-        { name: { contains: 'abc', mode: 'insensitive' } },
-        { phone: { contains: 'abc', mode: 'insensitive' } },
-        { address: { contains: 'abc', mode: 'insensitive' } },
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { name: { contains: 'abc', mode: 'insensitive' } },
+            { phone: { contains: 'abc', mode: 'insensitive' } },
+            { cnic: { contains: 'abc', mode: 'insensitive' } },
+            { address: { contains: 'abc', mode: 'insensitive' } },
+          ],
+        },
       ]);
     });
 
-    it('also matches the canonical phone when the owner types a local number', async () => {
+    it('tokenizes multi-word search so each word must match', async () => {
+      prismaStub.supplier.findMany.mockResolvedValue([]);
+      prismaStub.supplier.count.mockResolvedValue(0);
+
+      await service.getSuppliers(
+        { page: 1, pageSize: 10, search: 'clear old' },
+        SHOP_ID,
+      );
+
+      const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0].OR[0]).toEqual({
+        name: { contains: 'clear', mode: 'insensitive' },
+      });
+      expect(where.AND[1].OR[0]).toEqual({
+        name: { contains: 'old', mode: 'insensitive' },
+      });
+    });
+
+    it('also matches the canonical phone (and digit-only CNIC) when the owner types a local number', async () => {
       prismaStub.supplier.findMany.mockResolvedValue([]);
       prismaStub.supplier.count.mockResolvedValue(0);
 
@@ -168,13 +246,37 @@ describe('SuppliersService', () => {
       );
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
-      expect(where.OR).toEqual([
-        { name: { contains: '0300-1234567', mode: 'insensitive' } },
-        { phone: { contains: '0300-1234567', mode: 'insensitive' } },
-        { address: { contains: '0300-1234567', mode: 'insensitive' } },
-        { phone: { contains: '923001234567', mode: 'insensitive' } },
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { name: { contains: '0300-1234567', mode: 'insensitive' } },
+            { phone: { contains: '0300-1234567', mode: 'insensitive' } },
+            { cnic: { contains: '0300-1234567', mode: 'insensitive' } },
+            { address: { contains: '0300-1234567', mode: 'insensitive' } },
+            { phone: { contains: '923001234567', mode: 'insensitive' } },
+            { cnic: { contains: '03001234567', mode: 'insensitive' } },
+          ],
+        },
       ]);
       expect(where.shopId).toBe(SHOP_ID);
+    });
+
+    it('matches formatted CNIC when the owner types digits only', async () => {
+      prismaStub.supplier.findMany.mockResolvedValue([]);
+      prismaStub.supplier.count.mockResolvedValue(0);
+
+      await service.getSuppliers(
+        { page: 1, pageSize: 10, search: '1730112345671' },
+        SHOP_ID,
+      );
+
+      const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
+      expect(where.AND[0].OR).toEqual(
+        expect.arrayContaining([
+          { cnic: { contains: '1730112345671', mode: 'insensitive' } },
+          { cnic: { contains: '17301-1234567-1', mode: 'insensitive' } },
+        ]),
+      );
     });
 
     it('adds no extra branch when the search term is already canonical', async () => {
@@ -187,7 +289,7 @@ describe('SuppliersService', () => {
       );
 
       const { where } = prismaStub.supplier.findMany.mock.calls[0][0];
-      expect(where.OR).toHaveLength(3);
+      expect(where.AND[0].OR).toHaveLength(4);
     });
 
     it('passes the isActive filter through', async () => {
@@ -218,6 +320,7 @@ describe('SuppliersService', () => {
       );
 
       expect(res.items[0].openingBalance).toBe(5000000);
+      expect(res.items[0].currentBalance).toBe(5000000);
       expect(res.items[0].isSystem).toBe(false);
       expect(res.total).toBe(1);
     });

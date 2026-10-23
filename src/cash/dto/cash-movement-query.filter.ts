@@ -1,5 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional } from 'class-validator';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
+import { IsIn, IsOptional, IsString } from 'class-validator';
+import { AmountRangeQueryFilterDto } from '../../common-dto/query/amount-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -12,7 +13,7 @@ import type {
   CashMovementType,
 } from '../../generated/prisma/enums.js';
 
-export class CashMovementQueryFilterDto extends ListPaginationQueryFilterDto {
+class CashMovementQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @ApiPropertyOptional({
     example: 'EXPENSE',
     description:
@@ -42,9 +43,17 @@ export class CashMovementQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @OptionalSearchQueryProperty(
     'rent',
-    'Case-insensitive contains search on the note.',
+    'Case-insensitive contains on note, or partial amount (e.g. 150 matches Rs 150,000).',
   )
   search?: string;
+
+  @ApiPropertyOptional({
+    example: 'rent',
+    description: 'Case-insensitive contains filter on note only.',
+  })
+  @IsOptional()
+  @IsString()
+  note?: string;
 
   @InclusiveDateFromQueryProperty(
     'Inclusive lower bound on movementDate (business day, PKT), YYYY-MM-DD.',
@@ -58,12 +67,17 @@ export class CashMovementQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'movementDate',
-    description: 'movementDate | amount | createdAt.',
+    description: 'movementDate | amount.',
   })
   @IsOptional()
-  @IsIn(['movementDate', 'amount', 'createdAt'])
-  sortBy?: 'movementDate' | 'amount' | 'createdAt' = 'movementDate';
+  @IsIn(['movementDate', 'amount'])
+  sortBy?: 'movementDate' | 'amount' = 'movementDate';
 
   @SortOrderPeriodQueryProperty('asc or desc.')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class CashMovementQueryFilterDto extends IntersectionType(
+  CashMovementQueryFilterBaseDto,
+  AmountRangeQueryFilterDto,
+) {}

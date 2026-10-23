@@ -79,7 +79,7 @@ export class ProductsController {
   @ApiOperation({
     summary: 'List products',
     description:
-      'Paginated list scoped to the shop in the JWT. Supports a contains search across name/model/sku/barcode, plus categoryId, brandId, trackingType and isActive filters. Each row carries categoryName, brandName and the live quantityOnHand.',
+      'Paginated list scoped to the shop in the JWT. Supports a contains search across name/model/sku/barcode, plus categoryId, brandId, trackingType, isActive, isPublished, quantityOnHand (exact stock), minSellingPrice/maxSellingPrice (paisa) and inStockOnly filters. Each row carries categoryName, brandName and the live quantityOnHand.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(PaginatedResponseDTO, 'Products fetched successfully'),
@@ -178,7 +178,7 @@ export class ProductsController {
   @ApiOperation({
     summary: 'Update a product',
     description:
-      'Partial update. Only the fields you send are changed. trackingType may change only while the product has no purchase and no sale history; switching to SERIALIZED additionally requires an empty stock counter. Release 1.2 also accepts isPublished, publicDescription, contactForPrice and ptaStatus.',
+      'Partial update. Only the fields you send are changed. trackingType may change only while the product has no purchase and no sale history; switching to SERIALIZED additionally requires an empty stock counter. Release 1.2 also accepts isPublished, publicDescription and ptaStatus.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(StatusBaseResponseDTO, 'Product updated successfully'),

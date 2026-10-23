@@ -21,6 +21,7 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
 import {
   cashReconciliationReasonRequired,
@@ -103,22 +104,21 @@ export class CashReconciliationsService {
     const sortOrder = query.sortOrder ?? 'desc';
 
     const where: Prisma.CashReconciliationWhereInput = { shopId };
-    if (query.search?.trim()) {
-      where.reason = {
-        contains: query.search.trim(),
-        mode: 'insensitive',
-      };
-    }
-    const dateFilters: Prisma.CashReconciliationWhereInput[] = [];
+    const andFilters: Prisma.CashReconciliationWhereInput[] = [
+      ...buildTokenizedSearchAnd<Prisma.CashReconciliationWhereInput>(
+        query.search,
+        (token) => [{ reason: { contains: token, mode: 'insensitive' } }],
+      ),
+    ];
     if (query.from)
-      dateFilters.push({
+      andFilters.push({
         reconciledAt: { gte: businessDayRange(query.from).start },
       });
     if (query.to)
-      dateFilters.push({
+      andFilters.push({
         reconciledAt: { lt: businessDayRange(query.to).end },
       });
-    if (dateFilters.length > 0) where.AND = dateFilters;
+    if (andFilters.length > 0) where.AND = andFilters;
 
     const [rows, total] = await Promise.all([
       this.prisma.cashReconciliation.findMany({

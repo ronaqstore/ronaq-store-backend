@@ -4,10 +4,11 @@ import { SalesService } from './services/sales.service.js';
 import { SalesLineWriterService } from './services/sales-line-writer.service.js';
 import { SalesCancelService } from './services/sales-cancel.service.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
+import { StoreModule } from '../store/store.module.js';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, StoreModule],
   controllers: [SalesController],
   providers: [
     SalesService,

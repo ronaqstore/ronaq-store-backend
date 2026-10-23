@@ -1,5 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class ResponsePurchasePaymentDto {
+  @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000401' })
+  id: string;
+
+  @ApiProperty({ description: 'In PAISA.', example: 500000 })
+  amount: number;
+
+  @ApiProperty({ description: 'YYYY-MM-DD.', example: '2026-10-07' })
+  paymentDate: string;
+
+  @ApiProperty({ example: 'ACTIVE' })
+  status: string;
+}
+
 export class ResponsePurchaseItemDto {
   @ApiProperty({ example: '01924f0a-0000-7000-8000-000000000201' })
   id: string;
@@ -27,11 +41,18 @@ export class ResponsePurchaseItemDto {
   totalCost: number;
 
   @ApiPropertyOptional({
-    description: 'IMEIs created from this line (SERIALIZED products only).',
-    example: ['111223344556677'],
-    type: [String],
+    description:
+      'Phone units created from this line (SERIALIZED only). Each entry is IMEI1 + IMEI2.',
+    example: [{ imei1: '111223344556677', imei2: '111223344556688' }],
   })
-  imeis?: string[];
+  phoneUnits?: Array<{
+    imei1: string;
+    imei2: string;
+    condition?: string;
+    batteryHealth?: number | null;
+    askingPrice?: number | null;
+    defectNotes?: string | null;
+  }>;
 }
 
 export class ResponsePurchaseDto {
@@ -109,4 +130,11 @@ export class ResponsePurchaseDto {
 
   @ApiProperty({ type: [ResponsePurchaseItemDto] })
   items: ResponsePurchaseItemDto[];
+
+  @ApiProperty({
+    description:
+      'ACTIVE + CANCELLED supplier payments linked to this bill. List UIs sum ACTIVE rows for Paid / Outstanding.',
+    type: [ResponsePurchasePaymentDto],
+  })
+  payments: ResponsePurchasePaymentDto[];
 }

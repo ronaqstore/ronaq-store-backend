@@ -18,7 +18,6 @@ async function bootstrap() {
     bufferLogs: true,
     rawBody: true,
   });
-  // Large phone purchases send thousands of IMEIs in one JSON body.
   app.useBodyParser('json', { limit: '10mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '10mb' });
 

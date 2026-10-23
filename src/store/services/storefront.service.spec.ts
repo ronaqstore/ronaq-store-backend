@@ -17,6 +17,9 @@ const settingsRow = {
   phoneNumber: '0300-1234567',
   address: 'Shop 12, Shahra-e-Faisal',
   city: 'Karachi',
+  latitude: 24.86,
+  longitude: 67.03,
+  mapPlaceName: null,
   googleMapsUrl: null,
   openingHours: null,
   facebookUrl: null,
@@ -34,7 +37,6 @@ function productRow(
     category: { id: 'cat-1', name: 'Mobile Phones' },
     trackingType: 'SERIALIZED',
     publicDescription: 'Genuine.',
-    contactForPrice: false,
     defaultSellingPrice: 699900n,
     lowStockThreshold: 2,
     ptaStatus: 'PTA_APPROVED',
@@ -76,6 +78,9 @@ describe('StorefrontService (public catalog)', () => {
               findMany: jest.fn(),
               count: jest.fn(),
               findFirst: jest.fn(),
+            },
+            inventoryUnit: {
+              findMany: jest.fn().mockResolvedValue([]),
             },
           },
         },
@@ -212,13 +217,17 @@ describe('StorefrontService (public catalog)', () => {
             brand: {
               name: { equals: 'Samsung', mode: 'insensitive' },
             },
-            OR: [
-              { name: { contains: 'a15', mode: 'insensitive' } },
-              { sku: { contains: 'a15', mode: 'insensitive' } },
+            AND: [
               {
-                brand: {
-                  name: { contains: 'a15', mode: 'insensitive' },
-                },
+                OR: [
+                  { name: { contains: 'a15', mode: 'insensitive' } },
+                  { sku: { contains: 'a15', mode: 'insensitive' } },
+                  {
+                    brand: {
+                      name: { contains: 'a15', mode: 'insensitive' },
+                    },
+                  },
+                ],
               },
             ],
           }),
@@ -266,13 +275,7 @@ describe('StorefrontService (public catalog)', () => {
       return res.items[0];
     };
 
-    it('hides the price when contactForPrice is on', async () => {
-      const item = await firstItem({ contactForPrice: true });
-      expect(item.price).toBeNull();
-      expect(item.contactForPrice).toBe(true);
-    });
-
-    it('shows the price in paisa when contactForPrice is off', async () => {
+    it('shows the price in paisa', async () => {
       const item = await firstItem();
       expect(item.price).toBe(699900);
     });
@@ -321,7 +324,6 @@ describe('StorefrontService (public catalog)', () => {
         'barcode',
         'unitCost',
         'costPrice',
-        'trackingType',
         'condition',
         'imei',
         'isActive',
@@ -334,6 +336,8 @@ describe('StorefrontService (public catalog)', () => {
       ]) {
         expect(forbidden in item).toBe(false);
       }
+      expect(item.trackingType).toBe('SERIALIZED');
+      expect(item.modelKey).toBeTruthy();
       // `description` is the PUBLIC text (publicDescription), never the
       // owner's private notes — the value proves which one it is.
       expect(item.description).toBe('Genuine.');

@@ -31,6 +31,19 @@ export const productNotPublishable = (
   );
 };
 
+export const ptaStatusNotAllowedForBrand = (
+  brandName: string,
+  ptaStatus: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    `PTA status ${ptaStatus} is not allowed for ${brandName}`,
+    [
+      'JV, Bypass and MDM Bypass are only for Apple (iPhone). Android and other brands may use PTA Approved or Non PTA only.',
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const imageLimitExceeded = (
   productName: string,
   max: number,

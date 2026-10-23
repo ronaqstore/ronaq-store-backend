@@ -1,15 +1,16 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { IsIn, IsOptional } from 'class-validator';
 import { PaginatedListQueryFilterDto } from '../../common-dto/query/paginated-list-query.filter.dto.js';
+import { PartyBalanceRangeQueryFilterDto } from '../../common-dto/query/party-balance-range-query.filter.dto.js';
 import {
   OptionalIsActiveQueryProperty,
   OptionalSearchQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export class CustomerQueryFilterDto extends PaginatedListQueryFilterDto {
+class CustomerQueryFilterBaseDto extends PaginatedListQueryFilterDto {
   @OptionalSearchQueryProperty(
     'ali',
-    'Case-insensitive contains search across the customer name, and contains search across the phone.',
+    'Case-insensitive contains search across customer name, phone and address (including normalised phone form).',
   )
   search?: string;
 
@@ -20,23 +21,14 @@ export class CustomerQueryFilterDto extends PaginatedListQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'name',
-    description:
-      'Field to sort by. name | createdAt | updatedAt | phone | isActive | openingBalance.',
+    description: 'Field to sort by. name | openingBalance.',
   })
   @IsOptional()
-  @IsIn([
-    'name',
-    'createdAt',
-    'updatedAt',
-    'phone',
-    'isActive',
-    'openingBalance',
-  ])
-  sortBy?:
-    | 'name'
-    | 'createdAt'
-    | 'updatedAt'
-    | 'phone'
-    | 'isActive'
-    | 'openingBalance' = 'createdAt';
+  @IsIn(['name', 'openingBalance'])
+  sortBy?: 'name' | 'openingBalance' = 'name';
 }
+
+export class CustomerQueryFilterDto extends IntersectionType(
+  CustomerQueryFilterBaseDto,
+  PartyBalanceRangeQueryFilterDto,
+) {}

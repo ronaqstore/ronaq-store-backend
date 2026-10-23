@@ -7,17 +7,20 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import {
   InventoryMovementType,
   ReferenceType,
+  UnitCondition,
   UnitStatus,
 } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { CreateSaleDto } from '../dto/create-sale.dto.js';
 import {
+  companyWarrantyForNewPhone,
   duplicateFieldValue,
   insufficientStock,
   inventoryUnitIdRequiredForSale,
   resourceNotFound,
   unitNotAvailableForSale,
   unwantedSaleItemField,
+  warrantyDaysRequiredForUsedPhone,
 } from '../../errors/error.builder.js';
 import { loadShopProductsById } from '../../helpers/product-catalog.helper.js';
 
@@ -87,14 +90,25 @@ export class SalesLineWriterService {
           );
         }
         seenUnits.add(line.inventoryUnitId);
-      } else if (line.inventoryUnitId) {
-        throw new BadRequestException(
-          unwantedSaleItemField(
-            product.name,
-            'inventoryUnitId',
-            'is tracked by quantity and does not use IMEIs',
-          ),
-        );
+      } else {
+        if (line.inventoryUnitId) {
+          throw new BadRequestException(
+            unwantedSaleItemField(
+              product.name,
+              'inventoryUnitId',
+              'is tracked by quantity and does not use IMEIs',
+            ),
+          );
+        }
+        if (line.warrantyDays != null) {
+          throw new BadRequestException(
+            unwantedSaleItemField(
+              product.name,
+              'warrantyDays',
+              'is not a phone — shop warranty days only apply to USED phones',
+            ),
+          );
+        }
       }
 
       return {
@@ -111,9 +125,15 @@ export class SalesLineWriterService {
     shopId: string,
   ): Promise<LockedSaleLine> {
     const locked = await tx.$queryRaw<
-      Array<{ id: string; status: string; imei1: string; unit_cost: bigint }>
+      Array<{
+        id: string;
+        status: string;
+        imei1: string;
+        unit_cost: bigint;
+        condition: string;
+      }>
     >`
-      SELECT id, status, imei1, unit_cost FROM inventory_units
+      SELECT id, status, imei1, unit_cost, condition FROM inventory_units
       WHERE id = ${line.inventoryUnitId} AND shop_id = ${shopId}
         AND product_id = ${line.productId}
       FOR UPDATE
@@ -129,6 +149,20 @@ export class SalesLineWriterService {
         unitNotAvailableForSale(line.productName, unit.imei1, unit.status),
       );
     }
+
+    const days = line.warrantyDays;
+    if (unit.condition === UnitCondition.USED) {
+      if (days !== 1 && days !== 2 && days !== 3) {
+        throw new BadRequestException(
+          warrantyDaysRequiredForUsedPhone(line.productName, unit.imei1),
+        );
+      }
+    } else if (days != null) {
+      throw new BadRequestException(
+        companyWarrantyForNewPhone(line.productName, unit.imei1),
+      );
+    }
+
     return { line, unitId: unit.id, unitCost: BigInt(unit.unit_cost) };
   }
 
@@ -176,6 +210,7 @@ export class SalesLineWriterService {
         unitCost: locked.unitCost,
         total:
           BigInt(locked.unitId ? 1 : line.quantity) * BigInt(line.unitPrice),
+        warrantyDays: locked.unitId ? (line.warrantyDays ?? null) : null,
       },
     });
 

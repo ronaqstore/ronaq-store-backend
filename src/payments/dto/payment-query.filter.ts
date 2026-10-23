@@ -1,5 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { AmountRangeQueryFilterDto } from '../../common-dto/query/amount-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -8,10 +9,10 @@ import {
   SortOrderPeriodQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
+class PaymentQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
-    'ali',
-    'Case-insensitive contains search across the customer name and the payment notes.',
+    'S-0047',
+    'Case-insensitive contains search across customer name, payment notes and linked sale number.',
   )
   search?: string;
 
@@ -41,6 +42,14 @@ export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
   receiptGroupId?: string;
 
   @ApiPropertyOptional({
+    example: 'CASH',
+    description: 'Payment method filter: CASH | JAZZCASH | EASYPAISA | BANK.',
+  })
+  @IsOptional()
+  @IsIn(['CASH', 'JAZZCASH', 'EASYPAISA', 'BANK'])
+  method?: 'CASH' | 'JAZZCASH' | 'EASYPAISA' | 'BANK';
+
+  @ApiPropertyOptional({
     example: 'ACTIVE',
     description:
       'ACTIVE or CANCELLED. Omit for both — cancelled rows stay visible.',
@@ -61,26 +70,17 @@ export class PaymentQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'paymentDate',
-    description:
-      'paymentDate | amount | createdAt | updatedAt | customerName | method.',
+    description: 'paymentDate | amount | customerName.',
   })
   @IsOptional()
-  @IsIn([
-    'paymentDate',
-    'amount',
-    'createdAt',
-    'updatedAt',
-    'customerName',
-    'method',
-  ])
-  sortBy?:
-    | 'paymentDate'
-    | 'amount'
-    | 'createdAt'
-    | 'updatedAt'
-    | 'customerName'
-    | 'method' = 'paymentDate';
+  @IsIn(['paymentDate', 'amount', 'customerName'])
+  sortBy?: 'paymentDate' | 'amount' | 'customerName' = 'paymentDate';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class PaymentQueryFilterDto extends IntersectionType(
+  PaymentQueryFilterBaseDto,
+  AmountRangeQueryFilterDto,
+) {}

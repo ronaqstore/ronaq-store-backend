@@ -20,9 +20,9 @@ export class CategoryQueryFilterDto extends PaginatedListQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'name',
-    description: 'Field to sort by. name | createdAt | updatedAt.',
+    description: 'Field to sort by. name.',
   })
   @IsOptional()
-  @IsIn(['name', 'createdAt', 'updatedAt'])
-  sortBy?: 'name' | 'createdAt' | 'updatedAt' = 'createdAt';
+  @IsIn(['name'])
+  sortBy = 'name' as const;
 }

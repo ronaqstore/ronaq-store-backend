@@ -3,6 +3,7 @@ import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 import {
   OptionalSupplierAddressProperty,
+  OptionalSupplierCnicProperty,
   OptionalSupplierNotesProperty,
   OptionalSupplierOpeningBalanceProperty,
   OptionalSupplierPhoneProperty,
@@ -21,6 +22,9 @@ export class CreateSupplierDto {
 
   @OptionalSupplierPhoneProperty()
   phone?: string;
+
+  @OptionalSupplierCnicProperty()
+  cnic?: string;
 
   @OptionalSupplierAddressProperty()
   address?: string;

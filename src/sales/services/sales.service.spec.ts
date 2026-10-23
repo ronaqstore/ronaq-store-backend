@@ -5,6 +5,8 @@ import { SalesService } from './sales.service.js';
 import { SalesLineWriterService } from './sales-line-writer.service.js';
 import { SalesCancelService } from './sales-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const SHOP_ID = 'shop-1';
 const USER_ID = 'user-1';
@@ -125,6 +127,10 @@ describe('SalesService', () => {
         SalesLineWriterService,
         SalesCancelService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
       ],
     }).compile();
 
@@ -146,11 +152,13 @@ describe('SalesService', () => {
         id: QUANTITY_PRODUCT_ID,
         name: 'Samsung Charger',
         trackingType: 'QUANTITY',
+        brand: { name: 'Samsung' },
       },
       {
         id: SERIAL_PRODUCT_ID,
         name: 'Samsung A15',
         trackingType: 'SERIALIZED',
+        brand: { name: 'Samsung' },
       },
     ]);
     // Stock lock returns the second queryRaw result (the counter is first).
@@ -676,7 +684,12 @@ describe('SalesService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prismaStub.product.findMany).toHaveBeenCalledWith({
         where: { id: { in: [QUANTITY_PRODUCT_ID] }, shopId: SHOP_ID },
-        select: { id: true, name: true, trackingType: true },
+        select: {
+          id: true,
+          name: true,
+          trackingType: true,
+          brand: { select: { name: true } },
+        },
       });
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
@@ -735,8 +748,8 @@ describe('SalesService', () => {
       );
 
       const where = prismaStub.sale.findMany.mock.calls[0][0].where;
-      expect(where.AND).toHaveLength(2);
-      expect(where.OR).toHaveLength(2);
+      expect(where.AND).toHaveLength(3);
+      expect(where.AND[2].OR).toHaveLength(2);
       expect(where.shopId).toBe(SHOP_ID);
     });
   });

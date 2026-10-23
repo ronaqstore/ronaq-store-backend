@@ -208,6 +208,7 @@ export class ReportsAnalyticsService {
       where: {
         shopId,
         isActive: true,
+        ...(query.productId ? { id: query.productId } : {}),
         ...this.query.searchOr(query, ['name', 'sku', 'barcode']),
       },
       include: {
@@ -256,12 +257,24 @@ export class ReportsAnalyticsService {
     if (typeof query.lowStock === 'boolean') {
       rows = rows.filter((row) => row.lowStock === query.lowStock);
     }
+    if (query.minStockValue !== undefined) {
+      const minStockValue = query.minStockValue;
+      rows = rows.filter((row) => row.stockValue >= minStockValue);
+    }
+    if (query.maxStockValue !== undefined) {
+      const maxStockValue = query.maxStockValue;
+      rows = rows.filter((row) => row.stockValue <= maxStockValue);
+    }
+    if (query.inStock !== undefined) {
+      const inStock = query.inStock;
+      rows = rows.filter((row) => row.inStock === inStock);
+    }
 
     return this.query.pageSnapshot(
       rows,
       query,
       'name',
-      ['name', 'inStock', 'stockValue', 'trackingType', 'lowStock'],
+      ['name', 'inStock', 'stockValue'],
       {
         countProducts: rows.length,
         countLowStock: rows.filter((r) => r.lowStock).length,

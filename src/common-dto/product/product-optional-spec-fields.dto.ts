@@ -92,20 +92,24 @@ export class ProductOptionalSpecFieldsDto {
 
   @ApiPropertyOptional({
     description:
-      'true hides the selling price on the store and shows "Contact for price" instead.',
-    example: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  contactForPrice?: boolean;
-
-  @ApiPropertyOptional({
-    description:
-      'PTA status shown to customers. null clears it (accessories have none).',
-    enum: ['PTA_APPROVED', 'NON_PTA'],
+      'PTA status shown to customers. null clears it (accessories have none). ' +
+      'Android: PTA_APPROVED | NON_PTA. iPhone may also use JV | BYPASS | MDM_BYPASS.',
+    enum: ['PTA_APPROVED', 'NON_PTA', 'JV', 'BYPASS', 'MDM_BYPASS'],
     example: 'PTA_APPROVED',
   })
   @IsOptional()
-  @IsIn(['PTA_APPROVED', 'NON_PTA'])
-  ptaStatus?: 'PTA_APPROVED' | 'NON_PTA' | null;
+  @IsIn(['PTA_APPROVED', 'NON_PTA', 'JV', 'BYPASS', 'MDM_BYPASS'])
+  ptaStatus?:
+    'PTA_APPROVED' | 'NON_PTA' | 'JV' | 'BYPASS' | 'MDM_BYPASS' | null;
+
+  @ApiPropertyOptional({
+    description:
+      'ORIGINAL or COPY for QUANTITY accessories (chargers, cables, airpods, covers, mic…). ' +
+      'null for phones or to clear. Shown on the public store.',
+    enum: ['ORIGINAL', 'COPY'],
+    example: 'ORIGINAL',
+  })
+  @IsOptional()
+  @IsIn(['ORIGINAL', 'COPY'])
+  authenticity?: 'ORIGINAL' | 'COPY' | null;
 }

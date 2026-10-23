@@ -15,10 +15,15 @@ const prismaStub = {
     updateMany: jest.fn(),
     count: jest.fn(),
   },
-  sale: { findMany: jest.fn() },
-  payment: { findMany: jest.fn() },
-  saleReturn: { findMany: jest.fn() },
+  user: { findFirst: jest.fn() },
+  platformAdmin: { findFirst: jest.fn() },
+  supplier: { findFirst: jest.fn() },
+  sale: { findMany: jest.fn(), groupBy: jest.fn() },
+  payment: { findMany: jest.fn(), groupBy: jest.fn() },
+  saleReturn: { findMany: jest.fn(), groupBy: jest.fn() },
+  refund: { findMany: jest.fn() },
   $transaction: jest.fn(),
+  $queryRaw: jest.fn(),
 };
 
 const customerRow = (overrides: Record<string, unknown> = {}) => ({
@@ -40,6 +45,14 @@ describe('CustomersService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prismaStub.user.findFirst.mockResolvedValue(null);
+    prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+    prismaStub.supplier.findFirst.mockResolvedValue(null);
+    prismaStub.customer.findFirst.mockResolvedValue(null);
+    prismaStub.sale.groupBy.mockResolvedValue([]);
+    prismaStub.payment.groupBy.mockResolvedValue([]);
+    prismaStub.saleReturn.groupBy.mockResolvedValue([]);
+    prismaStub.refund.findMany.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CustomersService,
@@ -93,6 +106,19 @@ describe('CustomersService', () => {
           }),
         }),
       );
+    });
+
+    it('rejects a phone already used by a platform admin', async () => {
+      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+
+      await expect(
+        service.createCustomer(
+          { name: 'Ali Khan', phone: '03029825213' },
+          'shop-1',
+          'user-1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.customer.create).not.toHaveBeenCalled();
     });
 
     it('stores the opening balance as a bigint', async () => {
@@ -150,13 +176,14 @@ describe('CustomersService', () => {
       expect(prismaStub.customer.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { shopId: 'shop-1' },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { name: 'desc' },
         }),
       );
       expect(result.items[0].openingBalance).toBe(5000000);
+      expect(result.items[0].currentBalance).toBe(5000000);
     });
 
-    it('searches name and phone', async () => {
+    it('searches name, phone and address', async () => {
       prismaStub.customer.findMany.mockResolvedValue([]);
       prismaStub.customer.count.mockResolvedValue(0);
 
@@ -166,12 +193,71 @@ describe('CustomersService', () => {
         expect.objectContaining({
           where: {
             shopId: 'shop-1',
-            OR: [
-              { name: { contains: 'ali', mode: 'insensitive' } },
-              { phone: { contains: 'ali' } },
-            ],
             isActive: true,
+            AND: [
+              {
+                OR: [
+                  { name: { contains: 'ali', mode: 'insensitive' } },
+                  { phone: { contains: 'ali' } },
+                  { address: { contains: 'ali', mode: 'insensitive' } },
+                ],
+              },
+            ],
           },
+        }),
+      );
+    });
+
+    it('tokenizes multi-word search against name/phone/address', async () => {
+      prismaStub.customer.findMany.mockResolvedValue([]);
+      prismaStub.customer.count.mockResolvedValue(0);
+
+      await service.getCustomers({ search: 'clear old' }, 'shop-1');
+
+      const where = prismaStub.customer.findMany.mock.calls[0][0].where;
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0].OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'clear', mode: 'insensitive' } },
+        ]),
+      );
+      expect(where.AND[1].OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'old', mode: 'insensitive' } },
+        ]),
+      );
+    });
+
+    it('filters opening balance and current credit ranges', async () => {
+      prismaStub.$queryRaw.mockResolvedValue([{ id: 'cust-1' }]);
+      prismaStub.customer.findMany.mockResolvedValue([customerRow()]);
+      prismaStub.customer.count.mockResolvedValue(1);
+
+      await service.getCustomers(
+        {
+          minOpeningBalance: 0,
+          maxOpeningBalance: 10_000_000,
+          minCurrentBalance: 1000,
+          maxCurrentBalance: 5_000_000,
+        },
+        'shop-1',
+      );
+
+      expect(prismaStub.$queryRaw).toHaveBeenCalled();
+      expect(prismaStub.customer.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            shopId: 'shop-1',
+            id: { in: ['cust-1'] },
+            AND: expect.arrayContaining([
+              {
+                openingBalance: {
+                  gte: 0n,
+                  lte: 10_000_000n,
+                },
+              },
+            ]),
+          }),
         }),
       );
     });
@@ -192,6 +278,7 @@ describe('CustomersService', () => {
       const result = await service.getCustomerById('cust-1', 'shop-1');
 
       expect(result.openingBalance).toBe(5000000);
+      expect(result.currentBalance).toBe(5000000);
     });
   });
 

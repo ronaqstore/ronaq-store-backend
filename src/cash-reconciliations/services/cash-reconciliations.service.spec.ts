@@ -239,7 +239,11 @@ describe('CashReconciliationsService', () => {
         expect.objectContaining({
           where: {
             shopId: SHOP_ID,
-            reason: { contains: 'change', mode: 'insensitive' },
+            AND: [
+              {
+                OR: [{ reason: { contains: 'change', mode: 'insensitive' } }],
+              },
+            ],
           },
           orderBy: { difference: 'asc' },
         }),

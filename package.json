@@ -11,9 +11,9 @@
   "scripts": {
     "postinstall": "prisma generate",
     "build": "prisma generate && nest build",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch",
+    "start": "nest start -p tsconfig.build.json",
+    "dev": "nest start --watch -p tsconfig.build.json",
+    "start:debug": "nest start --debug --watch -p tsconfig.build.json",
     "start:prod": "node dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
     "lint": "eslint \"{src,test}/**/*.ts\"",
@@ -30,12 +30,13 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:status": "prisma migrate status",
     "prisma:studio": "prisma studio",
-    "seed": "node prisma/seed.cjs",
+    "seed": "npm run build && node prisma/seed.cjs",
     "seed:admin": "npm run build && node prisma/seed-platform-admin.cjs",
     "seed:owner": "npm run build && node prisma/seed-shop-owner.cjs",
     "seed:catalog": "npm run build && node prisma/seed-catalog.cjs",
+    "db:clean": "node prisma/clean-db.cjs",
     "check": "node scripts/run-checks.mjs",
-    "knip": "knip --include files,dependencies,unlisted,unresolved,exports,nsExports,types,nsTypes,enumMembers,duplicates,cycles --reporter compact",
+    "knip": "node scripts/run-knip.mjs",
     "duplicates": "jscpd --config .jscpd.json"
   },
   "dependencies": {

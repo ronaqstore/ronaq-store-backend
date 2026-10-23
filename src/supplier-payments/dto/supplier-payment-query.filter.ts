@@ -1,5 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { AmountRangeQueryFilterDto } from '../../common-dto/query/amount-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -8,10 +9,10 @@ import {
   SortOrderPeriodQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export class SupplierPaymentQueryFilterDto extends ListPaginationQueryFilterDto {
+class SupplierPaymentQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
-    'ABC Mobiles',
-    'Case-insensitive contains search across the supplier name and the purchase number the payment was made against.',
+    'P-0047',
+    'Case-insensitive contains search across supplier name, notes and linked purchase / bill number.',
   )
   search?: string;
 
@@ -51,25 +52,17 @@ export class SupplierPaymentQueryFilterDto extends ListPaginationQueryFilterDto 
 
   @ApiPropertyOptional({
     example: 'paymentDate',
-    description: 'paymentDate | amount | createdAt | updatedAt.',
+    description: 'paymentDate | amount | supplierName.',
   })
   @IsOptional()
-  @IsIn([
-    'paymentDate',
-    'amount',
-    'createdAt',
-    'updatedAt',
-    'supplierName',
-    'purchaseNo',
-  ])
-  sortBy?:
-    | 'paymentDate'
-    | 'amount'
-    | 'createdAt'
-    | 'updatedAt'
-    | 'supplierName'
-    | 'purchaseNo' = 'paymentDate';
+  @IsIn(['paymentDate', 'amount', 'supplierName'])
+  sortBy?: 'paymentDate' | 'amount' | 'supplierName' = 'paymentDate';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class SupplierPaymentQueryFilterDto extends IntersectionType(
+  SupplierPaymentQueryFilterBaseDto,
+  AmountRangeQueryFilterDto,
+) {}

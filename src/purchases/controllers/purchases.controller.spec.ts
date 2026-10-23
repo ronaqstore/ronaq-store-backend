@@ -13,6 +13,8 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
 import { CancelImpactResponseDto } from '../../common-dto/response/cancel-impact.dto.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const prismaStub = {
   purchase: {
@@ -41,6 +43,11 @@ describe('PurchasesController', () => {
         PurchasesWriteService,
         PurchasesCancelService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
+
         {
           provide: AuthGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },

@@ -132,6 +132,26 @@ describe('Product DTO validation', () => {
     expect(dto.isActive).toBe(expected);
   });
 
+  it.each([
+    ['true', true],
+    ['false', false],
+  ])('converts isPublished=%s to boolean %s', (input, expected) => {
+    const dto = plainToInstance(ProductQueryFilterDto, { isPublished: input });
+
+    expect(dto.isPublished).toBe(expected);
+  });
+
+  it('accepts minSellingPrice and maxSellingPrice as integers', async () => {
+    const dto = plainToInstance(ProductQueryFilterDto, {
+      minSellingPrice: '5000000',
+      maxSellingPrice: '15000000',
+    });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+    expect(dto.minSellingPrice).toBe(5_000_000);
+    expect(dto.maxSellingPrice).toBe(15_000_000);
+  });
+
   it('rejects an unsupported sortBy field', async () => {
     const dto = plainToInstance(ProductQueryFilterDto, { sortBy: 'whatever' });
 

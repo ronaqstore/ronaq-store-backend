@@ -35,11 +35,16 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
+import {
+  buildTokenizedSearchAnd,
+  stripDocSearchPrefix,
+} from '../../helpers/tokenized-search.helper.js';
 import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import {
   paymentExceedsOutstanding,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 
 export type CreateSupplierPaymentResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
@@ -185,27 +190,38 @@ export class SupplierPaymentsService {
     if (query.purchaseId) where.purchaseId = query.purchaseId;
     if (query.status) where.status = query.status;
 
-    const dateFilters: Prisma.SupplierPaymentWhereInput[] = [];
+    const andFilters: Prisma.SupplierPaymentWhereInput[] = [];
     if (query.from)
-      dateFilters.push({ paymentDate: { gte: new Date(query.from) } });
-    if (query.to)
-      dateFilters.push({ paymentDate: { lte: new Date(query.to) } });
-    if (dateFilters.length > 0) where.AND = dateFilters;
-
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      where.OR = [
-        { supplier: { name: { contains: term, mode: 'insensitive' } } },
-        { purchase: { purchaseNo: { contains: term, mode: 'insensitive' } } },
-      ];
-    }
+      andFilters.push({ paymentDate: { gte: new Date(query.from) } });
+    if (query.to) andFilters.push({ paymentDate: { lte: new Date(query.to) } });
+    const amountFilter = buildAmountRangeFilter(
+      query.minAmount,
+      query.maxAmount,
+    );
+    if (amountFilter) andFilters.push({ amount: amountFilter });
+    andFilters.push(
+      ...buildTokenizedSearchAnd<Prisma.SupplierPaymentWhereInput>(
+        query.search,
+        (token) => {
+          const billTerm = stripDocSearchPrefix(token);
+          return [
+            { supplier: { name: { contains: token, mode: 'insensitive' } } },
+            { notes: { contains: token, mode: 'insensitive' } },
+            {
+              purchase: {
+                purchaseNo: { contains: billTerm, mode: 'insensitive' },
+              },
+            },
+          ];
+        },
+      ),
+    );
+    if (andFilters.length > 0) where.AND = andFilters;
 
     const orderBy =
       sortBy === 'supplierName'
         ? ({ supplier: { name: sortOrder } } as const)
-        : sortBy === 'purchaseNo'
-          ? ({ purchase: { purchaseNo: sortOrder } } as const)
-          : ({ [sortBy]: sortOrder } as const);
+        : ({ [sortBy]: sortOrder } as const);
 
     const [rows, total] = await Promise.all([
       this.prisma.supplierPayment.findMany({

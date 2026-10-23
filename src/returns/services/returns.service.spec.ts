@@ -682,7 +682,7 @@ describe('ReturnsService', () => {
           where: expect.objectContaining({
             shopId: SHOP_ID,
             saleId: SALE_ID,
-            OR: expect.any(Array),
+            AND: expect.any(Array),
           }),
         }),
       );

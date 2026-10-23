@@ -27,6 +27,12 @@ enum UnitCondition {
   USED
 }
 
+// Accessories (chargers, cables, airpods, covers, …): original vs copy/replica.
+enum ProductAuthenticity {
+  ORIGINAL
+  COPY
+}
+
 enum UnitStatus {
   IN_STOCK
   SOLD
@@ -44,7 +50,9 @@ enum RecordStatus {
 
 enum PaymentMethod {
   CASH
-  // later: JAZZCASH, EASYPAISA, BANK, CARD
+  JAZZCASH
+  EASYPAISA
+  BANK
 }
 
 enum CashDirection {
@@ -94,7 +102,12 @@ enum ReturnCondition {
 }
 
 // Phone legal status in Pakistan. NULL on a product = not applicable (accessories).
+// Android listings use PTA_APPROVED | NON_PTA.
+// iPhone listings may also use JV | BYPASS | MDM_BYPASS.
 enum PtaStatus {
   PTA_APPROVED
   NON_PTA
+  JV
+  BYPASS
+  MDM_BYPASS
 }

@@ -48,14 +48,14 @@ export class InventoryController {
 
   @Get('/units')
   @ApiOperation({
-    summary: 'List in-stock phone units for a product',
+    summary: 'List phone units for a product',
     description:
-      'Returns IN_STOCK inventory units (id + IMEI) for the given product so the sale / write-off UI can pick one.',
+      'Returns inventory units (id, IMEI, cost, status, condition, supplier/purchase/sale info) for the given product.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
-      ResponseInventoryUnitDto,
-      'In-stock units fetched successfully',
+      PaginatedResponseDTO,
+      'Inventory units fetched successfully',
     ),
   )
   @ApiResponse(BAD_REQUEST_RESPONSE)
@@ -65,14 +65,16 @@ export class InventoryController {
   async listUnits(
     @Query() query: InventoryUnitQueryFilterDto,
     @Req() req: OwnerRequest,
-  ): Promise<ApiSuccessResponseDTO<ResponseInventoryUnitDto[]>> {
+  ): Promise<
+    ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseInventoryUnitDto>>
+  > {
     try {
-      const units = await this.inventoryService.listInStockUnits(
-        query.productId,
+      const units = await this.inventoryService.listUnits(
+        query,
         req.user.shopId,
       );
       return new ApiSuccessResponseDTO(
-        'In-stock units fetched successfully',
+        'Inventory units fetched successfully',
         units,
       );
     } catch (error) {
@@ -138,7 +140,7 @@ export class InventoryController {
     description:
       'Paginated history of stock adjustments and write-offs, scoped to the shop in the JWT. ' +
       'Defaults to manual changes (ADJUSTMENT/DAMAGED/LOST) only — purchase and sale movements belong to the ledger, not this screen. ' +
-      'Filter by type, product, a createdAt date range and/or a search term that matches the product name or the reason.',
+      'Filter by type, productId, exact quantityChange, reason (any word contains match), a createdAt date range and/or a search term that matches the product name or the reason.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(

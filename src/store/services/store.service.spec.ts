@@ -7,6 +7,8 @@ import { StoreService } from './store.service.js';
 import { StoreCacheService } from './store-cache.service.js';
 import { R2StorageService } from './r2-storage.service.js';
 import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
+import { StorefrontRevalidateService } from './storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const makeJpegFile = async (withExif = false): Promise<UploadedImageFile> => {
   let image = sharp({
@@ -38,6 +40,9 @@ const settingsRow = {
   phoneNumber: null,
   address: null,
   city: null,
+  latitude: null,
+  longitude: null,
+  mapPlaceName: null,
   googleMapsUrl: null,
   openingHours: null,
   facebookUrl: null,
@@ -72,6 +77,11 @@ describe('StoreService (owner surface)', () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
+
         StoreService,
         StoreCacheService,
         {
@@ -87,10 +97,13 @@ describe('StoreService (owner surface)', () => {
           useValue: {
             shopStoreSettings: {
               findUnique: jest.fn(),
+              findMany: jest.fn().mockResolvedValue([]),
               create: jest.fn(),
               update: jest.fn(),
             },
             shop: { findUnique: jest.fn() },
+            platformAdmin: { findFirst: jest.fn().mockResolvedValue(null) },
+            user: { findFirst: jest.fn().mockResolvedValue(null) },
             product: {
               findFirst: jest.fn(),
               count: jest.fn(),
@@ -237,6 +250,63 @@ describe('StoreService (owner surface)', () => {
       await expect(
         service.updateSettings({ displayName: 'Khalid' }, 'shop-1', 'user-1'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects a store phone that matches a platform admin', async () => {
+      prisma.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+
+      await expect(
+        service.updateSettings(
+          { phoneNumber: '03001234567' },
+          'shop-1',
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.shopStoreSettings.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a store phone that matches another shop owner login', async () => {
+      prisma.platformAdmin.findFirst.mockResolvedValue(null);
+      prisma.user.findFirst.mockImplementation(
+        (args: { where?: { shopId?: string | { not: string } } }) => {
+          const shopIdFilter = args?.where?.shopId;
+          if (
+            shopIdFilter &&
+            typeof shopIdFilter === 'object' &&
+            'not' in shopIdFilter
+          ) {
+            return Promise.resolve({ id: 'owner-2' });
+          }
+          return Promise.resolve(null);
+        },
+      );
+
+      await expect(
+        service.updateSettings(
+          { phoneNumber: '923001234567' },
+          'shop-1',
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('stores a normalized phone when it is free', async () => {
+      prisma.platformAdmin.findFirst.mockResolvedValue(null);
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.shopStoreSettings.findMany.mockResolvedValue([]);
+      prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
+      prisma.shopStoreSettings.update.mockResolvedValue(settingsRow);
+
+      await service.updateSettings(
+        { phoneNumber: '03001234567' },
+        'shop-1',
+        'user-1',
+      );
+
+      expect(prisma.shopStoreSettings.update).toHaveBeenCalledWith({
+        where: { shopId: 'shop-1' },
+        data: { phoneNumber: '03001234567' },
+      });
     });
   });
 

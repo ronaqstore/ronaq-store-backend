@@ -21,14 +21,19 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
+import { normalizePhoneOrRaw } from '../../helpers/phone.helper.js';
+import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import {
-  normalizePhone,
-  normalizePhoneOrRaw,
-} from '../../helpers/phone.helper.js';
-import {
+  loginPhoneAlreadyTaken,
   requiredFieldCannotBeNull,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { customerCurrentBalances } from '../../helpers/party-current-balance.helper.js';
+import {
+  buildCustomerCurrentBalanceFilterSql,
+  buildCustomerListWhere,
+  customerListNeedsCurrentBalanceJoin,
+} from '../helpers/customer-list-where.helper.js';
 
 @Injectable()
 export class CustomersService {
@@ -42,11 +47,14 @@ export class CustomersService {
 
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    const phone = dto.phone ? normalizePhoneOrRaw(dto.phone) : null;
+    await this.assertPhoneAvailable(phone);
+
     await this.prisma.customer.create({
       data: {
         shopId,
         name: dto.name.trim(),
-        phone: dto.phone ? normalizePhoneOrRaw(dto.phone) : null,
+        phone,
         address: dto.address?.trim() ?? null,
         notes: dto.notes?.trim() ?? null,
         openingBalance: BigInt(dto.openingBalance ?? 0),
@@ -66,25 +74,19 @@ export class CustomersService {
       query.pageSize,
       100,
     );
-    const sortBy = query.sortBy ?? 'createdAt';
+    const sortBy = query.sortBy ?? 'name';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.CustomerWhereInput = { shopId };
-    const search = query.search?.trim();
-    if (search) {
-      const branches: Prisma.CustomerWhereInput[] = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search } },
-      ];
+    let where = buildCustomerListWhere(query, shopId);
 
-      const canonical = normalizePhone(search);
-      if (canonical && canonical !== search) {
-        branches.push({ phone: { contains: canonical } });
-      }
-      where.OR = branches;
-    }
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
+    if (customerListNeedsCurrentBalanceJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildCustomerCurrentBalanceFilterSql(query, shopId),
+      );
+      where = {
+        ...where,
+        id: { in: matched.map((row) => row.id) },
+      };
     }
 
     const [items, total] = await Promise.all([
@@ -97,8 +99,16 @@ export class CustomersService {
       this.prisma.customer.count({ where }),
     ]);
 
+    const ledgerDeltas = await customerCurrentBalances(
+      this.prisma,
+      shopId,
+      items.map((item) => item.id),
+    );
+
     return new PaginatedResponseDTO<ResponseCustomerDto>(
-      items.map((item) => this.toResponse(item)),
+      items.map((item) =>
+        this.toResponse(item, ledgerDeltas.get(item.id) ?? 0),
+      ),
       total,
       page,
       pageSize,
@@ -115,7 +125,10 @@ export class CustomersService {
     if (!customer) {
       throw new NotFoundException(resourceNotFound('Customer', id));
     }
-    return this.toResponse(customer);
+    const ledgerDeltas = await customerCurrentBalances(this.prisma, shopId, [
+      id,
+    ]);
+    return this.toResponse(customer, ledgerDeltas.get(id) ?? 0);
   }
 
   async getCustomerLedger(
@@ -288,7 +301,9 @@ export class CustomersService {
       data.name = dto.name.trim();
     }
     if (dto.phone !== undefined) {
-      data.phone = dto.phone === null ? null : normalizePhoneOrRaw(dto.phone);
+      const phone = dto.phone === null ? null : normalizePhoneOrRaw(dto.phone);
+      await this.assertPhoneAvailable(phone, id);
+      data.phone = phone;
     }
     if (dto.address !== undefined) {
       data.address = dto.address === null ? null : dto.address.trim();
@@ -329,7 +344,25 @@ export class CustomersService {
     return new StatusBaseResponseDTO(true, 'Customer deactivated successfully');
   }
 
-  private toResponse(customer: Customer): ResponseCustomerDto {
-    return { ...customer, openingBalance: Number(customer.openingBalance) };
+  private toResponse(customer: Customer, ledgerDelta = 0): ResponseCustomerDto {
+    const openingBalance = Number(customer.openingBalance);
+    return {
+      ...customer,
+      openingBalance,
+      currentBalance: openingBalance + ledgerDelta,
+    };
+  }
+
+  private async assertPhoneAvailable(
+    phone: string | null,
+    excludeCustomerId?: string,
+  ): Promise<void> {
+    if (!phone) return;
+    const conflict = await findLoginPhoneConflict(this.prisma, phone, {
+      excludeCustomerId,
+    });
+    if (conflict) {
+      throw new BadRequestException(loginPhoneAlreadyTaken(phone));
+    }
   }
 }

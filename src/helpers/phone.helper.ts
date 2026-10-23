@@ -14,5 +14,13 @@ export const normalizePhone = (
   return null;
 };
 
+export const toLocalPkPhone = (
+  input: string | null | undefined,
+): string | null => {
+  const canonical = normalizePhone(input);
+  if (!canonical) return null;
+  return `0${canonical.slice(2)}`;
+};
+
 export const normalizePhoneOrRaw = (input: string): string =>
   normalizePhone(input) ?? input.replace(/[\s\-().]/g, '').replace(/^\+/, '');

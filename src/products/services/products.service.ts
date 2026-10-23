@@ -18,45 +18,38 @@ import {
 } from '../../helpers/paginate-helper.js';
 import {
   resourceNotFound,
-  duplicateName,
   duplicateFieldValue,
   trackingTypeLocked,
   stockNotEmptyForTrackingChange,
   productNotPublishable,
+  ptaStatusNotAllowedForBrand,
 } from '../../errors/error.builder.js';
 import {
   isUniqueConstraintViolation,
   violatedColumn,
 } from '../../helpers/prisma-error-helper.js';
+import { isPtaAllowedForBrand } from '../../helpers/device-family.helper.js';
 import { BulkPublishProductsDto } from '../dto/bulk-publish-products.dto.js';
-
-type ProductRow = Prisma.ProductGetPayload<{
-  include: {
-    category: { select: { name: true } };
-    brand: { select: { name: true } };
-    stockLevel: { select: { quantityOnHand: true } };
-    images: { select: { url: true; sortOrder: true } };
-    _count: { select: { inventoryUnits: { where: { status: 'IN_STOCK' } } } };
-  };
-}>;
-
-const PRODUCT_INCLUDE = {
-  category: { select: { name: true } },
-  brand: { select: { name: true } },
-  stockLevel: { select: { quantityOnHand: true } },
-  images: {
-    select: { url: true, sortOrder: true },
-    orderBy: { sortOrder: 'asc' as const },
-    take: 5,
-  },
-  _count: { select: { inventoryUnits: { where: { status: 'IN_STOCK' } } } },
-} as const;
+import {
+  PRODUCT_INCLUDE,
+  mapProductToResponse,
+} from '../helpers/product.mapper.js';
+import { assertNoDuplicateVariant } from '../helpers/product-variant-uniqueness.helper.js';
+import {
+  buildProductListWhere,
+  buildProductStockFilterSql,
+  productListNeedsStockJoin,
+} from '../helpers/product-list-where.helper.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
+  ) {}
 
   async createProduct(
     dto: CreateProductDto,
@@ -69,58 +62,84 @@ export class ProductsService {
     const barcode = dto.barcode?.trim() || null;
 
     await this.assertCategoryOwned(dto.categoryId, shopId);
-    await this.assertBrandOwned(dto.brandId, shopId);
+    const brandName = await this.assertBrandOwned(dto.brandId, shopId);
+    this.assertPtaForBrand(brandName, dto.ptaStatus, dto.trackingType);
 
     const willBeActive = dto.isActive ?? true;
     if (dto.isPublished === true && !willBeActive) {
       throw new BadRequestException(productNotPublishable(name));
     }
 
+    const model = dto.model?.trim() || null;
+    const color = dto.color?.trim() || null;
+    const ram = dto.ram?.trim() || null;
+    const storage = dto.storage?.trim() || null;
+    const ptaStatus =
+      dto.trackingType === 'SERIALIZED' ? (dto.ptaStatus ?? null) : null;
+    const authenticity = dto.authenticity ?? null;
+
+    await assertNoDuplicateVariant(this.prisma, shopId, {
+      name,
+      model,
+      color,
+      ram,
+      storage,
+      ptaStatus,
+      authenticity,
+    });
+
     let createdProductId = '';
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const product = await tx.product.create({
-          data: {
-            shopId,
-            categoryId: dto.categoryId,
-            brandId: dto.brandId,
-            name,
-            trackingType: dto.trackingType,
-            model: dto.model?.trim() || null,
-            color: dto.color?.trim() || null,
-            ram: dto.ram?.trim() || null,
-            storage: dto.storage?.trim() || null,
-            sku,
-            barcode,
-            description: dto.description?.trim() || null,
-            imageUrl: dto.imageUrl?.trim() || null,
-            defaultPurchasePrice: dto.defaultPurchasePrice ?? 0,
-            defaultSellingPrice: dto.defaultSellingPrice ?? 0,
-            lowStockThreshold: dto.lowStockThreshold ?? 0,
-            isActive: willBeActive,
-            isPublished: dto.isPublished ?? false,
-            publicDescription: dto.publicDescription?.trim() || null,
-            contactForPrice: dto.contactForPrice ?? false,
-            ptaStatus: dto.ptaStatus ?? null,
-          },
-        });
-        createdProductId = product.id;
-
-        if (dto.trackingType === 'QUANTITY') {
-          await tx.stockLevel.create({
+      await this.prisma.$transaction(
+        async (tx) => {
+          const product = await tx.product.create({
             data: {
-              productId: product.id,
               shopId,
-              quantityOnHand: 0,
-              avgUnitCost: 0,
+              categoryId: dto.categoryId,
+              brandId: dto.brandId,
+              name,
+              trackingType: dto.trackingType,
+              model,
+              color,
+              ram,
+              storage,
+              sku,
+              barcode,
+              description: dto.description?.trim() || null,
+              imageUrl: dto.imageUrl?.trim() || null,
+              defaultPurchasePrice: dto.defaultPurchasePrice ?? 0,
+              defaultSellingPrice: dto.defaultSellingPrice ?? 0,
+              lowStockThreshold: dto.lowStockThreshold ?? 0,
+              isActive: willBeActive,
+              isPublished: dto.isPublished ?? false,
+              publicDescription: dto.publicDescription?.trim() || null,
+              ptaStatus,
+              authenticity,
             },
           });
-        }
-      });
+          createdProductId = product.id;
+
+          if (dto.trackingType === 'QUANTITY') {
+            await tx.stockLevel.create({
+              data: {
+                productId: product.id,
+                shopId,
+                quantityOnHand: 0,
+                avgUnitCost: 0,
+              },
+            });
+          }
+        },
+        {
+          maxWait: 15_000,
+          timeout: 30_000,
+        },
+      );
     } catch (error) {
-      throw this.mapDuplicate(error, name, sku, barcode);
+      throw this.mapDuplicate(error, sku, barcode);
     }
 
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(
       true,
       'Product created successfully',
@@ -137,25 +156,18 @@ export class ProductsService {
       query.pageSize,
       100,
     );
-    const sortBy = query.sortBy ?? 'createdAt';
+    const sortBy = query.sortBy ?? 'name';
     const sortOrder = query.sortOrder ?? 'desc';
+    let where = buildProductListWhere(query, shopId);
 
-    const where: Prisma.ProductWhereInput = { shopId };
-    if (query.categoryId) where.categoryId = query.categoryId;
-    if (query.brandId) where.brandId = query.brandId;
-    if (query.trackingType) where.trackingType = query.trackingType;
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
-    }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-
-      where.OR = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { model: { contains: term, mode: 'insensitive' } },
-        { sku: { contains: term, mode: 'insensitive' } },
-        { barcode: { contains: term, mode: 'insensitive' } },
-      ];
+    if (productListNeedsStockJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildProductStockFilterSql(query, shopId),
+      );
+      where = {
+        ...where,
+        id: { in: matched.map((row) => row.id) },
+      };
     }
 
     const [rows, total] = await Promise.all([
@@ -164,13 +176,13 @@ export class ProductsService {
         include: PRODUCT_INCLUDE,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: [{ [sortBy]: sortOrder }, { id: 'asc' }],
       }),
       this.prisma.product.count({ where }),
     ]);
 
     return new PaginatedResponseDTO<ResponseProductDto>(
-      rows.map((row) => this.toResponse(row)),
+      rows.map((row) => mapProductToResponse(row)),
       total,
       page,
       pageSize,
@@ -188,7 +200,7 @@ export class ProductsService {
     if (!row) {
       throw new NotFoundException(resourceNotFound('Product', id));
     }
-    return this.toResponse(row);
+    return mapProductToResponse(row);
   }
 
   async updateProduct(
@@ -212,8 +224,15 @@ export class ProductsService {
     if (dto.categoryId !== undefined) {
       await this.assertCategoryOwned(dto.categoryId, shopId);
     }
+    let brandName: string | undefined;
     if (dto.brandId !== undefined) {
-      await this.assertBrandOwned(dto.brandId, shopId);
+      brandName = await this.assertBrandOwned(dto.brandId, shopId);
+    } else {
+      const brand = await this.prisma.brand.findFirst({
+        where: { id: existing.brandId, shopId },
+        select: { name: true },
+      });
+      brandName = brand?.name;
     }
 
     const trackingTypeChanges =
@@ -236,6 +255,49 @@ export class ProductsService {
     if (dto.isPublished === true && !willBeActive) {
       throw new BadRequestException(productNotPublishable(existing.name));
     }
+
+    const nextTrackingForPta = dto.trackingType ?? existing.trackingType;
+    const nextPta =
+      dto.ptaStatus !== undefined ? dto.ptaStatus : existing.ptaStatus;
+    this.assertPtaForBrand(brandName, nextPta, nextTrackingForPta);
+
+    const nextName = newName ?? existing.name;
+    const nextModel =
+      dto.model !== undefined ? dto.model?.trim() || null : existing.model;
+    const nextColor =
+      dto.color !== undefined ? dto.color?.trim() || null : existing.color;
+    const nextRam =
+      dto.ram !== undefined ? dto.ram?.trim() || null : existing.ram;
+    const nextStorage =
+      dto.storage !== undefined
+        ? dto.storage?.trim() || null
+        : existing.storage;
+    const nextAuthenticity =
+      dto.authenticity !== undefined
+        ? dto.authenticity || null
+        : existing.authenticity;
+    const nextTracking = dto.trackingType ?? existing.trackingType;
+    const nextPtaStored =
+      nextTracking === 'SERIALIZED'
+        ? dto.ptaStatus !== undefined
+          ? dto.ptaStatus
+          : existing.ptaStatus
+        : null;
+
+    await assertNoDuplicateVariant(
+      this.prisma,
+      shopId,
+      {
+        name: nextName,
+        model: nextModel,
+        color: nextColor,
+        ram: nextRam,
+        storage: nextStorage,
+        ptaStatus: nextPtaStored,
+        authenticity: nextAuthenticity,
+      },
+      id,
+    );
 
     const data: Prisma.ProductUpdateInput = {};
     if (newName !== undefined) data.name = newName;
@@ -271,10 +333,14 @@ export class ProductsService {
     if (dto.publicDescription !== undefined) {
       data.publicDescription = dto.publicDescription?.trim() || null;
     }
-    if (dto.contactForPrice !== undefined) {
-      data.contactForPrice = dto.contactForPrice;
+    if (dto.ptaStatus !== undefined) {
+      data.ptaStatus = nextTracking === 'SERIALIZED' ? dto.ptaStatus : null;
+    } else if (trackingTypeChanges && nextTracking === 'QUANTITY') {
+      data.ptaStatus = null;
     }
-    if (dto.ptaStatus !== undefined) data.ptaStatus = dto.ptaStatus;
+    if (dto.authenticity !== undefined) {
+      data.authenticity = dto.authenticity || null;
+    }
 
     if (Object.keys(data).length === 0) {
       return new StatusBaseResponseDTO(true, 'Product updated successfully');
@@ -305,9 +371,10 @@ export class ProductsService {
         }
       });
     } catch (error) {
-      throw this.mapDuplicate(error, newName, newSku, newBarcode);
+      throw this.mapDuplicate(error, newSku, newBarcode);
     }
 
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Product updated successfully');
   }
 
@@ -324,6 +391,7 @@ export class ProductsService {
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Product', id));
     }
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(true, 'Product deactivated successfully');
   }
 
@@ -361,6 +429,7 @@ export class ProductsService {
 
     const count = products.length;
     const word = `${count} product${count === 1 ? '' : 's'}`;
+    this.storefrontRevalidate.invalidateShopById(shopId);
     return new StatusBaseResponseDTO(
       true,
       `${word} ${dto.isPublished ? 'published' : 'unpublished'} successfully`,
@@ -383,13 +452,27 @@ export class ProductsService {
   private async assertBrandOwned(
     brandId: string,
     shopId: string,
-  ): Promise<void> {
+  ): Promise<string> {
     const found = await this.prisma.brand.findFirst({
       where: { id: brandId, shopId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!found) {
       throw new NotFoundException(resourceNotFound('Brand', brandId));
+    }
+    return found.name;
+  }
+
+  private assertPtaForBrand(
+    brandName: string | null | undefined,
+    ptaStatus: string | null | undefined,
+    trackingType: string,
+  ): void {
+    if (trackingType !== 'SERIALIZED' || ptaStatus == null) return;
+    if (!isPtaAllowedForBrand(brandName, ptaStatus)) {
+      throw new BadRequestException(
+        ptaStatusNotAllowedForBrand(brandName ?? 'this brand', ptaStatus),
+      );
     }
   }
 
@@ -421,7 +504,6 @@ export class ProductsService {
 
   private mapDuplicate(
     error: unknown,
-    name?: string,
     sku?: string | null,
     barcode?: string | null,
   ): unknown {
@@ -437,49 +519,6 @@ export class ProductsService {
         duplicateFieldValue('Product', 'barcode', barcode),
       );
     }
-    if (name) {
-      return new BadRequestException(duplicateName('Product', name));
-    }
     return error;
-  }
-
-  private toResponse(row: ProductRow): ResponseProductDto {
-    const quantityOnHand =
-      row.trackingType === 'QUANTITY'
-        ? (row.stockLevel?.quantityOnHand ?? 0)
-        : row._count.inventoryUnits;
-    const imageUrls = row.images.map((image) => image.url);
-    const coverUrl = row.imageUrl ?? imageUrls[0] ?? null;
-
-    return {
-      id: row.id,
-      shopId: row.shopId,
-      categoryId: row.categoryId,
-      brandId: row.brandId,
-      categoryName: row.category.name,
-      brandName: row.brand.name,
-      name: row.name,
-      trackingType: row.trackingType,
-      model: row.model,
-      color: row.color,
-      ram: row.ram,
-      storage: row.storage,
-      sku: row.sku,
-      barcode: row.barcode,
-      description: row.description,
-      imageUrl: coverUrl,
-      imageUrls,
-      defaultPurchasePrice: Number(row.defaultPurchasePrice),
-      defaultSellingPrice: Number(row.defaultSellingPrice),
-      lowStockThreshold: row.lowStockThreshold,
-      isActive: row.isActive,
-      isPublished: row.isPublished,
-      publicDescription: row.publicDescription,
-      contactForPrice: row.contactForPrice,
-      ptaStatus: row.ptaStatus,
-      quantityOnHand,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
   }
 }

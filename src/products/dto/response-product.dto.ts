@@ -111,20 +111,21 @@ export class ResponseProductDto {
   })
   publicDescription?: string | null;
 
-  @ApiProperty({
-    description:
-      'When true the public store hides the price and shows "Contact for price".',
-    example: false,
-  })
-  contactForPrice: boolean;
-
   @ApiPropertyOptional({
     description:
       'PTA approval status for phones (PTA_APPROVED / NON_PTA). Null for accessories.',
     enum: ['PTA_APPROVED', 'NON_PTA'],
     example: 'PTA_APPROVED',
   })
-  ptaStatus?: 'PTA_APPROVED' | 'NON_PTA' | null;
+  ptaStatus?:
+    'PTA_APPROVED' | 'NON_PTA' | 'JV' | 'BYPASS' | 'MDM_BYPASS' | null;
+
+  @ApiPropertyOptional({
+    description: 'ORIGINAL or COPY for accessories. Null for phones / unset.',
+    enum: ['ORIGINAL', 'COPY'],
+    example: 'ORIGINAL',
+  })
+  authenticity?: 'ORIGINAL' | 'COPY' | null;
 
   @ApiProperty({
     description:

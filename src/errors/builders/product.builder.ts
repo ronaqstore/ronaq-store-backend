@@ -1,6 +1,16 @@
 import { HttpStatus } from '@nestjs/common';
 import { ErrorResponseDTO } from '../../common-dto/response/error-response.dto.js';
 
+export const duplicateProductVariant = (name: string): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    `Product "${name}" with these variant details already exists`,
+    [
+      `Another "${name}" in your shop already uses the same color / storage / RAM / PTA (or authenticity). Same name is fine for different variants — change a variant detail, or pick the existing product.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const trackingTypeLocked = (name: string): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     `Cannot change the stock tracking type of "${name}"`,

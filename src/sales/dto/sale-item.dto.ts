@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 export class SaleItemDto {
   @ApiProperty({
@@ -41,4 +41,16 @@ export class SaleItemDto {
   @Min(0)
   @Max(Number.MAX_SAFE_INTEGER)
   unitPrice: number;
+
+  @ApiPropertyOptional({
+    description:
+      'USED phones only: shop warranty of 1, 2, or 3 days. ' +
+      'Omit for NEW phones (company warranty) and for accessories.',
+    example: 2,
+    enum: [1, 2, 3],
+  })
+  @IsOptional()
+  @IsInt()
+  @IsIn([1, 2, 3])
+  warrantyDays?: number;
 }

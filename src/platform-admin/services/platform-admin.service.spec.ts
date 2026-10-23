@@ -103,6 +103,12 @@ const prismaStub = {
   platformAdmin: {
     findFirst: jest.fn(),
   },
+  supplier: {
+    findFirst: jest.fn(),
+  },
+  customer: {
+    findFirst: jest.fn(),
+  },
   $transaction: jest.fn((cb: any) => cb(txStub)),
 };
 
@@ -138,10 +144,17 @@ describe('PlatformAdminService', () => {
     prismaStub.user.findUnique.mockResolvedValue(null);
     prismaStub.user.findFirst.mockResolvedValue(null);
     prismaStub.platformAdmin.findFirst.mockResolvedValue(null);
+    prismaStub.supplier.findFirst.mockResolvedValue(null);
+    prismaStub.customer.findFirst.mockResolvedValue(null);
     service = new PlatformAdminService(
       prismaStub as unknown as PrismaService,
       authStub as unknown as AuthService,
       storeStub as any,
+      {
+        invalidateStoresDirectory: jest.fn(),
+        invalidateShopById: jest.fn(),
+        invalidateShopRef: jest.fn(),
+      } as any,
     );
   });
 
@@ -241,7 +254,8 @@ describe('PlatformAdminService', () => {
       await expect(service.createShop(validDto)).rejects.toMatchObject({
         status: 400,
         response: expect.objectContaining({
-          error: 'This phone number already has a Ronaq Store account',
+          error: 'This number is already in use',
+          code: 'PHONE_ALREADY_TAKEN',
         }),
       });
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
@@ -531,6 +545,83 @@ describe('PlatformAdminService', () => {
               expect.objectContaining({ status: ShopStatus.ACTIVE }),
             ]),
           }),
+        }),
+      );
+    });
+
+    it('searches shop name, address, owner name, and phone variants', async () => {
+      prismaStub.shop.findMany.mockResolvedValue([]);
+      prismaStub.shop.count.mockResolvedValue(0);
+
+      await service.listShops({
+        page: 1,
+        pageSize: 10,
+        search: '03020000120',
+      });
+
+      expect(prismaStub.shop.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              { name: { contains: '03020000120', mode: 'insensitive' } },
+              { address: { contains: '03020000120', mode: 'insensitive' } },
+              {
+                users: {
+                  some: {
+                    name: { contains: '03020000120', mode: 'insensitive' },
+                  },
+                },
+              },
+              {
+                phone: { contains: '923020000120', mode: 'insensitive' },
+              },
+              {
+                users: {
+                  some: {
+                    phone: { contains: '923020000120', mode: 'insensitive' },
+                  },
+                },
+              },
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('filters by subscription and created date ranges', async () => {
+      prismaStub.shop.findMany.mockResolvedValue([]);
+      prismaStub.shop.count.mockResolvedValue(0);
+
+      await service.listShops({
+        page: 1,
+        pageSize: 10,
+        subscriptionFrom: '2026-10-01',
+        subscriptionTo: '2026-10-31',
+        createdFrom: '2026-01-01',
+        createdTo: '2026-01-31',
+        sortBy: 'name',
+        sortOrder: 'asc',
+      });
+
+      expect(prismaStub.shop.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              {
+                subscriptionEndsAt: {
+                  gte: new Date('2026-10-01T00:00:00.000Z'),
+                  lt: new Date('2026-11-01T00:00:00.000Z'),
+                },
+              },
+              {
+                createdAt: {
+                  gte: new Date('2026-01-01T00:00:00.000Z'),
+                  lt: new Date('2026-02-01T00:00:00.000Z'),
+                },
+              },
+            ]),
+          }),
+          orderBy: { name: 'asc' },
         }),
       );
     });

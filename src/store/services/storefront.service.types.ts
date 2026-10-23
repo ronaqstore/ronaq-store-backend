@@ -9,6 +9,8 @@ export type StorefrontSettingsProfile = {
   phoneNumber: string | null;
   address: string | null;
   city: string | null;
+  latitude: number | null;
+  longitude: number | null;
   googleMapsUrl: string | null;
   openingHours: string | null;
   facebookUrl: string | null;

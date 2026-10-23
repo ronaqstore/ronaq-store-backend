@@ -21,11 +21,11 @@ export class ExpenseCategoryQueryFilterDto extends ListPaginationQueryFilterDto 
 
   @ApiPropertyOptional({
     example: 'name',
-    description: 'Field to sort by. name | createdAt | updatedAt.',
+    description: 'Field to sort by. name | createdAt.',
   })
   @IsOptional()
-  @IsIn(['name', 'createdAt', 'updatedAt'])
-  sortBy?: 'name' | 'createdAt' | 'updatedAt' = 'name';
+  @IsIn(['name', 'createdAt'])
+  sortBy?: 'name' | 'createdAt' = 'name';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'asc';

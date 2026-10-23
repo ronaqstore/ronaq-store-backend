@@ -2,14 +2,33 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import {
   ResponsePurchaseDto,
   ResponsePurchaseItemDto,
+  ResponsePurchasePaymentDto,
 } from '../dto/response-purchase.dto.js';
 
 export const PURCHASE_INCLUDE = {
   supplier: { select: { name: true } },
+  supplierPayments: {
+    select: {
+      id: true,
+      amount: true,
+      paymentDate: true,
+      status: true,
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
   items: {
     include: {
       product: { select: { name: true } },
-      inventoryUnits: { select: { imei1: true } },
+      inventoryUnits: {
+        select: {
+          imei1: true,
+          imei2: true,
+          condition: true,
+          batteryHealth: true,
+          askingPrice: true,
+          defectNotes: true,
+        },
+      },
     },
   },
 } satisfies Prisma.PurchaseInclude;
@@ -47,7 +66,22 @@ export function mapPurchaseToResponse(
       quantity: item.quantity,
       unitCost: Number(item.unitCost),
       totalCost: Number(item.totalCost),
-      imeis: item.inventoryUnits.map((unit) => unit.imei1),
+      phoneUnits: item.inventoryUnits.map((unit) => ({
+        imei1: unit.imei1,
+        imei2: unit.imei2,
+        condition: unit.condition,
+        batteryHealth: unit.batteryHealth,
+        askingPrice: unit.askingPrice != null ? Number(unit.askingPrice) : null,
+        defectNotes: unit.defectNotes,
+      })),
     })),
+    payments: row.supplierPayments.map(
+      (payment): ResponsePurchasePaymentDto => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        paymentDate: payment.paymentDate.toISOString().slice(0, 10),
+        status: payment.status,
+      }),
+    ),
   };
 }

@@ -58,7 +58,7 @@ export class BrandsService {
       query.pageSize,
       100,
     );
-    const sortBy = query.sortBy ?? 'createdAt';
+    const sortBy = query.sortBy ?? 'name';
     const sortOrder = query.sortOrder ?? 'desc';
 
     const where: Prisma.BrandWhereInput = buildShopNamedEntityWhere(
@@ -72,7 +72,7 @@ export class BrandsService {
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: [{ [sortBy]: sortOrder }, { id: 'asc' }],
       }),
       this.prisma.brand.count({ where }),
     ]);

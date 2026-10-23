@@ -1,21 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayNotEmpty,
-  ArrayUnique,
   IsArray,
   IsIn,
   IsInt,
   IsOptional,
-  IsString,
   IsUUID,
-  Matches,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { PurchasePhoneUnitDto } from './purchase-phone-unit.dto.js';
 
-const IMEI_PATTERN = /^[0-9A-Za-z]{4,20}$/;
-const IMEI_COUNT_MAX = 50_000;
+const PHONE_UNIT_COUNT_MAX = 50_000;
 
 export class PurchaseItemDto {
   @ApiProperty({
@@ -28,8 +27,8 @@ export class PurchaseItemDto {
 
   @ApiProperty({
     description:
-      'How many were bought. More than 0. For SERIALIZED products this must equal the number of IMEIs.',
-    example: 40,
+      'How many were bought. More than 0. For SERIALIZED products this must equal phoneUnits.length.',
+    example: 2,
   })
   @IsInt()
   @Min(1)
@@ -48,21 +47,20 @@ export class PurchaseItemDto {
 
   @ApiPropertyOptional({
     description:
-      'SERIALIZED products only. One IMEI per phone. Length must equal quantity.',
-    example: ['111223344556677', '111223344556688'],
+      'SERIALIZED products only. One entry per physical phone (IMEI1 + IMEI2). Length must equal quantity.',
+    type: [PurchasePhoneUnitDto],
   })
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
-  @ArrayMaxSize(IMEI_COUNT_MAX)
-  @ArrayUnique()
-  @IsString({ each: true })
-  @Matches(IMEI_PATTERN, { each: true })
-  imeis?: string[];
+  @ArrayMaxSize(PHONE_UNIT_COUNT_MAX)
+  @ValidateNested({ each: true })
+  @Type(() => PurchasePhoneUnitDto)
+  phoneUnits?: PurchasePhoneUnitDto[];
 
   @ApiPropertyOptional({
     description:
-      'SERIALIZED products only. Physical condition of the phones on this line.',
+      'Default condition for phoneUnits that omit their own condition.',
     example: 'NEW',
     default: 'NEW',
   })

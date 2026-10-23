@@ -12,9 +12,12 @@ import {
   normalizePhone,
   normalizePhoneOrRaw,
 } from '../../helpers/phone.helper.js';
+import { phoneSearchVariants } from '../../helpers/phone-search.helper.js';
 import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
 import { logInfo } from '../../helpers/logger-helper.js';
+import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
+import { dateColumnRange } from '../../helpers/date.helper.js';
 import {
   getSkipNumber,
   normalizePagination,
@@ -48,6 +51,7 @@ import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
 import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { StoreService } from '../../store/services/store.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import {
   storeSlugBase,
@@ -62,6 +66,7 @@ export class PlatformAdminService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly storeService: StoreService,
+    private readonly storefrontRevalidate: StorefrontRevalidateService,
   ) {}
 
   async getOverview(): Promise<PlatformOverviewResponseDto> {
@@ -114,25 +119,44 @@ export class PlatformAdminService {
       );
     }
 
-    if (query.search?.trim()) {
-      const term = query.search.trim();
-      const branches: Prisma.ShopWhereInput[] = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { phone: { contains: term, mode: 'insensitive' } },
-        { address: { contains: term, mode: 'insensitive' } },
-        { users: { some: { name: { contains: term, mode: 'insensitive' } } } },
-        { users: { some: { phone: { contains: term, mode: 'insensitive' } } } },
-      ];
-      const canonical = normalizePhone(term);
-      if (canonical && canonical !== term) {
-        branches.push({ phone: { contains: canonical, mode: 'insensitive' } });
-        branches.push({
-          users: {
-            some: { phone: { contains: canonical, mode: 'insensitive' } },
-          },
-        });
-      }
-      andParts.push({ OR: branches });
+    andParts.push(
+      ...buildTokenizedSearchAnd<Prisma.ShopWhereInput>(
+        query.search,
+        (token) => {
+          const branches: Prisma.ShopWhereInput[] = [
+            { name: { contains: token, mode: 'insensitive' } },
+            { address: { contains: token, mode: 'insensitive' } },
+            {
+              users: {
+                some: { name: { contains: token, mode: 'insensitive' } },
+              },
+            },
+          ];
+          for (const phone of phoneSearchVariants(token)) {
+            branches.push({
+              phone: { contains: phone, mode: 'insensitive' },
+            });
+            branches.push({
+              users: {
+                some: { phone: { contains: phone, mode: 'insensitive' } },
+              },
+            });
+          }
+          return branches;
+        },
+      ),
+    );
+
+    if (query.subscriptionFrom || query.subscriptionTo) {
+      const from = query.subscriptionFrom ?? '1970-01-01';
+      const to = query.subscriptionTo ?? '9999-12-31';
+      andParts.push({ subscriptionEndsAt: dateColumnRange(from, to) });
+    }
+
+    if (query.createdFrom || query.createdTo) {
+      const from = query.createdFrom ?? '1970-01-01';
+      const to = query.createdTo ?? '9999-12-31';
+      andParts.push({ createdAt: dateColumnRange(from, to) });
     }
 
     const where: Prisma.ShopWhereInput =
@@ -295,6 +319,8 @@ export class PlatformAdminService {
           setupLinkExpiresAt: result.link.expiresAt.toISOString(),
         },
       );
+
+      this.storefrontRevalidate.invalidateStoresDirectory();
 
       return {
         shopId: result.shop.id,

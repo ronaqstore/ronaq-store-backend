@@ -1,6 +1,7 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, IntersectionType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsOptional, IsUUID } from 'class-validator';
+import { DocumentMoneyRangeQueryFilterDto } from '../../common-dto/query/document-money-range-query.filter.dto.js';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -10,7 +11,7 @@ import {
   optionalBooleanQueryTransform,
 } from '../../helpers/query-filter.decorators.js';
 
-export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
+class PurchaseQueryFilterBaseDto extends ListPaginationQueryFilterDto {
   @OptionalSearchQueryProperty(
     'AB-771',
     'Case-insensitive contains search across purchase number, the supplier invoice reference and the supplier name.',
@@ -27,11 +28,20 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'ACTIVE',
-    description: 'ACTIVE (default) or CANCELLED. Omit for both.',
+    description: 'ACTIVE or CANCELLED document status. Omit for both.',
   })
   @IsOptional()
   @IsIn(['ACTIVE', 'CANCELLED'])
   status?: 'ACTIVE' | 'CANCELLED';
+
+  @ApiPropertyOptional({
+    example: 'PAYABLE',
+    description:
+      'Payment state filter: PAID | PARTIAL | PAYABLE (due) | CANCELLED. CANCELLED matches document status.',
+  })
+  @IsOptional()
+  @IsIn(['PAID', 'PARTIAL', 'PAYABLE', 'CANCELLED'])
+  payStatus?: 'PAID' | 'PARTIAL' | 'PAYABLE' | 'CANCELLED';
 
   @ApiPropertyOptional({
     example: 'true',
@@ -57,25 +67,19 @@ export class PurchaseQueryFilterDto extends ListPaginationQueryFilterDto {
   @ApiPropertyOptional({
     example: 'purchaseDate',
     description:
-      'purchaseDate | purchaseNo | totalAmount | status | createdAt | updatedAt.',
+      'purchaseDate | purchaseNo | totalAmount | paid | outstanding.',
   })
   @IsOptional()
-  @IsIn([
-    'purchaseDate',
-    'purchaseNo',
-    'totalAmount',
-    'status',
-    'createdAt',
-    'updatedAt',
-  ])
+  @IsIn(['purchaseDate', 'purchaseNo', 'totalAmount', 'paid', 'outstanding'])
   sortBy?:
-    | 'purchaseDate'
-    | 'purchaseNo'
-    | 'totalAmount'
-    | 'status'
-    | 'createdAt'
-    | 'updatedAt' = 'purchaseDate';
+    'purchaseDate' | 'purchaseNo' | 'totalAmount' | 'paid' | 'outstanding' =
+    'purchaseDate';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
+
+export class PurchaseQueryFilterDto extends IntersectionType(
+  PurchaseQueryFilterBaseDto,
+  DocumentMoneyRangeQueryFilterDto,
+) {}

@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InventoryService } from './inventory.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const SHOP_ID = 'shop-1';
 const PRODUCT_ID = 'prod-1';
@@ -94,6 +96,10 @@ describe('InventoryService', () => {
       providers: [
         InventoryService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
       ],
     }).compile();
 
@@ -470,14 +476,46 @@ describe('InventoryService', () => {
       expect(call.where.AND).toEqual([
         { createdAt: { gte: new Date('2026-10-01') } },
         { createdAt: { lte: new Date('2026-10-31') } },
-      ]);
-      expect(call.where.OR).toEqual([
-        { product: { name: { contains: 'cable', mode: 'insensitive' } } },
-        { reason: { contains: 'cable', mode: 'insensitive' } },
+        {
+          OR: [
+            { product: { name: { contains: 'cable', mode: 'insensitive' } } },
+            { reason: { contains: 'cable', mode: 'insensitive' } },
+          ],
+        },
       ]);
       expect(call.skip).toBe(25);
       expect(call.take).toBe(25);
       expect(call.orderBy).toEqual({ quantityChange: 'asc' });
+    });
+
+    it('applies productId, exact quantityChange and reason word match', async () => {
+      await service.getInventoryMovements(
+        {
+          productId: PRODUCT_ID,
+          quantityChange: -2,
+          reason: 'water screen',
+        },
+        SHOP_ID,
+      );
+
+      const call = prismaStub.inventoryMovement.findMany.mock.calls[0][0];
+      expect(call.where.productId).toBe(PRODUCT_ID);
+      expect(call.where.quantityChange).toBe(-2);
+      expect(call.where.AND).toEqual([
+        {
+          OR: [
+            { reason: { contains: 'water', mode: 'insensitive' } },
+            { reason: { contains: 'screen', mode: 'insensitive' } },
+          ],
+        },
+      ]);
+    });
+
+    it('scope=all omits the manual-type restriction', async () => {
+      await service.getInventoryMovements({ scope: 'all' } as any, SHOP_ID);
+
+      const call = prismaStub.inventoryMovement.findMany.mock.calls[0][0];
+      expect(call.where).toEqual({ shopId: SHOP_ID });
     });
   });
 });

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,11 +22,23 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import { normalizePhone } from '../../helpers/phone.helper.js';
 import {
+  normalizePhone,
+  normalizePhoneOrRaw,
+} from '../../helpers/phone.helper.js';
+import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
+import {
+  duplicateFieldValue,
+  loginPhoneAlreadyTaken,
   resourceNotFound,
   systemRowProtected,
 } from '../../errors/error.builder.js';
+import { supplierCurrentBalances } from '../../helpers/party-current-balance.helper.js';
+import {
+  buildSupplierCurrentBalanceFilterSql,
+  buildSupplierListWhere,
+  supplierListNeedsCurrentBalanceJoin,
+} from '../helpers/supplier-list-where.helper.js';
 
 const WALK_IN_SELLER = 'supplier';
 
@@ -47,11 +60,18 @@ export class SuppliersService {
 
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    const phone = this.canonicalPhone(dto.phone);
+    const cnic = dto.cnic?.trim() || null;
+
+    await this.assertPhoneAvailable(phone);
+    await this.assertCnicAvailable(shopId, cnic);
+
     await this.prisma.supplier.create({
       data: {
         shopId,
         name: dto.name.trim(),
-        phone: dto.phone?.trim() || null,
+        phone,
+        cnic,
         address: dto.address?.trim() || null,
         notes: dto.notes?.trim() || null,
         openingBalance: BigInt(dto.openingBalance ?? 0),
@@ -71,27 +91,19 @@ export class SuppliersService {
       query.pageSize,
       100,
     );
-    const sortBy = query.sortBy ?? 'createdAt';
+    const sortBy = query.sortBy ?? 'name';
     const sortOrder = query.sortOrder ?? 'desc';
 
-    const where: Prisma.SupplierWhereInput = { shopId };
-    if (query.isActive !== undefined && query.isActive !== null) {
-      where.isActive = query.isActive;
-    }
-    if (query.search?.trim()) {
-      const term = query.search.trim();
+    let where = buildSupplierListWhere(query, shopId);
 
-      const branches: Prisma.SupplierWhereInput[] = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { phone: { contains: term, mode: 'insensitive' } },
-        { address: { contains: term, mode: 'insensitive' } },
-      ];
-
-      const canonical = normalizePhone(term);
-      if (canonical && canonical !== term) {
-        branches.push({ phone: { contains: canonical, mode: 'insensitive' } });
-      }
-      where.OR = branches;
+    if (supplierListNeedsCurrentBalanceJoin(query)) {
+      const matched = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        buildSupplierCurrentBalanceFilterSql(query, shopId),
+      );
+      where = {
+        ...where,
+        id: { in: matched.map((row) => row.id) },
+      };
     }
 
     const [rows, total] = await Promise.all([
@@ -99,13 +111,19 @@ export class SuppliersService {
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: [{ [sortBy]: sortOrder }, { id: 'asc' }],
       }),
       this.prisma.supplier.count({ where }),
     ]);
 
+    const ledgerDeltas = await supplierCurrentBalances(
+      this.prisma,
+      shopId,
+      rows.map((row) => row.id),
+    );
+
     return new PaginatedResponseDTO<ResponseSupplierDto>(
-      rows.map((row) => this.toResponse(row)),
+      rows.map((row) => this.toResponse(row, ledgerDeltas.get(row.id) ?? 0)),
       total,
       page,
       pageSize,
@@ -120,7 +138,10 @@ export class SuppliersService {
     if (!row) {
       throw new NotFoundException(resourceNotFound('Supplier', id));
     }
-    return this.toResponse(row);
+    const ledgerDeltas = await supplierCurrentBalances(this.prisma, shopId, [
+      id,
+    ]);
+    return this.toResponse(row, ledgerDeltas.get(id) ?? 0);
   }
 
   async getSupplierLedger(
@@ -257,7 +278,16 @@ export class SuppliersService {
 
     const data: Prisma.SupplierUpdateInput = {};
     if (newName !== undefined) data.name = newName;
-    if (dto.phone !== undefined) data.phone = dto.phone?.trim() || null;
+    if (dto.phone !== undefined) {
+      const phone = this.canonicalPhone(dto.phone);
+      await this.assertPhoneAvailable(phone, id);
+      data.phone = phone;
+    }
+    if (dto.cnic !== undefined) {
+      const cnic = dto.cnic == null ? null : dto.cnic.trim() || null;
+      await this.assertCnicAvailable(shopId, cnic, id);
+      data.cnic = cnic;
+    }
     if (dto.address !== undefined) data.address = dto.address?.trim() || null;
     if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
     if (dto.openingBalance !== undefined) {
@@ -298,19 +328,63 @@ export class SuppliersService {
     return new StatusBaseResponseDTO(true, 'Supplier deactivated successfully');
   }
 
-  private toResponse(row: SupplierRow): ResponseSupplierDto {
+  private toResponse(row: SupplierRow, ledgerDelta = 0): ResponseSupplierDto {
+    const openingBalance = Number(row.openingBalance);
     return {
       id: row.id,
       shopId: row.shopId,
       name: row.name,
       phone: row.phone,
+      cnic: row.cnic,
       address: row.address,
       notes: row.notes,
-      openingBalance: Number(row.openingBalance),
+      openingBalance,
+      currentBalance: openingBalance + ledgerDelta,
       isSystem: row.isSystem,
       isActive: row.isActive,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  private canonicalPhone(raw: string | null | undefined): string | null {
+    if (raw == null) return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    return normalizePhone(trimmed) ?? normalizePhoneOrRaw(trimmed);
+  }
+
+  private async assertPhoneAvailable(
+    phone: string | null,
+    excludeSupplierId?: string,
+  ): Promise<void> {
+    if (!phone) return;
+    const conflict = await findLoginPhoneConflict(this.prisma, phone, {
+      excludeSupplierId,
+    });
+    if (conflict) {
+      throw new BadRequestException(loginPhoneAlreadyTaken(phone));
+    }
+  }
+
+  private async assertCnicAvailable(
+    shopId: string,
+    cnic: string | null,
+    excludeSupplierId?: string,
+  ): Promise<void> {
+    if (!cnic) return;
+    const existing = await this.prisma.supplier.findFirst({
+      where: {
+        shopId,
+        cnic,
+        ...(excludeSupplierId ? { id: { not: excludeSupplierId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException(
+        duplicateFieldValue('Supplier', 'CNIC', cnic),
+      );
+    }
   }
 }

@@ -16,6 +16,10 @@ export class AppConfigurationService {
       DATABASE_URL: Joi.string()
         .uri({ scheme: ['postgresql', 'postgres'] })
         .required(),
+      DIRECT_URL: Joi.string()
+        .uri({ scheme: ['postgresql', 'postgres'] })
+        .optional()
+        .allow(''),
       JWT_SECRET: Joi.string().min(16).required(),
       CORS_ORIGINS: Joi.string().required(),
       APP_BASE_URL: Joi.string()
@@ -60,6 +64,11 @@ export class AppConfigurationService {
           otherwise: Joi.allow('').optional(),
         }),
       R2_STORAGE_ENABLED: Joi.string().valid('true', 'false').default('false'),
+      STOREFRONT_REVALIDATE_URL: Joi.string()
+        .uri({ scheme: ['http', 'https'] })
+        .allow('')
+        .optional(),
+      STOREFRONT_REVALIDATE_SECRET: Joi.string().allow('').optional(),
     });
 
     const result = schema.validate(config, {
@@ -159,6 +168,16 @@ export class AppConfigurationService {
 
   get r2StorageEnabled(): boolean {
     return this.configService.get<string>('R2_STORAGE_ENABLED') === 'true';
+  }
+
+  get storefrontRevalidateUrl(): string {
+    return (
+      this.configService.get<string>('STOREFRONT_REVALIDATE_URL') ?? ''
+    ).replace(/\/+$/, '');
+  }
+
+  get storefrontRevalidateSecret(): string {
+    return this.configService.get<string>('STOREFRONT_REVALIDATE_SECRET') ?? '';
   }
 
   get r2(): {

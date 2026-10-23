@@ -43,12 +43,11 @@ export class ReturnQueryFilterDto extends ListPaginationQueryFilterDto {
 
   @ApiPropertyOptional({
     example: 'returnDate',
-    description: 'returnDate | returnAmount | createdAt | updatedAt.',
+    description: 'returnDate | returnAmount.',
   })
   @IsOptional()
-  @IsIn(['returnDate', 'returnAmount', 'createdAt', 'updatedAt'])
-  sortBy?: 'returnDate' | 'returnAmount' | 'createdAt' | 'updatedAt' =
-    'returnDate';
+  @IsIn(['returnDate', 'returnAmount'])
+  sortBy?: 'returnDate' | 'returnAmount' = 'returnDate';
 
   @SortOrderPeriodQueryProperty('asc or desc')
   sortOrder?: 'asc' | 'desc' = 'desc';

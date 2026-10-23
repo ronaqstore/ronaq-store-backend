@@ -1,0 +1,74 @@
+# Ronaq Store Backend — coding rules (`npm run check`)
+
+Always apply these rules when changing this NestJS API. Gate: `npm run check` (or `npm run check -- --only <id>`).
+
+## How to work
+
+1. Named DTOs/interfaces only — never inline `{ ... }` object types on service/controller method params or returns.
+2. Zero comments in `src/` — no `//`, `/* */`, or JSDoc. Use clear names + Swagger decorators.
+3. Always use `.js` extensions on relative TypeScript imports (ESM).
+4. Prefer named exports — no default exports in `src/`.
+5. Keep modules thin; put logic in services/helpers; stay under line limits.
+
+## Check catalog (what each script enforces)
+
+| Check | Rule |
+| --- | --- |
+| **secrets** | No hardcoded secrets, API keys, connection strings with credentials. |
+| **structure** | Allowed Nest `src/` layout only (modules, controllers, services, dto, etc.). |
+| **module-layout** | Each feature module follows Nest folder conventions (controller/service/dto/helpers colocated correctly). |
+| **filename-conventions** | Filenames match Nest conventions (e.g. `*.controller.ts`, `*.service.ts`, `*.dto.ts`, `*.module.ts`). |
+| **empty-files** | No empty source files. |
+| **types** | Ban `any`, non-null assertions, `@ts-ignore`, loose `Function`/`Object` typing. |
+| **nest-type** | Ban inline object type literals in method params/returns. Extract to `*.types.ts`, DTOs, or interfaces. |
+| **comments** | Zero comments in `src/`. Document via Swagger (`@Api*`) and names. |
+| **console** | No ad-hoc `console.log` in services/controllers — use Nest `Logger`. |
+| **catch-handling** | Catch blocks must handle/rethrow properly — no empty catches. |
+| **no-todo** | No `TODO` / `FIXME` markers left in source. |
+| **env-access** | Env only via approved config layer — no scattered `process.env` reads. |
+| **api-urls** | No hardcoded external URLs outside config. |
+| **banned-deps** | Do not introduce prohibited packages (script-defined). Prefer Nest/Prisma stack. |
+| **tenancy** | Multi-shop tenancy: always scope by `shopId` / tenant context; never leak cross-shop data. |
+| **financial-safety** | Money in integer paisa; no unsafe float money math; follow existing number helpers. |
+| **prisma-safety** | Safe Prisma usage (correct where clauses, no unsafe raw patterns the auditor flags). |
+| **transaction-safety** | Multi-write financial/stock flows must use transactions correctly. |
+| **dto-safety** | Request DTOs use class-validator / Swagger properly; don’t accept untyped bodies. |
+| **controller-guards** | Controllers must have the required auth/guards for protected routes. |
+| **swagger-docs** | Public API endpoints documented with Swagger decorators. |
+| **injectable** | Services that Nest injects are `@Injectable()`. |
+| **import-extensions** | Relative imports end with `.js`. |
+| **no-default-export** | Named exports only. |
+| **max-lines** | Modules ≤ 120; controllers ≤ 350; services ≤ 550; DTOs ≤ 250; guards ≤ 200; helpers ≤ 250; default ≤ 400. Split when over. |
+| **unused-imports** | No unused imports. |
+| **orphans** | No unreferenced services/helpers that should be wired or removed. |
+| **spec-colocation** | Specs live next to the unit under test (`*.spec.ts`). |
+| **duplicates** / **duplicate-audit** | Avoid copy-paste clones (jscpd). |
+| **knip** | No dead code / unused deps. |
+| **format** | Prettier `format:check` must pass. |
+| **lint** / **typecheck** / **test** | ESLint/oxlint, `tsc`, and unit tests must pass. |
+| **prisma-validate** | Prisma schema validates. |
+| **build** | Nest production build must succeed. |
+
+## Types pattern
+
+```ts
+// ❌
+private async processImage(
+  file: UploadedImageFile,
+  options: { maxEdge: number; fit: 'inside' | 'cover' },
+): Promise<{ buffer: Buffer; ext: string; contentType: string }>
+
+// ✅
+import type { ProcessImageOptions, ProcessedImageResult } from './store.service.types.js'
+private async processImage(
+  file: UploadedImageFile,
+  options: ProcessImageOptions,
+): Promise<ProcessedImageResult>
+```
+
+## Nest patterns
+
+- Controllers: thin — validate/auth/delegate to services.
+- Services: business rules + Prisma; extract helpers when a service grows.
+- Errors: use Nest exceptions / `error.builder` helpers — not raw `throw new Error()` for domain cases.
+- Images/money/stock: follow existing helpers; do not invent parallel paths.

@@ -5,6 +5,8 @@ import { PurchasesService } from './purchases.service.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
 import { PurchasesCancelService } from './purchases-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
 
 const SHOP_ID = 'shop-1';
 const USER_ID = 'user-1';
@@ -83,15 +85,13 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         .mockImplementation((args: any) =>
           Promise.resolve({ id: `unit-${args.data.imei1}` }),
         ),
-      createManyAndReturn: jest
-        .fn()
-        .mockImplementation((args: any) =>
-          Promise.resolve(
-            (args.data as Array<{ imei1: string }>).map((row) => ({
-              id: `unit-${row.imei1}`,
-            })),
-          ),
+      createManyAndReturn: jest.fn().mockImplementation((args: any) =>
+        Promise.resolve(
+          (args.data as Array<{ imei1: string }>).map((row) => ({
+            id: `unit-${row.imei1}`,
+          })),
         ),
+      ),
       update: jest.fn().mockResolvedValue({}),
     },
     inventoryMovement: {
@@ -158,6 +158,10 @@ describe('PurchasesService', () => {
         PurchasesWriteService,
         PurchasesCancelService,
         { provide: PrismaService, useValue: prismaStub },
+        {
+          provide: StorefrontRevalidateService,
+          useValue: storefrontRevalidateStub,
+        },
       ],
     }).compile();
 
@@ -174,15 +178,18 @@ describe('PurchasesService', () => {
         id: QUANTITY_PRODUCT_ID,
         name: 'Samsung Charger',
         trackingType: 'QUANTITY',
+        brand: { name: 'Samsung' },
       },
       {
         id: SERIAL_PRODUCT_ID,
         name: 'Samsung A15',
         trackingType: 'SERIALIZED',
+        brand: { name: 'Samsung' },
       },
     ]);
     prismaStub.inventoryUnit.findMany.mockResolvedValue([]);
     prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
+    prismaStub.inventoryUnit.findFirst.mockClear();
   });
 
   it('should be defined', () => {
@@ -436,11 +443,22 @@ describe('PurchasesService', () => {
       productId: SERIAL_PRODUCT_ID,
       quantity: 2,
       unitCost: 2000000,
-      imeis: ['111223344556677', '111223344556688'],
+      phoneUnits: [
+        {
+          imei1: '111223344556677',
+          imei2: '111223344556601',
+          condition: 'USED',
+        },
+        {
+          imei1: '111223344556688',
+          imei2: '111223344556602',
+          condition: 'USED',
+        },
+      ],
       condition: 'USED',
     };
 
-    it('creates one inventory unit and one movement per IMEI', async () => {
+    it('creates one inventory unit and one movement per phone unit', async () => {
       await service.createPurchase(
         serialisePurchaseRequest({ items: [phoneLine] }),
         SHOP_ID,
@@ -448,37 +466,70 @@ describe('PurchasesService', () => {
       );
 
       expect(tx.inventoryUnit.createManyAndReturn).toHaveBeenCalledTimes(1);
-      expect(tx.inventoryUnit.createManyAndReturn.mock.calls[0][0].data).toEqual(
-        [
-          expect.objectContaining({
-            imei1: '111223344556677',
-            condition: 'USED',
-          }),
-          expect.objectContaining({
-            imei1: '111223344556688',
-            condition: 'USED',
-          }),
-        ],
-      );
+      expect(
+        tx.inventoryUnit.createManyAndReturn.mock.calls[0][0].data,
+      ).toEqual([
+        expect.objectContaining({
+          imei1: '111223344556677',
+          imei2: '111223344556601',
+          condition: 'USED',
+        }),
+        expect.objectContaining({
+          imei1: '111223344556688',
+          imei2: '111223344556602',
+          condition: 'USED',
+        }),
+      ]);
       expect(tx.inventoryMovement.createMany).toHaveBeenCalledTimes(1);
-      expect(tx.inventoryMovement.createMany.mock.calls[0][0].data).toHaveLength(
-        2,
-      );
+      expect(
+        tx.inventoryMovement.createMany.mock.calls[0][0].data,
+      ).toHaveLength(2);
       expect(tx.stockLevel.update).not.toHaveBeenCalled();
       expect(tx.stockLevel.create).not.toHaveBeenCalled();
     });
 
-    it('rejects a phone line whose IMEI count does not equal the quantity', async () => {
+    it('rejects a phone line whose unit count does not equal the quantity', async () => {
       await expect(
         service.createPurchase(
           serialisePurchaseRequest({
-            items: [{ ...phoneLine, imeis: ['111223344556677'] }],
+            items: [
+              {
+                ...phoneLine,
+                phoneUnits: [
+                  {
+                    imei1: '111223344556677',
+                    imei2: '111223344556601',
+                  },
+                ],
+              },
+            ],
           }),
           SHOP_ID,
           USER_ID,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects when IMEI1 equals IMEI2 on one phone', async () => {
+      await expect(
+        service.createPurchase(
+          serialisePurchaseRequest({
+            items: [
+              {
+                productId: SERIAL_PRODUCT_ID,
+                quantity: 1,
+                unitCost: 2000000,
+                phoneUnits: [
+                  { imei1: '111223344556677', imei2: '111223344556677' },
+                ],
+              },
+            ],
+          }),
+          SHOP_ID,
+          USER_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rejects the same IMEI listed twice in one request', async () => {
@@ -490,7 +541,16 @@ describe('PurchasesService', () => {
                 productId: SERIAL_PRODUCT_ID,
                 quantity: 2,
                 unitCost: 2000000,
-                imeis: ['111223344556677', '111223344556677'],
+                phoneUnits: [
+                  {
+                    imei1: '111223344556677',
+                    imei2: '111223344556601',
+                  },
+                  {
+                    imei1: '111223344556677',
+                    imei2: '111223344556602',
+                  },
+                ],
               },
             ],
           }),
@@ -501,9 +561,10 @@ describe('PurchasesService', () => {
     });
 
     it('rejects an IMEI the shop already owns', async () => {
-      prismaStub.inventoryUnit.findMany.mockResolvedValue([
-        { imei1: '111223344556677' },
-      ]);
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue({
+        imei1: '111223344556677',
+        imei2: '999',
+      });
 
       await expect(
         service.createPurchase(
@@ -512,16 +573,10 @@ describe('PurchasesService', () => {
           USER_ID,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
-      expect(prismaStub.inventoryUnit.findMany).toHaveBeenCalledWith({
-        where: {
-          shopId: SHOP_ID,
-          imei1: { in: phoneLine.imeis },
-        },
-        select: { imei1: true },
-      });
+      expect(prismaStub.inventoryUnit.findFirst).toHaveBeenCalled();
     });
 
-    it('rejects IMEIs on a quantity-tracked accessory', async () => {
+    it('rejects phoneUnits on a quantity-tracked accessory', async () => {
       await expect(
         service.createPurchase(
           serialisePurchaseRequest({
@@ -530,7 +585,16 @@ describe('PurchasesService', () => {
                 productId: QUANTITY_PRODUCT_ID,
                 quantity: 2,
                 unitCost: 50000,
-                imeis: ['111223344556677', '111223344556688'],
+                phoneUnits: [
+                  {
+                    imei1: '111223344556677',
+                    imei2: '111223344556601',
+                  },
+                  {
+                    imei1: '111223344556688',
+                    imei2: '111223344556602',
+                  },
+                ],
               },
             ],
           }),
@@ -682,7 +746,12 @@ describe('PurchasesService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prismaStub.product.findMany).toHaveBeenCalledWith({
         where: { id: { in: [QUANTITY_PRODUCT_ID] }, shopId: SHOP_ID },
-        select: { id: true, name: true, trackingType: true },
+        select: {
+          id: true,
+          name: true,
+          trackingType: true,
+          brand: { select: { name: true } },
+        },
       });
     });
   });
@@ -742,8 +811,8 @@ describe('PurchasesService', () => {
       );
 
       const where = prismaStub.purchase.findMany.mock.calls[0][0].where;
-      expect(where.AND).toHaveLength(2);
-      expect(where.OR).toHaveLength(3);
+      expect(where.AND).toHaveLength(3);
+      expect(where.AND[2].OR).toHaveLength(3);
       expect(where.shopId).toBe(SHOP_ID);
     });
   });
@@ -781,6 +850,14 @@ describe('PurchasesService', () => {
         createdById: USER_ID,
         createdAt: new Date('2026-10-06T09:20:00.000Z'),
         updatedAt: new Date('2026-10-06T09:20:00.000Z'),
+        supplierPayments: [
+          {
+            id: 'pay-1',
+            amount: 10000000n,
+            paymentDate: new Date('2026-10-06T00:00:00.000Z'),
+            status: 'ACTIVE',
+          },
+        ],
         items: [
           {
             id: 'item-1',
@@ -789,7 +866,24 @@ describe('PurchasesService', () => {
             quantity: 3,
             unitCost: 9000000n,
             totalCost: 27000000n,
-            inventoryUnits: [{ imei1: '111' }, { imei1: '222' }],
+            inventoryUnits: [
+              {
+                imei1: '111',
+                imei2: '112',
+                condition: 'NEW',
+                batteryHealth: null,
+                askingPrice: null,
+                defectNotes: null,
+              },
+              {
+                imei1: '222',
+                imei2: '223',
+                condition: 'USED',
+                batteryHealth: 97,
+                askingPrice: 8500000n,
+                defectNotes: 'Scratched',
+              },
+            ],
           },
         ],
       });
@@ -797,9 +891,34 @@ describe('PurchasesService', () => {
       const res = await service.getPurchaseById('purchase-1', SHOP_ID);
 
       expect(res.totalAmount).toBe(29000000);
+      expect(res.payments).toEqual([
+        {
+          id: 'pay-1',
+          amount: 10000000,
+          paymentDate: '2026-10-06',
+          status: 'ACTIVE',
+        },
+      ]);
       expect(res.purchaseDate).toBe('2026-10-06');
       expect(res.supplierName).toBe('ABC Mobiles');
-      expect(res.items[0].imeis).toEqual(['111', '222']);
+      expect(res.items[0].phoneUnits).toEqual([
+        {
+          imei1: '111',
+          imei2: '112',
+          condition: 'NEW',
+          batteryHealth: null,
+          askingPrice: null,
+          defectNotes: null,
+        },
+        {
+          imei1: '222',
+          imei2: '223',
+          condition: 'USED',
+          batteryHealth: 97,
+          askingPrice: 8500000,
+          defectNotes: 'Scratched',
+        },
+      ]);
       expect(res.items[0].totalCost).toBe(27000000);
     });
   });

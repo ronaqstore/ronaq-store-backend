@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ListPaginationQueryFilterDto } from '../../common-dto/query/list-pagination-query.filter.dto.js';
 import {
   InclusiveDateFromQueryProperty,
@@ -26,11 +27,56 @@ export class InventoryAdjustmentQueryFilterDto extends ListPaginationQueryFilter
   @ApiPropertyOptional({
     example: 'DAMAGED',
     description:
-      'ADJUSTMENT | DAMAGED | LOST. When omitted the list only shows manual stock changes, never purchase/sale movements.',
+      'Filter by movement type. With scope=manual (default), only ADJUSTMENT | DAMAGED | LOST. With scope=all, any inventory movement type.',
   })
   @IsOptional()
-  @IsIn(['ADJUSTMENT', 'DAMAGED', 'LOST'])
-  type?: 'ADJUSTMENT' | 'DAMAGED' | 'LOST';
+  @IsIn([
+    'ADJUSTMENT',
+    'DAMAGED',
+    'LOST',
+    'PURCHASE',
+    'SALE',
+    'SALE_CANCEL',
+    'PURCHASE_CANCEL',
+    'CUSTOMER_RETURN',
+  ])
+  type?:
+    | 'ADJUSTMENT'
+    | 'DAMAGED'
+    | 'LOST'
+    | 'PURCHASE'
+    | 'SALE'
+    | 'SALE_CANCEL'
+    | 'PURCHASE_CANCEL'
+    | 'CUSTOMER_RETURN';
+
+  @ApiPropertyOptional({
+    example: -2,
+    description:
+      'Exact quantityChange match (signed). Use negative values for write-offs.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  quantityChange?: number;
+
+  @ApiPropertyOptional({
+    example: 'water damage',
+    description:
+      'Case-insensitive reason filter. Any whitespace-separated word that appears in the reason matches the row.',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @ApiPropertyOptional({
+    example: 'all',
+    description:
+      'manual (default) = adjustment/damaged/lost only. all = full inventory movement ledger.',
+  })
+  @IsOptional()
+  @IsIn(['manual', 'all'])
+  scope?: 'manual' | 'all';
 
   @InclusiveDateFromQueryProperty(
     'Inclusive lower bound on the movement timestamp, YYYY-MM-DD.',

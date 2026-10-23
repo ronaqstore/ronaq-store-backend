@@ -64,17 +64,26 @@ export const requiredFieldCannotBeNull = (
   );
 };
 
+export const SUPPLIER_CNIC_DUPLICATE_CODE = 'SUPPLIER_CNIC_DUPLICATE';
+export const SUPPLIER_CNIC_DUPLICATE_MESSAGE =
+  'Another supplier in your shop already uses this CNIC. Pick a different one.';
+
 export const duplicateFieldValue = (
   name: string,
   fieldLabel: string,
   value: string,
 ): ErrorResponseDTO => {
+  const isSupplierCnic =
+    name.toLowerCase() === 'supplier' && fieldLabel.toLowerCase() === 'cnic';
   return new ErrorResponseDTO(
     `${name} ${fieldLabel} "${value}" already exists`,
     [
-      `Another ${name.toLowerCase()} in your shop already uses this ${fieldLabel}. ${fieldLabel} must be unique inside a shop, so pick a different one.`,
+      isSupplierCnic
+        ? SUPPLIER_CNIC_DUPLICATE_MESSAGE
+        : `Another ${name.toLowerCase()} in your shop already uses this ${fieldLabel}. ${fieldLabel} must be unique inside a shop, so pick a different one.`,
     ],
     HttpStatus.BAD_REQUEST,
+    isSupplierCnic ? SUPPLIER_CNIC_DUPLICATE_CODE : undefined,
   );
 };
 

@@ -15,8 +15,9 @@ import { ProductOptionalSpecFieldsDto } from '../../common-dto/product/product-o
 
 export class UpdateProductDto extends ProductOptionalSpecFieldsDto {
   @ApiPropertyOptional({
-    description: 'Must stay unique inside the shop.',
-    example: 'Galaxy A15',
+    description:
+      'Display name. Same name is allowed for different variants; exact name + variant match is still rejected.',
+    example: 'iPhone 7',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()

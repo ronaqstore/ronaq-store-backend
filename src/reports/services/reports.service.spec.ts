@@ -491,6 +491,54 @@ describe('ReportsService', () => {
     );
   });
 
+  it('inventory report: filters by stock value range and exact quantity', async () => {
+    prismaStub.product.findMany.mockResolvedValue([
+      {
+        id: 'ph',
+        name: 'iPhone 13',
+        sku: 'IP13',
+        barcode: null,
+        trackingType: 'SERIALIZED',
+        lowStockThreshold: 2,
+        category: { name: 'Phones' },
+        brand: { name: 'Apple' },
+        stockLevel: null,
+        inventoryUnits: [
+          { imei1: '111', unitCost: 250000n },
+          { imei1: '222', unitCost: 250000n },
+        ],
+      },
+      {
+        id: 'qb',
+        name: 'Charger',
+        sku: 'CHG',
+        barcode: null,
+        trackingType: 'QUANTITY',
+        lowStockThreshold: 5,
+        category: { name: 'Accessories' },
+        brand: { name: 'Anker' },
+        stockLevel: { quantityOnHand: 3, avgUnitCost: 1500n },
+        inventoryUnits: [],
+      },
+    ]);
+
+    const byQty = await service.getInventoryReport({ inStock: 3 }, SHOP_ID);
+    expect(byQty.items.map((row) => row.id)).toEqual(['qb']);
+
+    const byCost = await service.getInventoryReport(
+      { minStockValue: 100000, maxStockValue: 600000 },
+      SHOP_ID,
+    );
+    expect(byCost.items.map((row) => row.id)).toEqual(['ph']);
+
+    await service.getInventoryReport({ productId: 'ph' }, SHOP_ID);
+    expect(prismaStub.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'ph' }),
+      }),
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // Best-sellers report
   // ---------------------------------------------------------------------------

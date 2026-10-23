@@ -25,13 +25,16 @@ import {
   ResponseStoreProductDto,
   ResponseStoreCategoriesDto,
   ResponseStoreListItemDto,
+  ResponseStoreModelDto,
+  ResponseStoreModelDetailDto,
 } from '../dto/response-storefront.dto.js';
 import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
 import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { StorefrontService } from '../services/storefront.service.js';
 
-const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
+const CACHE_CONTROL =
+  'public, max-age=0, s-maxage=15, stale-while-revalidate=60';
 
 @ApiTags('storefront')
 @Controller('public/stores')
@@ -126,6 +129,76 @@ export class StorefrontController {
       throw new InternalServerErrorException(
         'Failed to fetch store categories',
       );
+    }
+  }
+
+  @Get('/:slug/models')
+  @ApiOperation({
+    summary: 'Phone models grouped for browsing',
+    description:
+      'SERIALIZED published products grouped by brand + model. Click a model to see color / storage / PTA variants.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseStoreModelDto,
+      'Store models fetched successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async getModels(
+    @Param('slug') slug: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<ApiSuccessResponseDTO<ResponseStoreModelDto[]>> {
+    try {
+      const data = await this.storefrontService.getModels(slug);
+      res.set('Cache-Control', CACHE_CONTROL);
+      return new ApiSuccessResponseDTO(
+        'Store models fetched successfully',
+        data,
+      );
+    } catch (error) {
+      logError('storefront.controller.ts', 'getModels', error, { slug });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch store models');
+    }
+  }
+
+  @Get('/:slug/models/:modelKey')
+  @ApiOperation({
+    summary: 'Variants for one phone model',
+    description:
+      'All published SERIALIZED variants that share the same brand + model (color, storage, PTA, etc.).',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseStoreModelDetailDto,
+      'Store model fetched successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async getModel(
+    @Param('slug') slug: string,
+    @Param('modelKey') modelKey: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<ApiSuccessResponseDTO<ResponseStoreModelDetailDto>> {
+    try {
+      const data = await this.storefrontService.getModel(slug, modelKey);
+      res.set('Cache-Control', CACHE_CONTROL);
+      return new ApiSuccessResponseDTO(
+        'Store model fetched successfully',
+        data,
+      );
+    } catch (error) {
+      logError('storefront.controller.ts', 'getModel', error, {
+        slug,
+        modelKey,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch store model');
     }
   }
 

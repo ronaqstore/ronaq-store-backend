@@ -6,9 +6,11 @@ import {
   IsBoolean,
   IsDateString,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Min,
 } from 'class-validator';
 
 export function optionalBooleanQueryTransform(
@@ -22,7 +24,10 @@ export function optionalBooleanQueryTransform(
   };
 }
 
-export function OptionalIsActiveQueryProperty(description: string) {
+export function OptionalBooleanQueryProperty(
+  fieldLabel: string,
+  description: string,
+) {
   return applyDecorators(
     ApiPropertyOptional({
       example: 'true',
@@ -30,9 +35,13 @@ export function OptionalIsActiveQueryProperty(description: string) {
     }),
     IsOptional(),
     Type(() => String),
-    Transform(optionalBooleanQueryTransform('isActive')),
+    Transform(optionalBooleanQueryTransform(fieldLabel)),
     IsBoolean(),
   );
+}
+
+export function OptionalIsActiveQueryProperty(description: string) {
+  return OptionalBooleanQueryProperty('isActive', description);
 }
 
 export function OptionalSearchQueryProperty(
@@ -77,5 +86,18 @@ export function SortOrderPeriodQueryProperty(
     ApiPropertyOptional({ example: 'desc', description }),
     IsOptional(),
     IsIn(['asc', 'desc']),
+  );
+}
+
+export function OptionalPaisaAmountQueryProperty(
+  example: number,
+  description: string,
+) {
+  return applyDecorators(
+    ApiPropertyOptional({ example, description }),
+    IsOptional(),
+    Type(() => Number),
+    IsInt(),
+    Min(0),
   );
 }
