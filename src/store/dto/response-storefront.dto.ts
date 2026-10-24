@@ -115,6 +115,14 @@ export class ResponseStoreProductDto {
   })
   authenticity?: 'ORIGINAL' | 'COPY' | null;
 
+  @ApiPropertyOptional({
+    description:
+      'NEW or USED when all in-stock phone units share one condition. Omitted when mixed, empty, or accessory.',
+    enum: ['NEW', 'USED'],
+    example: 'USED',
+  })
+  condition?: 'NEW' | 'USED' | null;
+
   @ApiProperty({
     description: 'Image URLs sorted by sortOrder — index 0 is the cover.',
     type: [String],

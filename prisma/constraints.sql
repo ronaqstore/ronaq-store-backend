@@ -338,6 +338,46 @@ CREATE INDEX products_public_catalog_idx
   ON products (shop_id, published_at DESC)
   WHERE is_published AND is_active;
 
+-- Marketplace cross-shop feed + ILIKE search (pg_trgm). Also applied via migration
+-- 20261024123000_marketplace_search_indexes.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS products_marketplace_feed_idx
+  ON products (published_at DESC NULLS LAST)
+  WHERE is_published AND is_active;
+CREATE INDEX IF NOT EXISTS products_name_trgm_idx
+  ON products USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS products_model_trgm_idx
+  ON products USING gin (model gin_trgm_ops)
+  WHERE model IS NOT NULL;
+CREATE INDEX IF NOT EXISTS brands_name_trgm_idx
+  ON brands USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS shop_store_settings_enabled_city_idx
+  ON shop_store_settings (is_enabled, lower(city))
+  WHERE is_enabled;
+
+CREATE INDEX IF NOT EXISTS products_marketplace_price_idx
+  ON products (default_selling_price ASC, published_at DESC NULLS LAST)
+  WHERE is_published AND is_active;
+CREATE INDEX IF NOT EXISTS products_marketplace_pta_idx
+  ON products (pta_status, published_at DESC NULLS LAST)
+  WHERE is_published AND is_active AND pta_status IS NOT NULL;
+CREATE INDEX IF NOT EXISTS products_marketplace_authenticity_idx
+  ON products (authenticity, published_at DESC NULLS LAST)
+  WHERE is_published AND is_active AND authenticity IS NOT NULL;
+CREATE INDEX IF NOT EXISTS products_shop_publish_active_idx
+  ON products (shop_id, is_published, is_active);
+CREATE INDEX IF NOT EXISTS inventory_units_in_stock_condition_idx
+  ON inventory_units (product_id, condition)
+  WHERE status = 'IN_STOCK';
+CREATE INDEX IF NOT EXISTS shop_store_settings_display_name_trgm_idx
+  ON shop_store_settings USING gin (display_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS shop_store_settings_city_trgm_idx
+  ON shop_store_settings USING gin (city gin_trgm_ops)
+  WHERE city IS NOT NULL;
+CREATE INDEX IF NOT EXISTS shop_store_settings_enabled_updated_idx
+  ON shop_store_settings (updated_at DESC)
+  WHERE is_enabled;
+
 -- Counting IN_STOCK phones per product already uses units_in_stock_idx (Release 1).
 
 -- -----------------------------------------------------------------------------

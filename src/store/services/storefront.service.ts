@@ -34,6 +34,7 @@ import {
 import {
   STOREFRONT_PRODUCT_INCLUDE,
   STOREFRONT_SELLABLE_STATUS,
+  applyUnitConditionSummary,
   applyUnitMinPrice,
   mapStorefrontUnitRow,
   storefrontCatalogWhere,
@@ -74,9 +75,8 @@ export class StorefrontService {
     if (query.q) {
       where.OR = [
         { displayName: { contains: query.q, mode: 'insensitive' } },
-        { address: { contains: query.q, mode: 'insensitive' } },
         { city: { contains: query.q, mode: 'insensitive' } },
-        { about: { contains: query.q, mode: 'insensitive' } },
+        { address: { contains: query.q, mode: 'insensitive' } },
         { shop: { name: { contains: query.q, mode: 'insensitive' } } },
       ];
     }
@@ -254,6 +254,7 @@ export class StorefrontService {
       );
       product.units = unitsByProduct.get(row.id) ?? [];
       applyUnitMinPrice(product);
+      applyUnitConditionSummary(product);
     }
     return product;
   }
@@ -396,6 +397,7 @@ export class StorefrontService {
         const product = toStorefrontProduct(row, settings.showExactStock);
         product.units = unitsByProduct.get(row.id) ?? [];
         applyUnitMinPrice(product);
+        applyUnitConditionSummary(product);
         return product;
       }),
     };

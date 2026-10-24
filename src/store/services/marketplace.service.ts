@@ -25,6 +25,10 @@ import {
   resolveHubCityTokens,
 } from '../helpers/marketplace-hub.helper.js';
 import {
+  buildMarketplaceModelSearchSql,
+  type MarketplaceModelSearchRow,
+} from '../helpers/marketplace-model-search.helper.js';
+import {
   buildRelatedSearchTokens,
   isDeviceProduct,
   MARKETPLACE_ACCESSORY_CATEGORY_NAMES,
@@ -47,7 +51,6 @@ import type {
   MarketplaceProductModelMatchRow,
 } from './marketplace.service.types.js';
 
-const MODEL_SUGGESTION_SCAN = 250;
 const MODEL_KEY_SCAN = 500;
 const RELATED_CANDIDATE_SCAN = 120;
 
@@ -240,83 +243,35 @@ export class MarketplaceService {
     }
 
     const limit = Math.min(Math.max(query.limit ?? 8, 1), 20);
-    const catalogWhere = storefrontCatalogWhere(null, { q });
-    const rows = await this.prisma.product.findMany({
-      where: {
-        ...catalogWhere,
-        shop: this.marketplaceShopWhere(query.city),
-      },
-      take: MODEL_SUGGESTION_SCAN,
-      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-      select: {
-        name: true,
-        model: true,
-        defaultSellingPrice: true,
-        brand: { select: { name: true } },
-        images: {
-          select: { url: true, sortOrder: true },
-          orderBy: { sortOrder: 'asc' },
-          take: 1,
-        },
-      },
-    });
-
-    type Group = {
-      modelKey: string;
-      brand: string;
-      model: string;
-      count: number;
-      imageUrl: string | null;
-      minPrice: number | null;
-    };
-
-    const groups = new Map<string, Group>();
-    for (const row of rows) {
-      const modelLabel = this.productModelLabel(row);
-      const modelKey = toModelKey(row.brand.name, modelLabel);
-      const price = Number(row.defaultSellingPrice);
-      const existing = groups.get(modelKey);
-      if (existing) {
-        existing.count += 1;
-        if (
-          Number.isFinite(price) &&
-          (existing.minPrice == null || price < existing.minPrice)
-        ) {
-          existing.minPrice = price;
-        }
-        if (!existing.imageUrl && row.images[0]?.url) {
-          existing.imageUrl = row.images[0].url;
-        }
-        continue;
-      }
-      groups.set(modelKey, {
-        modelKey,
-        brand: row.brand.name,
-        model: modelLabel,
-        count: 1,
-        imageUrl: row.images[0]?.url ?? null,
-        minPrice: Number.isFinite(price) ? price : null,
-      });
+    const sql = buildMarketplaceModelSearchSql(
+      q,
+      resolveHubCityTokens(query.city),
+      limit,
+    );
+    if (!sql) {
+      return { items: [], total: 0 };
     }
 
-    const sorted = [...groups.values()].sort((a, b) => {
-      if (b.count !== a.count) return b.count - a.count;
-      return a.model.localeCompare(b.model);
+    const rows = await this.prisma.$queryRaw<MarketplaceModelSearchRow[]>(sql);
+    const items: ResponseMarketplaceModelDto[] = rows.map((row) => {
+      const brand = row.brand ?? '';
+      const model = row.model ?? '';
+      const minPriceRaw = row.min_price == null ? null : Number(row.min_price);
+      return {
+        modelKey: toModelKey(brand, model),
+        brand,
+        model,
+        title: `${brand} ${model}`.trim(),
+        count: Number(row.count) || 0,
+        imageUrl: row.image_url ?? null,
+        minPrice:
+          minPriceRaw != null && Number.isFinite(minPriceRaw)
+            ? minPriceRaw
+            : null,
+      };
     });
 
-    const items: ResponseMarketplaceModelDto[] = sorted
-      .slice(0, limit)
-      .map((group) => ({
-        modelKey: group.modelKey,
-        brand: group.brand,
-        model: group.model,
-        title: `${group.brand} ${group.model}`.trim(),
-        count: group.count,
-        imageUrl: group.imageUrl,
-        minPrice: group.minPrice,
-      }));
-
-    return { items, total: groups.size };
+    return { items, total: items.length };
   }
 
   async listProducts(
