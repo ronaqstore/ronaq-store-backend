@@ -130,6 +130,7 @@ const validDto = {
   shopName: '  Khalid Mobile Center  ',
   shopPhone: '03001234567',
   shopAddress: 'Main Bazaar',
+  city: 'Timergara',
   subscriptionEndsAt: FUTURE,
   ownerName: '  Khalid Mehmood  ',
   ownerPhone: '03001234567',

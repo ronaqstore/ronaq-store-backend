@@ -221,6 +221,7 @@ describe('StorefrontService (public catalog)', () => {
               {
                 OR: [
                   { name: { contains: 'a15', mode: 'insensitive' } },
+                  { model: { contains: 'a15', mode: 'insensitive' } },
                   { sku: { contains: 'a15', mode: 'insensitive' } },
                   {
                     brand: {

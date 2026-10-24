@@ -6,10 +6,12 @@ import { StoreController } from './controllers/store.controller.js';
 import { StoreBrandingController } from './controllers/store-branding.controller.js';
 import { StorePreviewController } from './controllers/store-preview.controller.js';
 import { StorefrontController } from './controllers/storefront.controller.js';
+import { MarketplaceController } from './controllers/marketplace.controller.js';
 import { ProductImagesController } from './controllers/product-images.controller.js';
 import { StoreService } from './services/store.service.js';
 import { StoreBrandingService } from './services/store-branding.service.js';
 import { StorefrontService } from './services/storefront.service.js';
+import { MarketplaceService } from './services/marketplace.service.js';
 import { StoreCacheService } from './services/store-cache.service.js';
 import { StorefrontRevalidateService } from './services/storefront-revalidate.service.js';
 import { R2StorageService } from './services/r2-storage.service.js';
@@ -22,12 +24,14 @@ import { R2StorageService } from './services/r2-storage.service.js';
     StoreBrandingController,
     StorePreviewController,
     StorefrontController,
+    MarketplaceController,
     ProductImagesController,
   ],
   providers: [
     StoreService,
     StoreBrandingService,
     StorefrontService,
+    MarketplaceService,
     StoreCacheService,
     StorefrontRevalidateService,
     R2StorageService,
@@ -38,6 +42,7 @@ import { R2StorageService } from './services/r2-storage.service.js';
     StoreService,
     StoreBrandingService,
     StorefrontService,
+    MarketplaceService,
     StoreCacheService,
     StorefrontRevalidateService,
   ],

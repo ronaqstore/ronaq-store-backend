@@ -86,20 +86,23 @@ export function toStorefrontProfile(
 }
 
 export function storefrontCatalogWhere(
-  shopId: string,
+  shopId: string | null,
   query?: Pick<StoreProductsQueryDto, 'q' | 'category' | 'brand' | 'inStock'>,
 ): Prisma.ProductWhereInput {
   const where: Prisma.ProductWhereInput = {
-    shopId,
     isActive: true,
     isPublished: true,
     publishedAt: { not: null },
   };
+  if (shopId) {
+    where.shopId = shopId;
+  }
   if (query?.q) {
     const searchAnd = buildTokenizedSearchAnd<Prisma.ProductWhereInput>(
       query.q,
       (token) => [
         { name: { contains: token, mode: 'insensitive' } },
+        { model: { contains: token, mode: 'insensitive' } },
         { sku: { contains: token, mode: 'insensitive' } },
         { brand: { name: { contains: token, mode: 'insensitive' } } },
       ],
@@ -137,6 +140,22 @@ export function storefrontCatalogWhere(
           {
             trackingType: 'SERIALIZED',
             inventoryUnits: { some: { status: STOREFRONT_SELLABLE_STATUS } },
+          },
+        ],
+      },
+    ];
+  } else if (query?.inStock === false) {
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      {
+        OR: [
+          {
+            trackingType: 'QUANTITY',
+            NOT: { stockLevel: { quantityOnHand: { gt: 0 } } },
+          },
+          {
+            trackingType: 'SERIALIZED',
+            inventoryUnits: { none: { status: STOREFRONT_SELLABLE_STATUS } },
           },
         ],
       },

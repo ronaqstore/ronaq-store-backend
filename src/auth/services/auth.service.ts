@@ -55,6 +55,10 @@ import {
   nextFreeStoreSlug,
   storeSlugBase,
 } from '../../store/helpers/store-slug.helper.js';
+import {
+  findMarketplaceHub,
+  resolveMarketplaceCityName,
+} from '../../store/helpers/marketplace-hub.helper.js';
 
 const TIMING_EQUALISER_HASH =
   '$2b$12$C6UzMDM.H6dfI/f/IKcEe.7QGK2M4Yw1nBqzYlJ0Z7iVfZ1zUq7r2K';
@@ -102,7 +106,13 @@ export class AuthService {
     }
 
     const resolvedAddress = (dto.address || dto.shopAddress)?.trim() ?? null;
-    const resolvedCity = dto.city?.trim() ?? null;
+    const resolvedCity = resolveMarketplaceCityName(dto.city);
+    if (!resolvedCity) {
+      throw new BadRequestException(
+        'Please select a valid KPK city from the list',
+      );
+    }
+    const hub = findMarketplaceHub(resolvedCity);
 
     const { shop, user } = await this.prisma.$transaction(async (tx) => {
       const newShop = await tx.shop.create({
@@ -184,6 +194,9 @@ export class AuthService {
           phoneNumber: newShop.phone,
           address: resolvedAddress,
           city: resolvedCity,
+          latitude: hub?.latitude ?? null,
+          longitude: hub?.longitude ?? null,
+          mapPlaceName: resolvedCity,
         },
       });
 

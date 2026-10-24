@@ -41,6 +41,7 @@ import {
   toStorefrontProfile,
   type StorefrontProductRow,
 } from '../helpers/storefront.mapper.js';
+import { resolveHubCityFilter } from '../helpers/marketplace-hub.helper.js';
 
 @Injectable()
 export class StorefrontService {
@@ -64,7 +65,10 @@ export class StorefrontService {
     };
 
     if (query.city) {
-      where.city = { contains: query.city, mode: 'insensitive' };
+      const cityFilter = resolveHubCityFilter(query.city);
+      if (cityFilter) {
+        where.city = { equals: cityFilter, mode: 'insensitive' };
+      }
     }
 
     if (query.q) {
