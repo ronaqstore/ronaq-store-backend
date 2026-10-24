@@ -8,6 +8,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { sanitizeQueryText } from '../../helpers/sanitize-query-text.helper.js';
 
 export class StoreListQueryDto {
   @ApiPropertyOptional({ example: 1, description: '1-based page number.' })
@@ -33,7 +34,7 @@ export class StoreListQueryDto {
     description: 'Search stores by name, display name, address, or city.',
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => sanitizeQueryText(value, 100))
   @IsString()
   @MaxLength(100)
   q?: string;
@@ -43,7 +44,7 @@ export class StoreListQueryDto {
     description: 'Filter stores by city.',
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => sanitizeQueryText(value, 100))
   @IsString()
   @MaxLength(100)
   city?: string;

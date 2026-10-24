@@ -10,12 +10,13 @@ import { tooManyRequests } from '../../errors/error.builder.js';
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 100;
+const MAX_SEARCH_REQUESTS = 40;
 const MAX_TRACKED_KEYS = 10_000;
 
-interface Bucket {
+type Bucket = {
   count: number;
   resetAt: number;
-}
+};
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
@@ -23,7 +24,9 @@ export class RateLimitGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const key = request.ip ?? 'unknown';
+    const isSearch = RateLimitGuard.isSearchRequest(request);
+    const key = `${request.ip ?? 'unknown'}:${isSearch ? 'search' : 'public'}`;
+    const max = isSearch ? MAX_SEARCH_REQUESTS : MAX_REQUESTS;
     const now = Date.now();
 
     const bucket = RateLimitGuard.buckets.get(key);
@@ -36,10 +39,17 @@ export class RateLimitGuard implements CanActivate {
     }
 
     bucket.count += 1;
-    if (bucket.count > MAX_REQUESTS) {
+    if (bucket.count > max) {
       throw new HttpException(tooManyRequests(), HttpStatus.TOO_MANY_REQUESTS);
     }
     return true;
+  }
+
+  private static isSearchRequest(request: Request): boolean {
+    const path = request.path ?? '';
+    if (path.includes('/models')) return true;
+    const q = request.query?.q;
+    return typeof q === 'string' && q.trim().length > 0;
   }
 
   private static sweep(now: number): void {

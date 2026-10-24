@@ -10,6 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { sanitizeQueryText } from '../../helpers/sanitize-query-text.helper.js';
 
 export class StoreProductsQueryDto {
   @ApiPropertyOptional({ example: 1, description: '1-based page number.' })
@@ -35,7 +36,7 @@ export class StoreProductsQueryDto {
     description: 'Only products in this category (id or exact name).',
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => sanitizeQueryText(value, 100))
   @IsString()
   @MaxLength(100)
   category?: string;
@@ -45,7 +46,7 @@ export class StoreProductsQueryDto {
     description: 'Only products of this brand (id or exact name).',
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => sanitizeQueryText(value, 100))
   @IsString()
   @MaxLength(100)
   brand?: string;
@@ -56,7 +57,7 @@ export class StoreProductsQueryDto {
       'Case-insensitive contains search on product name, sku or brand name.',
   })
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(({ value }) => sanitizeQueryText(value, 100))
   @IsString()
   @MaxLength(100)
   q?: string;

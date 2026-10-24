@@ -31,6 +31,9 @@ import {
 import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
 import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
+import { ParseModelKeyPipe } from '../pipes/parse-model-key.pipe.js';
+import { ParseProductIdPipe } from '../pipes/parse-product-id.pipe.js';
+import { ParseStoreSlugPipe } from '../pipes/parse-store-slug.pipe.js';
 import { StorefrontService } from '../services/storefront.service.js';
 
 const CACHE_CONTROL =
@@ -83,7 +86,7 @@ export class StorefrontController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getStore(
-    @Param('slug') slug: string,
+    @Param('slug', ParseStoreSlugPipe) slug: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<ResponseStoreDto>> {
     try {
@@ -113,7 +116,7 @@ export class StorefrontController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCategories(
-    @Param('slug') slug: string,
+    @Param('slug', ParseStoreSlugPipe) slug: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<ResponseStoreCategoriesDto>> {
     try {
@@ -148,7 +151,7 @@ export class StorefrontController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getModels(
-    @Param('slug') slug: string,
+    @Param('slug', ParseStoreSlugPipe) slug: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<ResponseStoreModelDto[]>> {
     try {
@@ -181,8 +184,8 @@ export class StorefrontController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getModel(
-    @Param('slug') slug: string,
-    @Param('modelKey') modelKey: string,
+    @Param('slug', ParseStoreSlugPipe) slug: string,
+    @Param('modelKey', ParseModelKeyPipe) modelKey: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<ResponseStoreModelDetailDto>> {
     try {
@@ -218,7 +221,7 @@ export class StorefrontController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getProducts(
-    @Param('slug') slug: string,
+    @Param('slug', ParseStoreSlugPipe) slug: string,
     @Query() query: StoreProductsQueryDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<
@@ -257,8 +260,8 @@ export class StorefrontController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getProduct(
-    @Param('slug') slug: string,
-    @Param('productId') productId: string,
+    @Param('slug', ParseStoreSlugPipe) slug: string,
+    @Param('productId', ParseProductIdPipe) productId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<ResponseStoreProductDto>> {
     try {

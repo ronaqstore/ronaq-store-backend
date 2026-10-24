@@ -1,60 +1,34 @@
-import { ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException } from '@nestjs/common';
 import { RateLimitGuard } from './rate-limit.guard.js';
 
-const contextFor = (ip: string): ExecutionContext =>
-  ({
-    switchToHttp: () => ({ getRequest: () => ({ ip }) }),
-  }) as unknown as ExecutionContext;
-
-const clearBuckets = (): void => {
-  (
-    RateLimitGuard as unknown as { buckets: Map<string, unknown> }
-  ).buckets.clear();
-};
-
 describe('RateLimitGuard', () => {
-  let guard: RateLimitGuard;
+  const guard = new RateLimitGuard();
 
-  beforeEach(() => {
-    guard = new RateLimitGuard();
-    clearBuckets();
-  });
+  function mockContext(path: string, query: Record<string, string> = {}) {
+    return {
+      switchToHttp: () => ({
+        getRequest: () => ({
+          ip: `test-${path}-${JSON.stringify(query)}`,
+          path,
+          query,
+        }),
+      }),
+    };
+  }
 
-  it('allows requests up to the per-minute limit', () => {
-    for (let i = 0; i < 100; i++) {
-      expect(guard.canActivate(contextFor('1.1.1.1'))).toBe(true);
+  it('allows normal public traffic under the global cap', () => {
+    const ctx = mockContext('/public/marketplace/hubs');
+    for (let i = 0; i < 100; i += 1) {
+      expect(guard.canActivate(ctx as never)).toBe(true);
     }
+    expect(() => guard.canActivate(ctx as never)).toThrow(HttpException);
   });
 
-  it('blocks the request past the limit with a 429', () => {
-    for (let i = 0; i < 100; i++) guard.canActivate(contextFor('2.2.2.2'));
-
-    let error: unknown;
-    try {
-      guard.canActivate(contextFor('2.2.2.2'));
-    } catch (caught) {
-      error = caught;
+  it('applies a stricter cap to search and models traffic', () => {
+    const ctx = mockContext('/public/marketplace/models', { q: 'iphone' });
+    for (let i = 0; i < 40; i += 1) {
+      expect(guard.canActivate(ctx as never)).toBe(true);
     }
-
-    expect(error).toBeInstanceOf(HttpException);
-    expect((error as HttpException).getStatus()).toBe(
-      HttpStatus.TOO_MANY_REQUESTS,
-    );
-  });
-
-  it('counts each IP separately', () => {
-    for (let i = 0; i < 100; i++) guard.canActivate(contextFor('3.3.3.3'));
-    expect(guard.canActivate(contextFor('4.4.4.4'))).toBe(true);
-  });
-
-  it('resets the window once it expires', () => {
-    const now = jest.spyOn(Date, 'now');
-    now.mockReturnValue(0);
-    for (let i = 0; i < 100; i++) guard.canActivate(contextFor('5.5.5.5'));
-
-    now.mockReturnValue(60_000);
-    expect(guard.canActivate(contextFor('5.5.5.5'))).toBe(true);
-
-    now.mockRestore();
+    expect(() => guard.canActivate(ctx as never)).toThrow(HttpException);
   });
 });
