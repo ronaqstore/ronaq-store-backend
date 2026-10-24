@@ -1,4 +1,4 @@
-import { applyUnitConditionSummary } from './storefront.mapper.js';
+import { applyUnitConditionSummary } from './storefront-condition.helper.js';
 import type { ResponseStoreProductDto } from '../dto/response-storefront.dto.js';
 
 function productWithUnits(

@@ -34,7 +34,6 @@ import {
 import {
   STOREFRONT_PRODUCT_INCLUDE,
   STOREFRONT_SELLABLE_STATUS,
-  applyUnitConditionSummary,
   applyUnitMinPrice,
   mapStorefrontUnitRow,
   storefrontCatalogWhere,
@@ -42,6 +41,7 @@ import {
   toStorefrontProfile,
   type StorefrontProductRow,
 } from '../helpers/storefront.mapper.js';
+import { applyUnitConditionSummary } from '../helpers/storefront-condition.helper.js';
 import { resolveHubCityFilter } from '../helpers/marketplace-hub.helper.js';
 
 @Injectable()
