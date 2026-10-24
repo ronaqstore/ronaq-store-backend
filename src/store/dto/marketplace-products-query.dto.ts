@@ -44,9 +44,9 @@ export class MarketplaceProductsQueryDto {
 
   @ApiPropertyOptional({ example: 'iphone 12' })
   @IsOptional()
-  @Transform(({ value }) => sanitizeQueryText(value, 100))
+  @Transform(({ value }) => sanitizeQueryText(value, 80))
   @IsString()
-  @MaxLength(100)
+  @MaxLength(80)
   q?: string;
 
   @ApiPropertyOptional({

@@ -12,4 +12,9 @@ describe('sanitizeQueryText', () => {
     expect(sanitizeQueryText('   ', 100)).toBeUndefined();
     expect(sanitizeQueryText(null, 100)).toBeUndefined();
   });
+
+  it('normalizes Arabic-script variants and Eastern digits', () => {
+    expect(sanitizeQueryText('ك\u064A\u0661\u0662', 100)).toBe('کی12');
+    expect(sanitizeQueryText('iphone\u200B 13', 100)).toBe('iphone 13');
+  });
 });

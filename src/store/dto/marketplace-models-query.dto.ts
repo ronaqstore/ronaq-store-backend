@@ -16,9 +16,9 @@ export class MarketplaceModelsQueryDto {
     description: 'Search text for model suggestions (min 2 chars).',
   })
   @IsOptional()
-  @Transform(({ value }) => sanitizeQueryText(value, 100))
+  @Transform(({ value }) => sanitizeQueryText(value, 80))
   @IsString()
-  @MaxLength(100)
+  @MaxLength(80)
   q?: string;
 
   @ApiPropertyOptional({
