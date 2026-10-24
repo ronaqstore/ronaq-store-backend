@@ -39,6 +39,10 @@ import {
 } from '../constants/default-lists.constant.js';
 import { CreateShopDto } from '../dto/create-shop.dto.js';
 import { CreateShopResponseDto } from '../dto/create-shop-response.dto.js';
+import {
+  findMarketplaceHub,
+  resolveMarketplaceCityName,
+} from '../../store/helpers/marketplace-hub.helper.js';
 import { UpdateSubscriptionDto } from '../dto/update-subscription.dto.js';
 import { UpdateSubscriptionResponseDto } from '../dto/update-subscription-response.dto.js';
 import { ShopOwnerStatusResponseDto } from '../dto/shop-owner-status-response.dto.js';
@@ -228,6 +232,13 @@ export class PlatformAdminService {
 
     const shopName = dto.shopName.trim();
     const ownerName = dto.ownerName.trim();
+    const resolvedCity = resolveMarketplaceCityName(dto.city);
+    if (!resolvedCity) {
+      throw new BadRequestException(
+        'Please select a valid KPK city from the list',
+      );
+    }
+    const hub = findMarketplaceHub(resolvedCity);
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -300,6 +311,10 @@ export class PlatformAdminService {
             displayName: shop.name.trim().slice(0, 100),
             phoneNumber: shop.phone,
             address: shop.address,
+            city: resolvedCity,
+            latitude: hub?.latitude ?? null,
+            longitude: hub?.longitude ?? null,
+            mapPlaceName: resolvedCity,
           },
         });
 

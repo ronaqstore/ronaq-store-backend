@@ -57,15 +57,16 @@ export class RegisterOwnerDto {
   @MaxLength(100)
   shopName: string;
 
-  @ApiPropertyOptional({
-    example: 'Lahore',
-    description: 'City where the shop is located.',
+  @ApiProperty({
+    example: 'Timergara',
+    description:
+      'KPK marketplace city where the shop is located. Must match a hub city from GET /public/marketplace/hubs.',
   })
-  @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
+  @IsNotEmpty()
   @MaxLength(100)
-  city?: string;
+  city: string;
 
   @ApiPropertyOptional({
     example: 'Shop 12, Hafeez Centre, Lahore',
