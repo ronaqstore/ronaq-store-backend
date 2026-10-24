@@ -5,7 +5,6 @@ import {
   InternalServerErrorException,
   Query,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -13,16 +12,17 @@ import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSucce
 import {
   BAD_REQUEST_RESPONSE,
   INTERNAL_SERVER_ERROR_RESPONSE,
+  NOT_FOUND_REQUEST_RESPONSE,
   OK_RESPONSE_STATUS,
 } from '../../constants/error-response.constant.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
-import { RateLimitGuard } from '../guards/rate-limit.guard.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { MarketplaceService } from '../services/marketplace.service.js';
 import { MarketplaceProductsQueryDto } from '../dto/marketplace-products-query.dto.js';
 import { MarketplaceHubsQueryDto } from '../dto/marketplace-hubs-query.dto.js';
 import { MarketplaceModelsQueryDto } from '../dto/marketplace-models-query.dto.js';
+import { MarketplaceRelatedQueryDto } from '../dto/marketplace-related-query.dto.js';
 import { NearestHubQueryDto } from '../dto/nearest-hub-query.dto.js';
 import {
   ResponseMarketplaceHubDto,
@@ -35,7 +35,6 @@ const CACHE_CONTROL =
 
 @ApiTags('marketplace')
 @Controller('public/marketplace')
-@UseGuards(RateLimitGuard)
 export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
 
@@ -165,6 +164,45 @@ export class MarketplaceController {
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(
         'Failed to fetch marketplace products',
+      );
+    }
+  }
+
+  @Get('/related-products')
+  @ApiOperation({
+    summary: 'Related accessories for a marketplace product',
+    description:
+      'For phones/tablets/watches returns covers, chargers, cables and other accessories matched by brand/model, scoped by city hub when provided.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      PaginatedResponseDTO,
+      'Related products fetched successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async listRelatedProducts(
+    @Query() query: MarketplaceRelatedQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<
+    ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseMarketplaceProductDto>>
+  > {
+    try {
+      const data = await this.marketplaceService.listRelatedProducts(query);
+      res.set('Cache-Control', CACHE_CONTROL);
+      return new ApiSuccessResponseDTO(
+        'Related products fetched successfully',
+        data,
+      );
+    } catch (error) {
+      logError('marketplace.controller.ts', 'listRelatedProducts', error, {
+        query,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException(
+        'Failed to fetch related products',
       );
     }
   }

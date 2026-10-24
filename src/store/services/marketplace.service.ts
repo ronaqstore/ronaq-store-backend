@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { ShopStatus } from '../../generated/prisma/enums.js';
@@ -13,6 +13,7 @@ import {
   slugify,
   toModelKey,
 } from '../../helpers/slug.helper.js';
+import { resourceNotFound } from '../../errors/error.builder.js';
 import {
   STOREFRONT_PRODUCT_INCLUDE,
   storefrontCatalogWhere,
@@ -23,9 +24,17 @@ import {
   paginateMarketplaceHubs,
   resolveHubCityTokens,
 } from '../helpers/marketplace-hub.helper.js';
+import {
+  buildRelatedSearchTokens,
+  isDeviceProduct,
+  MARKETPLACE_ACCESSORY_CATEGORY_NAMES,
+  scoreRelatedAccessory,
+  type RelatedSourceProduct,
+} from '../helpers/marketplace-related.helper.js';
 import type { MarketplaceProductsQueryDto } from '../dto/marketplace-products-query.dto.js';
 import type { MarketplaceHubsQueryDto } from '../dto/marketplace-hubs-query.dto.js';
 import type { MarketplaceModelsQueryDto } from '../dto/marketplace-models-query.dto.js';
+import type { MarketplaceRelatedQueryDto } from '../dto/marketplace-related-query.dto.js';
 import type {
   ResponseMarketplaceHubDto,
   ResponseMarketplaceProductDto,
@@ -40,6 +49,7 @@ import type {
 
 const MODEL_SUGGESTION_SCAN = 250;
 const MODEL_KEY_SCAN = 500;
+const RELATED_CANDIDATE_SCAN = 120;
 
 @Injectable()
 export class MarketplaceService {
@@ -388,6 +398,139 @@ export class MarketplaceService {
       total,
       page,
       pageSize,
+    );
+  }
+
+  async listRelatedProducts(
+    query: MarketplaceRelatedQueryDto,
+  ): Promise<PaginatedResponseDTO<ResponseMarketplaceProductDto>> {
+    const limit = Math.min(Math.max(query.limit ?? 8, 1), 24);
+    const source = await this.prisma.product.findFirst({
+      where: {
+        id: query.productId,
+        isActive: true,
+        isPublished: true,
+        publishedAt: { not: null },
+        shop: {
+          status: ShopStatus.ACTIVE,
+          storeSettings: { isEnabled: true },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        model: true,
+        trackingType: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true } },
+      },
+    });
+
+    if (!source) {
+      throw new NotFoundException(resourceNotFound('Product', query.productId));
+    }
+
+    const sourceInfo: RelatedSourceProduct = {
+      id: source.id,
+      name: source.name,
+      model: source.model,
+      trackingType: source.trackingType,
+      brandName: source.brand.name,
+      categoryName: source.category.name,
+    };
+    const tokens = buildRelatedSearchTokens(sourceInfo);
+    const wantAccessories = isDeviceProduct(sourceInfo);
+
+    const accessoryCategoryOr = MARKETPLACE_ACCESSORY_CATEGORY_NAMES.map(
+      (name) => ({
+        category: { name: { equals: name, mode: 'insensitive' as const } },
+      }),
+    );
+
+    const catalogWhere = storefrontCatalogWhere(null);
+    const where: Prisma.ProductWhereInput = {
+      ...catalogWhere,
+      id: { not: source.id },
+      shop: this.marketplaceShopWhere(query.city),
+      OR: wantAccessories
+        ? [{ trackingType: 'QUANTITY' }, ...accessoryCategoryOr]
+        : [
+            { trackingType: 'QUANTITY' },
+            ...accessoryCategoryOr,
+            {
+              brand: {
+                name: {
+                  equals: source.brand.name,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          ],
+    };
+
+    const include = {
+      ...STOREFRONT_PRODUCT_INCLUDE,
+      shop: {
+        select: {
+          storeSettings: {
+            select: {
+              slug: true,
+              displayName: true,
+              city: true,
+              whatsappNumber: true,
+              showExactStock: true,
+            },
+          },
+        },
+      },
+    } as const;
+
+    const rows = await this.prisma.product.findMany({
+      where,
+      take: RELATED_CANDIDATE_SCAN,
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      include,
+    });
+
+    const scored = rows
+      .map((row) => ({
+        row,
+        score: scoreRelatedAccessory(
+          {
+            id: row.id,
+            name: row.name,
+            model: row.model,
+            trackingType: row.trackingType,
+            categoryName: row.category.name,
+            brandName: row.brand.name,
+          },
+          sourceInfo,
+          tokens,
+        ),
+      }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const aTime = a.row.publishedAt?.getTime() ?? 0;
+        const bTime = b.row.publishedAt?.getTime() ?? 0;
+        return bTime - aTime;
+      });
+
+    const seenKeys = new Set<string>();
+    const unique: typeof scored = [];
+    for (const entry of scored) {
+      const key = `${slugify(entry.row.brand.name)}--${slugify(entry.row.name)}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      unique.push(entry);
+      if (unique.length >= limit) break;
+    }
+
+    return new PaginatedResponseDTO(
+      unique.map((entry) => this.toMarketplaceProduct(entry.row)),
+      unique.length,
+      1,
+      limit,
     );
   }
 }

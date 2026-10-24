@@ -100,9 +100,7 @@ export const outstandingExceeded = (): ErrorResponseDTO => {
 export const tooManyRequests = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'Too many requests',
-    [
-      'You have hit the request limit for the public store this minute. Wait a moment and try again.',
-    ],
+    ['Too many login or register attempts. Wait a moment and try again.'],
     HttpStatus.TOO_MANY_REQUESTS,
   );
 };

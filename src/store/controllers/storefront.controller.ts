@@ -6,9 +6,7 @@ import {
   Param,
   Query,
   Res,
-  UseGuards,
 } from '@nestjs/common';
-import { RateLimitGuard } from '../guards/rate-limit.guard.js';
 import type { Response } from 'express';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiSuccessResponseDecorator } from '../../common-dto/decorator/ApiSuccessResponseDecorator.js';
@@ -41,7 +39,6 @@ const CACHE_CONTROL =
 
 @ApiTags('storefront')
 @Controller('public/stores')
-@UseGuards(RateLimitGuard)
 export class StorefrontController {
   constructor(private readonly storefrontService: StorefrontService) {}
 
