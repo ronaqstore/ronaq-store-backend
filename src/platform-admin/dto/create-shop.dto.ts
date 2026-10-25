@@ -24,13 +24,23 @@ export class CreateShopDto {
 
   @ApiPropertyOptional({
     description: 'Shop address, shown on receipts.',
-    example: 'Main Bazaar, Lahore',
+    example: 'Main Bazaar, Timergara',
   })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @Length(2, 250)
   shopAddress?: string;
+
+  @ApiProperty({
+    description:
+      'KPK marketplace city for the shop. Must match a hub from GET /public/marketplace/hubs.',
+    example: 'Timergara',
+  })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @Length(2, 100)
+  city: string;
 
   @ApiProperty({
     description:

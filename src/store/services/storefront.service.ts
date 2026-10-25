@@ -41,6 +41,8 @@ import {
   toStorefrontProfile,
   type StorefrontProductRow,
 } from '../helpers/storefront.mapper.js';
+import { applyUnitConditionSummary } from '../helpers/storefront-condition.helper.js';
+import { resolveHubCityFilter } from '../helpers/marketplace-hub.helper.js';
 
 @Injectable()
 export class StorefrontService {
@@ -64,15 +66,17 @@ export class StorefrontService {
     };
 
     if (query.city) {
-      where.city = { contains: query.city, mode: 'insensitive' };
+      const cityFilter = resolveHubCityFilter(query.city);
+      if (cityFilter) {
+        where.city = { equals: cityFilter, mode: 'insensitive' };
+      }
     }
 
     if (query.q) {
       where.OR = [
         { displayName: { contains: query.q, mode: 'insensitive' } },
-        { address: { contains: query.q, mode: 'insensitive' } },
         { city: { contains: query.q, mode: 'insensitive' } },
-        { about: { contains: query.q, mode: 'insensitive' } },
+        { address: { contains: query.q, mode: 'insensitive' } },
         { shop: { name: { contains: query.q, mode: 'insensitive' } } },
       ];
     }
@@ -250,6 +254,7 @@ export class StorefrontService {
       );
       product.units = unitsByProduct.get(row.id) ?? [];
       applyUnitMinPrice(product);
+      applyUnitConditionSummary(product);
     }
     return product;
   }
@@ -392,6 +397,7 @@ export class StorefrontService {
         const product = toStorefrontProduct(row, settings.showExactStock);
         product.units = unitsByProduct.get(row.id) ?? [];
         applyUnitMinPrice(product);
+        applyUnitConditionSummary(product);
         return product;
       }),
     };

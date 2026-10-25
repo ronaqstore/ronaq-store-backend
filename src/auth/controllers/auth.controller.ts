@@ -8,6 +8,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { AuthRateLimitGuard } from '../guards/auth-rate-limit.guard.js';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -51,6 +52,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({
     summary: 'Self-serve register a new shop owner and shop',
     description:
@@ -75,15 +77,12 @@ export class AuthController {
       );
     } catch (error) {
       logError('auth.controller.ts', 'register', error);
-      if (error instanceof HttpException) throw error;
-      const msg = error instanceof Error ? error.message : String(error);
-      throw new InternalServerErrorException(
-        `Failed to register account and shop: ${msg}`,
-      );
+      throw rethrowOrDefault(error, 'Failed to register account and shop');
     }
   }
 
   @Post('login')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({
     summary: 'Log in as a shop owner',
     description:
@@ -110,6 +109,7 @@ export class AuthController {
   }
 
   @Post('platform-admin/login')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({
     summary: 'Log in as a Ronaq Store platform admin',
     description:
@@ -144,6 +144,7 @@ export class AuthController {
   }
 
   @Post('setup-password')
+  @UseGuards(AuthRateLimitGuard)
   @ApiOperation({
     summary: 'Set a password using a one-time setup link',
     description:

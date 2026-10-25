@@ -18,8 +18,9 @@ async function bootstrap() {
     bufferLogs: true,
     rawBody: true,
   });
-  app.useBodyParser('json', { limit: '10mb' });
-  app.useBodyParser('urlencoded', { extended: true, limit: '10mb' });
+  app.disable('x-powered-by');
+  app.useBodyParser('json', { limit: '1mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '1mb' });
 
   const traceLogger = app.get(TraceLoggerService);
   const cls = app.get(ClsService);
@@ -33,6 +34,7 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
+      stopAtFirstError: false,
       transformOptions: { enableImplicitConversion: true },
     }),
   );
@@ -60,6 +62,24 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api', app, document);
+
+  app.enableShutdownHooks();
+
+  process.on('unhandledRejection', (reason: unknown) => {
+    traceLogger.error(
+      `UnhandledRejection: ${reason instanceof Error ? reason.message : String(reason)}`,
+      reason instanceof Error ? reason.stack : undefined,
+      'bootstrap',
+    );
+  });
+
+  process.on('uncaughtException', (error: Error) => {
+    traceLogger.error(
+      `UncaughtException: ${error.message}`,
+      error.stack,
+      'bootstrap',
+    );
+  });
 
   await app.listen(configService.serverPort);
 }

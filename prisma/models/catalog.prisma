@@ -87,6 +87,8 @@ model Product {
   @@index([shopId, categoryId])
   @@index([shopId, brandId])
   @@index([shopId, isActive])
+  @@index([shopId, isPublished, isActive])
+  @@index([isPublished, isActive, publishedAt(sort: Desc)])
   @@map("products")
 }
 

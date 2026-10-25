@@ -39,6 +39,7 @@ import { normalizeAndAssertContactPhone } from '../helpers/store-contact-phone.h
 import { normalizeLocationCoords } from '../helpers/store-location.helper.js';
 import { buildStoreSettingsUpdate } from '../helpers/store-settings-update.helper.js';
 import { processStoreImage } from '../helpers/store-image-process.helper.js';
+import { resolveMarketplaceCityName } from '../helpers/marketplace-hub.helper.js';
 
 const MAX_PRODUCT_IMAGES = 5;
 const MAX_IMAGE_EDGE = 1600;
@@ -97,6 +98,16 @@ export class StoreService {
     }
 
     normalizeLocationCoords(dto);
+
+    if (dto.city !== undefined && dto.city !== null && dto.city.trim()) {
+      const resolvedCity = resolveMarketplaceCityName(dto.city);
+      if (!resolvedCity) {
+        throw new BadRequestException(
+          'Please select a valid KPK city from the list',
+        );
+      }
+      dto.city = resolvedCity;
+    }
 
     const existing = await this.prisma.shopStoreSettings.findUnique({
       where: { shopId },

@@ -7,14 +7,10 @@
  * and cash movements. Adjustments update live stock_levels / inventory_units.
  *
  * Env (defaults in parentheses):
- *   SEED_SHOP_COUNT (120)
- *   SEED_PRODUCTS_PER_CATEGORY (40)
- *   SEED_CUSTOMERS_PER_SHOP (40)
- *   SEED_SUPPLIERS_PER_SHOP (40)
- *   SEED_PURCHASES_PER_SHOP (48)
- *   SEED_SALES_PER_SHOP (48)
- *   SEED_ADJUSTMENTS_PER_SHOP (36)
- *   SEED_EXPENSES_PER_SHOP (40)
+ *   SEED_SHOPS_PER_CITY (40) — unique shops created in every marketplace city
+ *   SEED_CITY_LIMIT (0) — 0 = all hubs; set e.g. 10 for a faster partial seed
+ *   SEED_PRODUCTS_PER_CATEGORY (auto: 40 light / 8 when many shops)
+ *   SEED_CUSTOMERS_PER_SHOP / SEED_SUPPLIERS_PER_SHOP / …
  *   SEED_OWNER_PASSWORD (admin@123)
  *   SEED_OWNER_PHONE — used as login for shop #1
  *
@@ -34,6 +30,9 @@ const {
   storeSlugBase,
   nextFreeStoreSlug,
 } = require('../dist/store/helpers/store-slug.helper.js');
+const {
+  MARKETPLACE_HUBS,
+} = require('../dist/store/constants/marketplace-hubs.constant.js');
 
 const SERIALIZED_CATEGORIES = new Set(['Mobile Phones', 'Tablets & iPads']);
 
@@ -289,18 +288,17 @@ async function mixupShopDemoData(prisma, shopId) {
   return summary;
 }
 
-const CITIES = [
-  { city: 'Lahore', area: 'Hall Road', lat: 31.5656, lng: 74.3142 },
-  { city: 'Karachi', area: 'Saddar', lat: 24.8615, lng: 67.0099 },
-  { city: 'Islamabad', area: 'Blue Area', lat: 33.7294, lng: 73.0931 },
-  { city: 'Peshawar', area: 'Saddar Bazaar', lat: 34.0151, lng: 71.5785 },
-  { city: 'Faisalabad', area: 'Clock Tower', lat: 31.4504, lng: 73.135 },
-  { city: 'Multan', area: 'Hussain Agahi', lat: 30.1575, lng: 71.5249 },
-  { city: 'Rawalpindi', area: 'Raja Bazaar', lat: 33.5973, lng: 73.0479 },
-  { city: 'Hyderabad', area: 'Resham Gali', lat: 25.396, lng: 68.3578 },
-  { city: 'Quetta', area: 'Liaquat Bazaar', lat: 30.1798, lng: 66.975 },
-  { city: 'Sialkot', area: 'Trunk Bazaar', lat: 32.4945, lng: 74.5229 },
-];
+function buildSeedCities() {
+  const cityLimit = envInt('SEED_CITY_LIMIT', 0);
+  const hubs =
+    cityLimit > 0 ? MARKETPLACE_HUBS.slice(0, cityLimit) : MARKETPLACE_HUBS;
+  return hubs.map((hub) => ({
+    city: hub.name,
+    area: 'Main Bazaar',
+    lat: hub.latitude,
+    lng: hub.longitude,
+  }));
+}
 
 const FIRST_NAMES = [
   'Ahmed', 'Ali', 'Hassan', 'Usman', 'Bilal', 'Hamza', 'Omar', 'Zain', 'Saad', 'Farhan',
@@ -519,6 +517,7 @@ async function ensureShopBundle(prisma, {
   ownerRawPhone,
   passwordHash,
   shopName,
+  place,
   cfg,
 }) {
   const ownerPhone = normalizePhone(ownerRawPhone);
@@ -546,7 +545,6 @@ async function ensureShopBundle(prisma, {
     return seedShopBusinessData(prisma, existing.shop, existing, shopIndex, cfg);
   }
 
-  const place = pick(CITIES, shopIndex);
   const oneYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
   const shop = await prisma.shop.create({
@@ -732,7 +730,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
           const digits = String(3000000000000 + shopIndex * 1000 + i + 1);
           return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
         })(),
-        address: `${pick(CITIES, i).area}, ${pick(CITIES, i).city}`,
+        address: `Supplier Street ${i + 1}`,
         notes: pick(SUPPLIER_NOTES, i),
         openingBalance: i % 7 === 0 ? paisa(5000 + i * 100) : 0n,
         isSystem: false,
@@ -750,7 +748,7 @@ async function seedShopBusinessData(prisma, shop, owner, shopIndex, cfg) {
         shopId: shop.id,
         name: `${pick(FIRST_NAMES, i + 5)} ${pick(LAST_NAMES, i + 8)}`,
         phone: normalizePhone(customerPhoneLocal(shopIndex, i)),
-        address: `${10 + i} Street, ${pick(CITIES, i).city}`,
+        address: `${10 + i} Street`,
         notes: pick(CUSTOMER_NOTES, i),
         openingBalance: i % 9 === 0 ? paisa(1000 + i * 50) : 0n,
         isActive: i % 6 !== 0,
@@ -1332,15 +1330,23 @@ async function seedManualAdjustments(prisma, shop, cfg) {
 }
 
 async function seedDemoData(prisma) {
+  const cities = buildSeedCities();
+  const shopsPerCity = Math.max(1, envInt('SEED_SHOPS_PER_CITY', 40));
+  const shopCount = cities.length * shopsPerCity;
+  const heavy = shopCount > 400;
   const cfg = {
-    shopCount: envInt('SEED_SHOP_COUNT', 120),
-    productsPerCategory: envInt('SEED_PRODUCTS_PER_CATEGORY', 40),
-    customersPerShop: envInt('SEED_CUSTOMERS_PER_SHOP', 40),
-    suppliersPerShop: envInt('SEED_SUPPLIERS_PER_SHOP', 40),
-    purchasesPerShop: envInt('SEED_PURCHASES_PER_SHOP', 48),
-    salesPerShop: envInt('SEED_SALES_PER_SHOP', 48),
-    adjustmentsPerShop: envInt('SEED_ADJUSTMENTS_PER_SHOP', 36),
-    expensesPerShop: envInt('SEED_EXPENSES_PER_SHOP', 40),
+    shopCount,
+    shopsPerCity,
+    productsPerCategory: envInt(
+      'SEED_PRODUCTS_PER_CATEGORY',
+      heavy ? 8 : 40,
+    ),
+    customersPerShop: envInt('SEED_CUSTOMERS_PER_SHOP', heavy ? 8 : 40),
+    suppliersPerShop: envInt('SEED_SUPPLIERS_PER_SHOP', heavy ? 6 : 40),
+    purchasesPerShop: envInt('SEED_PURCHASES_PER_SHOP', heavy ? 8 : 48),
+    salesPerShop: envInt('SEED_SALES_PER_SHOP', heavy ? 8 : 48),
+    adjustmentsPerShop: envInt('SEED_ADJUSTMENTS_PER_SHOP', heavy ? 4 : 36),
+    expensesPerShop: envInt('SEED_EXPENSES_PER_SHOP', heavy ? 6 : 40),
   };
 
   const password = (process.env.SEED_OWNER_PASSWORD || 'admin@123').trim();
@@ -1350,31 +1356,39 @@ async function seedDemoData(prisma) {
   const firstOwnerPhone = (process.env.SEED_OWNER_PHONE || '03029825214').trim();
 
   console.log('🏪 Demo seed configuration:');
-  console.log(`   shops=${cfg.shopCount} products/category=${cfg.productsPerCategory}`);
+  console.log(
+    `   cities=${cities.length} shops/city=${shopsPerCity} totalShops=${shopCount}${heavy ? ' (light data mode)' : ''}`,
+  );
+  console.log(`   products/category=${cfg.productsPerCategory}`);
   console.log(
     `   customers=${cfg.customersPerShop} suppliers=${cfg.suppliersPerShop} purchases=${cfg.purchasesPerShop} sales=${cfg.salesPerShop} adjustments=${cfg.adjustmentsPerShop} expenses=${cfg.expensesPerShop}`,
   );
   console.log('');
 
-  for (let i = 0; i < cfg.shopCount; i += 1) {
-    const place = pick(CITIES, i);
+  for (let i = 0; i < shopCount; i += 1) {
+    const cityIndex = Math.floor(i / shopsPerCity);
+    const shopInCity = (i % shopsPerCity) + 1;
+    const place = cities[cityIndex];
     const ownerRawPhone = i === 0 ? firstOwnerPhone : ownerPhoneLocal(i);
     const shopName =
       i === 0
         ? process.env.SEED_SHOP_NAME || `Ronaq Mobile ${place.city}`
-        : `Ronaq Mobile ${place.city} ${String(i + 1).padStart(2, '0')}`;
+        : `Ronaq Mobile ${place.city} ${String(shopInCity).padStart(2, '0')}`;
     const ownerName =
       i === 0
         ? process.env.SEED_OWNER_NAME || 'Shop Owner'
         : `${pick(FIRST_NAMES, i)} ${pick(LAST_NAMES, i)}`;
 
-    console.log(`→ Seeding shop ${i + 1}/${cfg.shopCount}…`);
+    console.log(
+      `→ Seeding shop ${i + 1}/${shopCount} (${place.city} #${shopInCity})…`,
+    );
     await ensureShopBundle(prisma, {
       shopIndex: i,
       ownerName,
       ownerRawPhone,
       passwordHash,
       shopName,
+      place,
       cfg,
     });
   }
@@ -1385,8 +1399,8 @@ async function seedDemoData(prisma) {
   console.log('Primary shop owner login:');
   console.log(`   Phone:    ${firstOwnerPhone}`);
   console.log(`   Password: ${password}`);
-  if (cfg.shopCount > 1) {
-    console.log(`   Other shops: ${ownerPhoneLocal(1)} … ${ownerPhoneLocal(cfg.shopCount - 1)}`);
+  if (shopCount > 1) {
+    console.log(`   Other shops: ${ownerPhoneLocal(1)} … ${ownerPhoneLocal(shopCount - 1)}`);
     console.log(`   Password: ${password} (same for all demo owners)`);
   }
   console.log('──────────────────────────────────────────────────');

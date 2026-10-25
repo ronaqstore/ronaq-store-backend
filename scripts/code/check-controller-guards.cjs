@@ -12,6 +12,7 @@ const PUBLIC_ALLOW = [
   'src/app.controller.ts',
   'src/auth/controllers/auth.controller.ts',
   'src/store/controllers/storefront.controller.ts',
+  'src/store/controllers/marketplace.controller.ts',
 ];
 
 if (fs.existsSync(srcRoot)) {

@@ -33,6 +33,7 @@ model InventoryUnit {
   @@unique([shopId, imei1])
   @@unique([shopId, imei2])
   @@index([productId, status])
+  @@index([productId, status, condition])
   @@index([shopId, status])
   @@index([purchaseItemId])
   @@map("inventory_units")

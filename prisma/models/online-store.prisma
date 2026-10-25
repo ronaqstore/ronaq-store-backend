@@ -33,5 +33,6 @@ model ShopStoreSettings {
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Restrict)
 
+  @@index([isEnabled, city])
   @@map("shop_store_settings")
 }

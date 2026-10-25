@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { Request } from 'express';
 import type { StringValue } from 'ms';
@@ -8,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { AppConfigurationModule } from './app-configuration/app-configuration.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { GlobalHttpExceptionFilter } from './common/filters/http-exception.filter.js';
 import { TraceIdInterceptor } from './common/interceptors/trace-id.interceptor.js';
 import { TraceLoggerService } from './common/logger/trace-logger.service.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -79,6 +81,14 @@ import { ReportsModule } from './reports/reports.module.js';
     ReportsModule,
   ],
   controllers: [AppController],
-  providers: [AppService, TraceLoggerService, TraceIdInterceptor],
+  providers: [
+    AppService,
+    TraceLoggerService,
+    TraceIdInterceptor,
+    {
+      provide: APP_FILTER,
+      useClass: GlobalHttpExceptionFilter,
+    },
+  ],
 })
 export class AppModule {}
