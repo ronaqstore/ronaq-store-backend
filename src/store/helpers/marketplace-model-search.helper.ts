@@ -9,11 +9,11 @@ export type MarketplaceModelSearchRow = {
   image_url: string | null;
 };
 
-function escapeLikePattern(value: string): string {
+export function escapeLikePattern(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-function buildTokenMatchSql(token: string): Prisma.Sql {
+export function buildTokenMatchSql(token: string): Prisma.Sql {
   const pattern = `%${escapeLikePattern(token)}%`;
   return Prisma.sql`(
     p.name ILIKE ${pattern} ESCAPE '\'
@@ -23,7 +23,7 @@ function buildTokenMatchSql(token: string): Prisma.Sql {
   )`;
 }
 
-function buildCityFilterSql(cityTokens: string[] | null): Prisma.Sql {
+export function buildCityFilterSql(cityTokens: string[] | null): Prisma.Sql {
   if (!cityTokens || cityTokens.length === 0) {
     return Prisma.sql`TRUE`;
   }

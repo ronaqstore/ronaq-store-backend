@@ -7,18 +7,13 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import { toLocalPkPhone } from '../../helpers/phone.helper.js';
 import {
   parseModelKey,
   slugify,
   toModelKey,
 } from '../../helpers/slug.helper.js';
 import { resourceNotFound } from '../../errors/error.builder.js';
-import {
-  STOREFRONT_PRODUCT_INCLUDE,
-  storefrontCatalogWhere,
-  toStorefrontProduct,
-} from '../helpers/storefront.mapper.js';
+import { storefrontCatalogWhere } from '../helpers/storefront.mapper.js';
 import {
   nearestMarketplaceHub,
   paginateMarketplaceHubs,
@@ -28,6 +23,23 @@ import {
   buildMarketplaceModelSearchSql,
   type MarketplaceModelSearchRow,
 } from '../helpers/marketplace-model-search.helper.js';
+import {
+  buildMarketplaceProductSearchSql,
+  canUseLeanProductSearch,
+  type MarketplaceProductSearchRow,
+} from '../helpers/marketplace-product-search.helper.js';
+import {
+  applyMarketplaceListingFilters,
+  matchesModelKey,
+  marketplaceShopWhere,
+} from '../helpers/marketplace-filter.helper.js';
+import {
+  MARKETPLACE_PRODUCT_INCLUDE,
+  toHubDto,
+  toLeanMarketplaceProduct,
+  toMarketplaceProduct,
+} from '../helpers/marketplace-product.mapper.js';
+import { MarketplaceSearchCacheService } from './marketplace-search-cache.service.js';
 import {
   buildRelatedSearchTokens,
   isDeviceProduct,
@@ -45,171 +57,16 @@ import type {
 } from '../dto/response-marketplace.dto.js';
 import type { ResponseMarketplaceModelDto } from '../dto/response-marketplace-model.dto.js';
 import type { NearestHubQueryDto } from '../dto/nearest-hub-query.dto.js';
-import type { MarketplaceHubDefinition } from '../constants/marketplace-hubs.constant.js';
-import type {
-  MarketplaceProductModelLabelRow,
-  MarketplaceProductModelMatchRow,
-} from './marketplace.service.types.js';
 
 const MODEL_KEY_SCAN = 500;
 const RELATED_CANDIDATE_SCAN = 120;
 
 @Injectable()
 export class MarketplaceService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  private toHubDto(hub: MarketplaceHubDefinition): ResponseMarketplaceHubDto {
-    return {
-      id: hub.id,
-      name: hub.name,
-      latitude: hub.latitude,
-      longitude: hub.longitude,
-    };
-  }
-
-  private marketplaceShopWhere(
-    city?: string | null,
-  ): Prisma.ProductWhereInput['shop'] {
-    const cityTokens = resolveHubCityTokens(city);
-    return {
-      status: ShopStatus.ACTIVE,
-      storeSettings: {
-        isEnabled: true,
-        ...(cityTokens
-          ? {
-              OR: cityTokens.map((token) => ({
-                city: { equals: token, mode: 'insensitive' as const },
-              })),
-            }
-          : {}),
-      },
-    };
-  }
-
-  private productModelLabel(row: MarketplaceProductModelLabelRow): string {
-    return (row.model?.trim() || row.name).trim();
-  }
-
-  private matchesModelKey(
-    row: MarketplaceProductModelMatchRow,
-    brandSlug: string,
-    modelSlug: string,
-  ): boolean {
-    return (
-      slugify(row.brand.name) === brandSlug &&
-      slugify(this.productModelLabel(row)) === modelSlug
-    );
-  }
-
-  private appendAnd(
-    where: Prisma.ProductWhereInput,
-    clause: Prisma.ProductWhereInput,
-  ): void {
-    const existing = where.AND;
-    where.AND = [
-      ...(Array.isArray(existing) ? existing : existing ? [existing] : []),
-      clause,
-    ];
-  }
-
-  private applyMarketplaceListingFilters(
-    where: Prisma.ProductWhereInput,
-    query: MarketplaceProductsQueryDto,
-  ): Prisma.ProductOrderByWithRelationInput[] {
-    if (query.condition === 'NEW' || query.condition === 'USED') {
-      if (query.condition === 'USED') {
-        this.appendAnd(where, {
-          trackingType: 'SERIALIZED',
-          inventoryUnits: {
-            some: {
-              status: 'IN_STOCK',
-              condition: 'USED',
-            },
-          },
-        });
-      } else {
-        this.appendAnd(where, {
-          OR: [
-            {
-              trackingType: 'SERIALIZED',
-              inventoryUnits: {
-                some: {
-                  status: 'IN_STOCK',
-                  condition: 'NEW',
-                },
-              },
-            },
-            { trackingType: 'QUANTITY' },
-          ],
-        });
-      }
-    }
-
-    if (query.minPrice != null || query.maxPrice != null) {
-      let minPrice = query.minPrice;
-      let maxPrice = query.maxPrice;
-      if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
-        const swap = minPrice;
-        minPrice = maxPrice;
-        maxPrice = swap;
-      }
-      where.defaultSellingPrice = {
-        ...(minPrice != null ? { gte: BigInt(minPrice) } : {}),
-        ...(maxPrice != null ? { lte: BigInt(maxPrice) } : {}),
-      };
-    }
-
-    if (query.ptaStatus) {
-      where.ptaStatus = query.ptaStatus;
-    }
-
-    if (query.authenticity) {
-      where.authenticity = query.authenticity;
-    }
-
-    if (query.sort === 'price_asc') {
-      return [{ defaultSellingPrice: 'asc' }, { publishedAt: 'desc' }];
-    }
-    if (query.sort === 'price_desc') {
-      return [{ defaultSellingPrice: 'desc' }, { publishedAt: 'desc' }];
-    }
-    return [{ publishedAt: 'desc' }, { createdAt: 'desc' }];
-  }
-
-  private toMarketplaceProduct(
-    row: Prisma.ProductGetPayload<{
-      include: typeof STOREFRONT_PRODUCT_INCLUDE & {
-        shop: {
-          select: {
-            storeSettings: {
-              select: {
-                slug: true;
-                displayName: true;
-                city: true;
-                whatsappNumber: true;
-                showExactStock: true;
-              };
-            };
-          };
-        };
-      };
-    }>,
-  ): ResponseMarketplaceProductDto {
-    const settings = row.shop.storeSettings;
-    const product = toStorefrontProduct(row, settings?.showExactStock ?? false);
-    return {
-      ...product,
-      shop: {
-        slug: settings?.slug ?? '',
-        displayName: settings?.displayName ?? '',
-        city: settings?.city ?? null,
-        whatsappNumber:
-          toLocalPkPhone(settings?.whatsappNumber) ??
-          settings?.whatsappNumber ??
-          null,
-      },
-    };
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly searchCache: MarketplaceSearchCacheService,
+  ) {}
 
   listHubs(
     query: MarketplaceHubsQueryDto = {},
@@ -221,7 +78,7 @@ export class MarketplaceService {
     );
     const result = paginateMarketplaceHubs(query.q, page, pageSize);
     return new PaginatedResponseDTO(
-      result.items.map((hub) => this.toHubDto(hub)),
+      result.items.map((hub) => toHubDto(hub)),
       result.total,
       result.page,
       result.pageSize,
@@ -229,9 +86,7 @@ export class MarketplaceService {
   }
 
   resolveNearestHub(query: NearestHubQueryDto): ResponseMarketplaceHubDto {
-    return this.toHubDto(
-      nearestMarketplaceHub(query.latitude, query.longitude),
-    );
+    return toHubDto(nearestMarketplaceHub(query.latitude, query.longitude));
   }
 
   async searchModels(
@@ -243,6 +98,13 @@ export class MarketplaceService {
     }
 
     const limit = Math.min(Math.max(query.limit ?? 8, 1), 20);
+    const cacheKey = `models:${q.toLowerCase()}:${query.city ?? ''}:${limit}`;
+    const cached = this.searchCache.get<{
+      items: ResponseMarketplaceModelDto[];
+      total: number;
+    }>(cacheKey);
+    if (cached) return cached;
+
     const sql = buildMarketplaceModelSearchSql(
       q,
       resolveHubCityTokens(query.city),
@@ -271,13 +133,43 @@ export class MarketplaceService {
       };
     });
 
-    return { items, total: items.length };
+    const payload = { items, total: items.length };
+    this.searchCache.set(cacheKey, payload);
+    return payload;
   }
 
   async listProducts(
     query: MarketplaceProductsQueryDto,
   ): Promise<PaginatedResponseDTO<ResponseMarketplaceProductDto>> {
     const { page, pageSize } = normalizePagination(query.page, query.limit, 50);
+    const cacheKey = `products:${JSON.stringify({
+      q: query.q ?? '',
+      city: query.city ?? '',
+      modelKey: query.modelKey ?? '',
+      category: query.category ?? '',
+      brand: query.brand ?? '',
+      inStock: query.inStock ?? '',
+      condition: query.condition ?? '',
+      minPrice: query.minPrice ?? '',
+      maxPrice: query.maxPrice ?? '',
+      pta: query.ptaStatus ?? '',
+      authenticity: query.authenticity ?? '',
+      sort: query.sort ?? '',
+      page,
+      pageSize,
+    })}`;
+    const cached =
+      this.searchCache.get<PaginatedResponseDTO<ResponseMarketplaceProductDto>>(
+        cacheKey,
+      );
+    if (cached) return cached;
+
+    if (canUseLeanProductSearch(query)) {
+      const lean = await this.listProductsLean(query, page, pageSize);
+      this.searchCache.set(cacheKey, lean);
+      return lean;
+    }
+
     const parsedModel = query.modelKey ? parseModelKey(query.modelKey) : null;
 
     const catalogWhere = storefrontCatalogWhere(null, {
@@ -289,26 +181,9 @@ export class MarketplaceService {
 
     const where: Prisma.ProductWhereInput = {
       ...catalogWhere,
-      shop: this.marketplaceShopWhere(query.city),
+      shop: marketplaceShopWhere(query.city),
     };
-    const orderBy = this.applyMarketplaceListingFilters(where, query);
-
-    const include = {
-      ...STOREFRONT_PRODUCT_INCLUDE,
-      shop: {
-        select: {
-          storeSettings: {
-            select: {
-              slug: true,
-              displayName: true,
-              city: true,
-              whatsappNumber: true,
-              showExactStock: true,
-            },
-          },
-        },
-      },
-    } as const;
+    const orderBy = applyMarketplaceListingFilters(where, query);
 
     if (parsedModel) {
       const brandHint = parsedModel.brandSlug.replace(/-/g, ' ');
@@ -322,19 +197,21 @@ export class MarketplaceService {
         where: modelWhere,
         take: MODEL_KEY_SCAN,
         orderBy,
-        include,
+        include: MARKETPLACE_PRODUCT_INCLUDE,
       });
       const matched = rows.filter((row) =>
-        this.matchesModelKey(row, parsedModel.brandSlug, parsedModel.modelSlug),
+        matchesModelKey(row, parsedModel.brandSlug, parsedModel.modelSlug),
       );
       const skip = getSkipNumber(page, pageSize);
       const pageRows = matched.slice(skip, skip + pageSize);
-      return new PaginatedResponseDTO(
-        pageRows.map((row) => this.toMarketplaceProduct(row)),
+      const modelPage = new PaginatedResponseDTO(
+        pageRows.map((row) => toMarketplaceProduct(row)),
         matched.length,
         page,
         pageSize,
       );
+      this.searchCache.set(cacheKey, modelPage);
+      return modelPage;
     }
 
     const [rows, total] = await Promise.all([
@@ -343,13 +220,50 @@ export class MarketplaceService {
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
         orderBy,
-        include,
+        include: MARKETPLACE_PRODUCT_INCLUDE,
       }),
       this.prisma.product.count({ where }),
     ]);
 
+    const browsePage = new PaginatedResponseDTO(
+      rows.map((row) => toMarketplaceProduct(row)),
+      total,
+      page,
+      pageSize,
+    );
+    this.searchCache.set(cacheKey, browsePage);
+    return browsePage;
+  }
+
+  private async listProductsLean(
+    query: MarketplaceProductsQueryDto,
+    page: number,
+    pageSize: number,
+  ): Promise<PaginatedResponseDTO<ResponseMarketplaceProductDto>> {
+    const skip = getSkipNumber(page, pageSize);
+    const sql = buildMarketplaceProductSearchSql({
+      q: query.q ?? '',
+      cityTokens: resolveHubCityTokens(query.city),
+      category: query.category,
+      minPrice: query.minPrice,
+      maxPrice: query.maxPrice,
+      ptaStatus: query.ptaStatus,
+      authenticity: query.authenticity,
+      sort: query.sort,
+      skip,
+      take: pageSize + 1,
+    });
+    if (!sql) {
+      return new PaginatedResponseDTO([], 0, page, pageSize);
+    }
+
+    const rows =
+      await this.prisma.$queryRaw<MarketplaceProductSearchRow[]>(sql);
+    const hasMore = rows.length > pageSize;
+    const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
+    const total = skip + pageRows.length + (hasMore ? 1 : 0);
     return new PaginatedResponseDTO(
-      rows.map((row) => this.toMarketplaceProduct(row)),
+      pageRows.map((row) => toLeanMarketplaceProduct(row)),
       total,
       page,
       pageSize,
@@ -406,7 +320,7 @@ export class MarketplaceService {
     const where: Prisma.ProductWhereInput = {
       ...catalogWhere,
       id: { not: source.id },
-      shop: this.marketplaceShopWhere(query.city),
+      shop: marketplaceShopWhere(query.city),
       OR: wantAccessories
         ? [{ trackingType: 'QUANTITY' }, ...accessoryCategoryOr]
         : [
@@ -423,28 +337,11 @@ export class MarketplaceService {
           ],
     };
 
-    const include = {
-      ...STOREFRONT_PRODUCT_INCLUDE,
-      shop: {
-        select: {
-          storeSettings: {
-            select: {
-              slug: true,
-              displayName: true,
-              city: true,
-              whatsappNumber: true,
-              showExactStock: true,
-            },
-          },
-        },
-      },
-    } as const;
-
     const rows = await this.prisma.product.findMany({
       where,
       take: RELATED_CANDIDATE_SCAN,
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-      include,
+      include: MARKETPLACE_PRODUCT_INCLUDE,
     });
 
     const scored = rows
@@ -482,7 +379,7 @@ export class MarketplaceService {
     }
 
     return new PaginatedResponseDTO(
-      unique.map((entry) => this.toMarketplaceProduct(entry.row)),
+      unique.map((entry) => toMarketplaceProduct(entry.row)),
       unique.length,
       1,
       limit,

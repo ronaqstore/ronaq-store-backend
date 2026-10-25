@@ -12,6 +12,7 @@ import { StoreService } from './services/store.service.js';
 import { StoreBrandingService } from './services/store-branding.service.js';
 import { StorefrontService } from './services/storefront.service.js';
 import { MarketplaceService } from './services/marketplace.service.js';
+import { MarketplaceSearchCacheService } from './services/marketplace-search-cache.service.js';
 import { StoreCacheService } from './services/store-cache.service.js';
 import { StorefrontRevalidateService } from './services/storefront-revalidate.service.js';
 import { R2StorageService } from './services/r2-storage.service.js';
@@ -32,6 +33,7 @@ import { R2StorageService } from './services/r2-storage.service.js';
     StoreBrandingService,
     StorefrontService,
     MarketplaceService,
+    MarketplaceSearchCacheService,
     StoreCacheService,
     StorefrontRevalidateService,
     R2StorageService,
@@ -43,6 +45,7 @@ import { R2StorageService } from './services/r2-storage.service.js';
     StoreBrandingService,
     StorefrontService,
     MarketplaceService,
+    MarketplaceSearchCacheService,
     StoreCacheService,
     StorefrontRevalidateService,
   ],
