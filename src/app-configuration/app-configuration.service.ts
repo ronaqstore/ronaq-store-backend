@@ -26,6 +26,9 @@ export class AppConfigurationService {
         .uri({ scheme: ['http', 'https'] })
         .default('http://localhost:3006'),
       JWT_EXPIRES_IN: Joi.string().default('24h'),
+      JWT_REMEMBER_EXPIRES_IN: Joi.string().default('30d'),
+      TURNSTILE_SECRET_KEY: Joi.string().allow('').optional(),
+      TURNSTILE_ENABLED: Joi.string().valid('true', 'false').optional(),
       BCRYPT_ROUNDS: Joi.number()
         .integer()
         .min(8)
@@ -150,6 +153,20 @@ export class AppConfigurationService {
 
   get jwtExpiresIn(): string {
     return this.configService.get<string>('JWT_EXPIRES_IN') ?? '24h';
+  }
+
+  get jwtRememberExpiresIn(): string {
+    return this.configService.get<string>('JWT_REMEMBER_EXPIRES_IN') ?? '30d';
+  }
+
+  get turnstileSecretKey(): string {
+    return this.configService.get<string>('TURNSTILE_SECRET_KEY')?.trim() ?? '';
+  }
+
+  get turnstileEnabled(): boolean {
+    const flag = this.configService.get<string>('TURNSTILE_ENABLED');
+    if (flag === 'false') return false;
+    return this.turnstileSecretKey.length > 0 || flag === 'true';
   }
 
   get bcryptRounds(): number {

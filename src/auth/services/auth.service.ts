@@ -45,6 +45,7 @@ import {
 import { MeResponseDto } from '../dto/me-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { RegisterOwnerDto } from '../dto/register-owner.dto.js';
+import { TurnstileService } from './turnstile.service.js';
 import {
   DEFAULT_BRANDS,
   DEFAULT_CATEGORIES,
@@ -73,9 +74,11 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: AppConfigurationService,
+    private readonly turnstileService: TurnstileService,
   ) {}
 
   async registerOwner(dto: RegisterOwnerDto): Promise<OwnerLoginResponseDto> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
     const ownerPhone = normalizePhone(dto.phone);
     if (!ownerPhone) {
       throw new BadRequestException(
@@ -225,6 +228,7 @@ export class AuthService {
   }
 
   async ownerLogin(dto: OwnerLoginDto): Promise<OwnerLoginResponseDto> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
     const phone = normalizePhone(dto.phone);
 
     if (!phone) {
@@ -266,24 +270,24 @@ export class AuthService {
       throw new ForbiddenException(shopSuspended());
     }
 
-    const accessToken = await this.signToken({
-      sub: user.id,
-      typ: AuthTokenType.OWNER,
-      shopId: user.shopId,
-      role: user.role,
-    });
-
-    return buildOwnerAuthResponseBody(
-      accessToken,
-      this.configService.jwtExpiresIn,
-      user,
-      user.shop,
+    const expiresIn = this.resolveJwtExpiresIn(dto.rememberMe);
+    const accessToken = await this.signToken(
+      {
+        sub: user.id,
+        typ: AuthTokenType.OWNER,
+        shopId: user.shopId,
+        role: user.role,
+      },
+      expiresIn,
     );
+
+    return buildOwnerAuthResponseBody(accessToken, expiresIn, user, user.shop);
   }
 
   async platformAdminLogin(
     dto: PlatformAdminLoginDto,
   ): Promise<PlatformAdminLoginResponseDto> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
     const raw = dto.phone.trim().toLowerCase();
     const phone = normalizePhone(dto.phone) ?? raw;
 
@@ -313,15 +317,19 @@ export class AuthService {
       throw new ForbiddenException(adminAccountDisabled());
     }
 
-    const accessToken = await this.signToken({
-      sub: admin.id,
-      typ: AuthTokenType.PLATFORM_ADMIN,
-    });
+    const expiresIn = this.resolveJwtExpiresIn(dto.rememberMe);
+    const accessToken = await this.signToken(
+      {
+        sub: admin.id,
+        typ: AuthTokenType.PLATFORM_ADMIN,
+      },
+      expiresIn,
+    );
 
     return {
       accessToken,
       tokenType: 'Bearer',
-      expiresIn: this.configService.jwtExpiresIn,
+      expiresIn,
       admin: { id: admin.id, name: admin.name, phone: admin.phone },
     };
   }
@@ -457,10 +465,19 @@ export class AuthService {
     };
   }
 
-  private async signToken(claims: SignTokenClaims): Promise<string> {
+  private resolveJwtExpiresIn(rememberMe?: boolean): string {
+    return rememberMe
+      ? this.configService.jwtRememberExpiresIn
+      : this.configService.jwtExpiresIn;
+  }
+
+  private async signToken(
+    claims: SignTokenClaims,
+    expiresIn: string = this.configService.jwtExpiresIn,
+  ): Promise<string> {
     return this.jwtService.signAsync(claims, {
       secret: this.configService.jwtSecret,
-      expiresIn: this.configService.jwtExpiresIn as StringValue,
+      expiresIn: expiresIn as StringValue,
     });
   }
 }

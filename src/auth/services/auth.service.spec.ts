@@ -47,9 +47,16 @@ const jwtStub = {
 const configStub = {
   jwtSecret: 'test-secret',
   jwtExpiresIn: '24h',
+  jwtRememberExpiresIn: '30d',
   bcryptRounds: 10,
   passwordSetupTokenTtlMinutes: 1440,
   appBaseUrl: 'http://localhost:3006',
+  turnstileEnabled: false,
+  turnstileSecretKey: '',
+};
+
+const turnstileStub = {
+  assertValidToken: jest.fn().mockResolvedValue(undefined),
 };
 
 const activeShop = {
@@ -82,6 +89,7 @@ describe('AuthService', () => {
       prismaStub as unknown as PrismaService,
       jwtStub as unknown as JwtService,
       configStub as unknown as AppConfigurationService,
+      turnstileStub as never,
     );
   });
 
@@ -171,10 +179,27 @@ describe('AuthService', () => {
           typ: 'OWNER',
           shopId: 'shop-1',
         }),
-        expect.objectContaining({ secret: 'test-secret' }),
+        expect.objectContaining({ secret: 'test-secret', expiresIn: '24h' }),
       );
       expect(res.accessToken).toBe('signed.jwt.token');
+      expect(res.expiresIn).toBe('24h');
       expect(res.shopId).toBe('shop-1');
+    });
+
+    it('issues a 30-day token when rememberMe is true', async () => {
+      prismaStub.user.findUnique.mockResolvedValue(activeUser);
+
+      const res = await service.ownerLogin({
+        phone: '03001234567',
+        password: 'DukaanOwner1',
+        rememberMe: true,
+      });
+
+      expect(jwtStub.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: 'user-1', typ: 'OWNER' }),
+        expect.objectContaining({ expiresIn: '30d' }),
+      );
+      expect(res.expiresIn).toBe('30d');
     });
   });
 
@@ -193,12 +218,40 @@ describe('AuthService', () => {
         password: 'AdminOwner1',
       });
 
+      expect(jwtStub.signAsync).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ expiresIn: '24h' }),
+      );
+      expect(res.expiresIn).toBe('24h');
+
       const [claims] = jwtStub.signAsync.mock.calls[0];
       expect(claims.typ).toBe('PLATFORM_ADMIN');
       expect(claims.shopId).toBeUndefined();
       expect(
         (res as unknown as Record<string, unknown>).shopId,
       ).toBeUndefined();
+    });
+
+    it('issues a 30-day token when rememberMe is true', async () => {
+      prismaStub.platformAdmin.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        name: 'Support',
+        phone: '923009999999',
+        passwordHash: ADMIN_HASH,
+        isActive: true,
+      });
+
+      const res = await service.platformAdminLogin({
+        phone: '03009999999',
+        password: 'AdminOwner1',
+        rememberMe: true,
+      });
+
+      expect(jwtStub.signAsync).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ expiresIn: '30d' }),
+      );
+      expect(res.expiresIn).toBe('30d');
     });
   });
 

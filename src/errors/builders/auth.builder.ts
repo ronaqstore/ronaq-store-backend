@@ -111,6 +111,16 @@ export const userSuspended = (): ErrorResponseDTO => {
   );
 };
 
+export const turnstileFailed = (): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'Human verification failed',
+    [
+      'Cloudflare Turnstile check failed or expired. Refresh the page and try again.',
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const invalidSetupToken = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'Invalid or expired setup link',
