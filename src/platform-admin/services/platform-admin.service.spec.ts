@@ -109,6 +109,7 @@ const prismaStub = {
   customer: {
     findFirst: jest.fn(),
   },
+  $queryRaw: jest.fn(),
   $transaction: jest.fn((cb: any) => cb(txStub)),
 };
 
@@ -511,16 +512,18 @@ describe('PlatformAdminService', () => {
   });
 
   describe('getOverview', () => {
-    it('returns the four shop counts', async () => {
+    it('returns the five shop counts including trial', async () => {
       prismaStub.shop.count
         .mockResolvedValueOnce(10)
         .mockResolvedValueOnce(6)
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(2);
+      prismaStub.$queryRaw.mockResolvedValueOnce([{ count: 3n }]);
 
       await expect(service.getOverview()).resolves.toEqual({
         totalShops: 10,
         activeShops: 6,
+        trialShops: 3,
         expiredShops: 2,
         suspendedShops: 2,
       });

@@ -11,6 +11,13 @@ export class PlatformOverviewResponseDto {
   activeShops: number;
 
   @ApiProperty({
+    example: 12,
+    description:
+      'ACTIVE shops still inside the free-trial window (subscriptionEndsAt within 30 days of createdAt, and not yet expired).',
+  })
+  trialShops: number;
+
+  @ApiProperty({
     example: 5,
     description: 'ACTIVE status but subscriptionEndsAt has passed.',
   })

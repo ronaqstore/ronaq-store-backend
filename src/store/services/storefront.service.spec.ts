@@ -27,6 +27,11 @@ const settingsRow = {
   showExactStock: false,
 };
 
+const activeShopWithProducts = {
+  status: 'ACTIVE',
+  _count: { products: 1 },
+};
+
 function productRow(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
@@ -134,7 +139,7 @@ describe('StorefrontService (public catalog)', () => {
   describe('GET /public/stores/:slug', () => {
     it('returns the allowlisted profile — no shopId, no toggles', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
 
       const profile = await service.getStore('khalid-mobile');
 
@@ -147,7 +152,7 @@ describe('StorefrontService (public catalog)', () => {
 
     it('reads shops.status fresh even when the slug row is cached', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       await service.getStore('khalid-mobile'); // warms the cache
 
       prisma.shop.findUnique.mockResolvedValue({ status: 'SUSPENDED' });
@@ -162,7 +167,7 @@ describe('StorefrontService (public catalog)', () => {
   describe('GET /public/stores/:slug/products', () => {
     it('filters to active + published products, newest-first, paged', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findMany.mockResolvedValue([
         productRow({
           id: 'p2',
@@ -197,7 +202,7 @@ describe('StorefrontService (public catalog)', () => {
 
     it('narrows by category id, brand name and search text', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findMany.mockResolvedValue([]);
       prisma.product.count.mockResolvedValue(0);
 
@@ -238,7 +243,7 @@ describe('StorefrontService (public catalog)', () => {
 
     it('never lets a page exceed 50 rows (WF22 limit)', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findMany.mockResolvedValue([]);
       prisma.product.count.mockResolvedValue(0);
 
@@ -269,7 +274,7 @@ describe('StorefrontService (public catalog)', () => {
         slug,
         ...settings,
       });
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findMany.mockResolvedValue([productRow(overrides)]);
       prisma.product.count.mockResolvedValue(1);
       const res = await service.getProducts(slug, query);
@@ -348,7 +353,7 @@ describe('StorefrontService (public catalog)', () => {
   describe('GET /public/stores/:slug/products/:productId', () => {
     it('404s a product from another shop, unpublished or inactive — same shape', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findFirst.mockResolvedValue(null);
 
       await expect(
@@ -368,7 +373,7 @@ describe('StorefrontService (public catalog)', () => {
 
     it('returns one product with its cover first', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findFirst.mockResolvedValue(productRow());
 
       const item = await service.getProduct('khalid-mobile', 'prod-1');
@@ -417,7 +422,7 @@ describe('StorefrontService (public catalog)', () => {
   describe('GET /public/stores/:slug/categories', () => {
     it('lists distinct categories and brands that have a published product', async () => {
       prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
-      prisma.shop.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+      prisma.shop.findUnique.mockResolvedValue(activeShopWithProducts);
       prisma.product.findMany
         .mockResolvedValueOnce([
           { category: { id: 'cat-1', name: 'Mobile Phones' } },
