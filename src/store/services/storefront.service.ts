@@ -58,10 +58,17 @@ export class StorefrontService {
     const limit = query.limit ?? 12;
     const skip = getSkipNumber(page, limit);
 
+    const publicProductWhere: Prisma.ProductWhereInput = {
+      isPublished: true,
+      isActive: true,
+      publishedAt: { not: null },
+    };
+
     const where: Prisma.ShopStoreSettingsWhereInput = {
       isEnabled: true,
       shop: {
         status: ShopStatus.ACTIVE,
+        products: { some: publicProductWhere },
       },
     };
 
@@ -94,7 +101,7 @@ export class StorefrontService {
               _count: {
                 select: {
                   products: {
-                    where: { isPublished: true, isActive: true },
+                    where: publicProductWhere,
                   },
                 },
               },
@@ -193,9 +200,26 @@ export class StorefrontService {
 
     const shop = await this.prisma.shop.findUnique({
       where: { id: settings.shopId },
-      select: { status: true },
+      select: {
+        status: true,
+        _count: {
+          select: {
+            products: {
+              where: {
+                isPublished: true,
+                isActive: true,
+                publishedAt: { not: null },
+              },
+            },
+          },
+        },
+      },
     });
-    if (!shop || shop.status !== ShopStatus.ACTIVE) {
+    if (
+      !shop ||
+      shop.status !== ShopStatus.ACTIVE ||
+      (shop._count?.products ?? 0) < 1
+    ) {
       throw new NotFoundException(storeNotAvailable());
     }
     return settings;
