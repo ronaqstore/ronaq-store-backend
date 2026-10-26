@@ -1,5 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+} from 'class-validator';
 
 export class OwnerLoginDto {
   @ApiProperty({
@@ -21,4 +28,15 @@ export class OwnerLoginDto {
   @IsNotEmpty()
   @Length(8, 72)
   password: string;
+
+  @ApiPropertyOptional({
+    description:
+      'When true the access token lasts 30 days; otherwise 24 hours.',
+    example: false,
+    default: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  rememberMe?: boolean;
 }

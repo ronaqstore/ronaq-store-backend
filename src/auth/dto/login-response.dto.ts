@@ -41,7 +41,8 @@ export class OwnerLoginResponseDto {
 
   @ApiProperty({
     example: '24h',
-    description: 'How long the token stays valid, matching JWT_EXPIRES_IN.',
+    description:
+      'How long the token stays valid: 24h by default, or 30d when rememberMe was true.',
   })
   expiresIn: string;
 

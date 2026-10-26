@@ -92,7 +92,12 @@ export class PurchasesCancelService {
         if (item.product.trackingType === 'SERIALIZED') {
           for (const unit of item.inventoryUnits) {
             const lockedUnit = await tx.$queryRaw<
-              Array<{ id: string; status: string; imei1: string; imei2: string }>
+              Array<{
+                id: string;
+                status: string;
+                imei1: string;
+                imei2: string;
+              }>
             >`
               SELECT id, status, imei1, imei2 FROM inventory_units
               WHERE id = ${unit.id} AND shop_id = ${shopId}

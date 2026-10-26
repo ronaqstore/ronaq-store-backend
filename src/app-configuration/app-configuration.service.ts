@@ -26,6 +26,7 @@ export class AppConfigurationService {
         .uri({ scheme: ['http', 'https'] })
         .default('http://localhost:3006'),
       JWT_EXPIRES_IN: Joi.string().default('24h'),
+      JWT_REMEMBER_EXPIRES_IN: Joi.string().default('30d'),
       BCRYPT_ROUNDS: Joi.number()
         .integer()
         .min(8)
@@ -150,6 +151,10 @@ export class AppConfigurationService {
 
   get jwtExpiresIn(): string {
     return this.configService.get<string>('JWT_EXPIRES_IN') ?? '24h';
+  }
+
+  get jwtRememberExpiresIn(): string {
+    return this.configService.get<string>('JWT_REMEMBER_EXPIRES_IN') ?? '30d';
   }
 
   get bcryptRounds(): number {
