@@ -22,7 +22,6 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import type { PlatformShopListRow } from './platform-admin.service.types.js';
 import {
   oneOwnerPerShop,
   invalidOwnerPhone,
@@ -47,12 +46,15 @@ import { UpdateSubscriptionDto } from '../dto/update-subscription.dto.js';
 import { UpdateSubscriptionResponseDto } from '../dto/update-subscription-response.dto.js';
 import { ShopOwnerStatusResponseDto } from '../dto/shop-owner-status-response.dto.js';
 import { ChangeStoreSlugDto } from '../dto/change-store-slug.dto.js';
-import {
-  ListShopsQueryDto,
-  type PlatformShopAccessStatus,
-} from '../dto/list-shops-query.dto.js';
+import { ListShopsQueryDto } from '../dto/list-shops-query.dto.js';
 import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
 import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
+import { PasswordSetupLinkResponseDto } from '../dto/password-setup-link-response.dto.js';
+import {
+  accessStatusWhere,
+  toPlatformShopResponse,
+  trialShopsCountSql,
+} from '../helpers/platform-shop-access.helper.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { StoreService } from '../../store/services/store.service.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
@@ -76,7 +78,7 @@ export class PlatformAdminService {
   async getOverview(): Promise<PlatformOverviewResponseDto> {
     const now = new Date();
 
-    const [totalShops, activeShops, expiredShops, suspendedShops] =
+    const [totalShops, activeShops, trialRows, expiredShops, suspendedShops] =
       await Promise.all([
         this.prisma.shop.count(),
         this.prisma.shop.count({
@@ -85,6 +87,9 @@ export class PlatformAdminService {
             subscriptionEndsAt: { gt: now },
           },
         }),
+        this.prisma.$queryRaw<Array<{ count: bigint }>>(
+          trialShopsCountSql(now),
+        ),
         this.prisma.shop.count({
           where: {
             status: ShopStatus.ACTIVE,
@@ -96,7 +101,15 @@ export class PlatformAdminService {
         }),
       ]);
 
-    return { totalShops, activeShops, expiredShops, suspendedShops };
+    const trialShops = Number(trialRows[0]?.count ?? 0);
+
+    return {
+      totalShops,
+      activeShops,
+      trialShops,
+      expiredShops,
+      suspendedShops,
+    };
   }
 
   async listShops(
@@ -116,7 +129,7 @@ export class PlatformAdminService {
     const accessStatuses = query.accessStatus ?? [];
     if (accessStatuses.length > 0) {
       const accessClauses = accessStatuses.map((status) =>
-        this.accessStatusWhere(status, now),
+        accessStatusWhere(status, now),
       );
       andParts.push(
         accessClauses.length === 1 ? accessClauses[0] : { OR: accessClauses },
@@ -196,7 +209,7 @@ export class PlatformAdminService {
     ]);
 
     return new PaginatedResponseDTO<ResponsePlatformShopDto>(
-      rows.map((row) => this.toPlatformShopResponse(row, now)),
+      rows.map((row) => toPlatformShopResponse(row, now)),
       total,
       page,
       pageSize,
@@ -479,70 +492,55 @@ export class PlatformAdminService {
     };
   }
 
+  async issuePasswordSetupLink(
+    shopId: string,
+  ): Promise<PasswordSetupLinkResponseDto> {
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      include: {
+        users: {
+          select: { id: true, name: true, phone: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!shop) {
+      throw new NotFoundException(resourceNotFound('Shop', shopId));
+    }
+
+    if (shop.users.length > 1) {
+      throw new BadRequestException(oneOwnerPerShop(shop.name));
+    }
+
+    const owner = shop.users[0];
+    if (!owner) {
+      throw new BadRequestException(resourceNotFound('Owner', shopId));
+    }
+
+    const link = await this.authService.buildSetupLink(owner.id);
+
+    logInfo(
+      'platform-admin.service.ts',
+      'issuePasswordSetupLink',
+      `Password setup link issued for shop "${shop.name}"`,
+      { shopId: shop.id, ownerId: owner.id },
+    );
+
+    return {
+      shopId: shop.id,
+      ownerId: owner.id,
+      ownerName: owner.name,
+      ownerPhone: owner.phone,
+      setupUrl: link.setupUrl,
+      setupLinkExpiresAt: link.expiresAt,
+    };
+  }
+
   async setShopActive(
     shopId: string,
     isActive: boolean,
   ): Promise<UpdateSubscriptionResponseDto> {
     return this.updateSubscription(shopId, { isActive });
-  }
-
-  private toPlatformShopResponse(
-    shop: PlatformShopListRow,
-    now: Date,
-  ): ResponsePlatformShopDto {
-    const owner = shop.users[0] ?? null;
-    const accessStatus = this.deriveAccessStatus(
-      shop.status,
-      shop.subscriptionEndsAt,
-      now,
-    );
-
-    return {
-      id: shop.id,
-      name: shop.name,
-      phone: shop.phone,
-      address: shop.address,
-      status: shop.status,
-      accessStatus,
-      isAccessible:
-        shop.status === ShopStatus.ACTIVE &&
-        shop.subscriptionEndsAt.getTime() > now.getTime(),
-      subscriptionEndsAt: shop.subscriptionEndsAt,
-      ownerId: owner?.id ?? null,
-      ownerName: owner?.name ?? null,
-      ownerPhone: owner?.phone ?? null,
-      hasPassword: Boolean(owner?.passwordHash),
-      storeSlug: shop.storeSettings?.slug ?? null,
-      createdAt: shop.createdAt,
-    };
-  }
-
-  private deriveAccessStatus(
-    status: ShopStatus,
-    subscriptionEndsAt: Date,
-    now: Date,
-  ): PlatformShopAccessStatus {
-    if (status === ShopStatus.SUSPENDED) return 'SUSPENDED';
-    if (subscriptionEndsAt.getTime() <= now.getTime()) return 'EXPIRED';
-    return 'ACTIVE';
-  }
-
-  private accessStatusWhere(
-    accessStatus: PlatformShopAccessStatus,
-    now: Date,
-  ): Prisma.ShopWhereInput {
-    if (accessStatus === 'ACTIVE') {
-      return {
-        status: ShopStatus.ACTIVE,
-        subscriptionEndsAt: { gt: now },
-      };
-    }
-    if (accessStatus === 'EXPIRED') {
-      return {
-        status: ShopStatus.ACTIVE,
-        subscriptionEndsAt: { lte: now },
-      };
-    }
-    return { status: ShopStatus.SUSPENDED };
   }
 }

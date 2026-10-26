@@ -43,6 +43,7 @@ import { ChangeStoreSlugDto } from '../dto/change-store-slug.dto.js';
 import { ListShopsQueryDto } from '../dto/list-shops-query.dto.js';
 import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
 import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
+import { PasswordSetupLinkResponseDto } from '../dto/password-setup-link-response.dto.js';
 
 @ApiTags('platform-admin-shops')
 @Controller('platform-admin/shops')
@@ -169,6 +170,48 @@ export class PlatformAdminShopsController {
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to fetch shop');
+    }
+  }
+
+  @Post('/:id/password-setup-link')
+  @ApiOperation({
+    summary: 'Issue a one-time password setup / reset link',
+    description:
+      'Generates a secure one-time link for the shop owner to set or reset their password. Previous unused links are invalidated. Copy the setupUrl and send it on WhatsApp — it cannot be retrieved again.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      PasswordSetupLinkResponseDto,
+      'Password setup link issued successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(FORBIDDEN_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  async issuePasswordSetupLink(
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ApiSuccessResponseDTO<PasswordSetupLinkResponseDto>> {
+    try {
+      const res = await this.platformAdminService.issuePasswordSetupLink(id);
+      return new ApiSuccessResponseDTO(
+        'Password setup link issued successfully',
+        res,
+      );
+    } catch (error) {
+      logError(
+        'platform-admin.controller.ts',
+        'issuePasswordSetupLink',
+        error,
+        {
+          shopId: id,
+        },
+      );
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException(
+        'Failed to issue password setup link',
+      );
     }
   }
 

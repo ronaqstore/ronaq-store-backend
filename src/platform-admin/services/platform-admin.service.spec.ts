@@ -109,12 +109,13 @@ const prismaStub = {
   customer: {
     findFirst: jest.fn(),
   },
+  $queryRaw: jest.fn(),
   $transaction: jest.fn((cb: any) => cb(txStub)),
 };
 
 const authStub = {
   buildSetupLink: jest.fn(() => ({
-    setupUrl: 'http://localhost:3000/setup-password?token=abc123',
+    setupUrl: 'http://localhost:3006/setup-password?token=abc123',
     expiresAt: new Date(Date.now() + 86_400_000),
   })),
 };
@@ -511,16 +512,18 @@ describe('PlatformAdminService', () => {
   });
 
   describe('getOverview', () => {
-    it('returns the four shop counts', async () => {
+    it('returns the five shop counts including trial', async () => {
       prismaStub.shop.count
         .mockResolvedValueOnce(10)
         .mockResolvedValueOnce(6)
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(2);
+      prismaStub.$queryRaw.mockResolvedValueOnce([{ count: 3n }]);
 
       await expect(service.getOverview()).resolves.toEqual({
         totalShops: 10,
         activeShops: 6,
+        trialShops: 3,
         expiredShops: 2,
         suspendedShops: 2,
       });
