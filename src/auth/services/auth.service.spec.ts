@@ -51,6 +51,12 @@ const configStub = {
   bcryptRounds: 10,
   passwordSetupTokenTtlMinutes: 1440,
   appBaseUrl: 'http://localhost:3006',
+  turnstileEnabled: false,
+  turnstileSecretKey: '',
+};
+
+const turnstileStub = {
+  assertValidToken: jest.fn().mockResolvedValue(undefined),
 };
 
 const activeShop = {
@@ -83,6 +89,7 @@ describe('AuthService', () => {
       prismaStub as unknown as PrismaService,
       jwtStub as unknown as JwtService,
       configStub as unknown as AppConfigurationService,
+      turnstileStub as never,
     );
   });
 

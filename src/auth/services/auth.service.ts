@@ -45,6 +45,7 @@ import {
 import { MeResponseDto } from '../dto/me-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { RegisterOwnerDto } from '../dto/register-owner.dto.js';
+import { TurnstileService } from './turnstile.service.js';
 import {
   DEFAULT_BRANDS,
   DEFAULT_CATEGORIES,
@@ -73,9 +74,11 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: AppConfigurationService,
+    private readonly turnstileService: TurnstileService,
   ) {}
 
   async registerOwner(dto: RegisterOwnerDto): Promise<OwnerLoginResponseDto> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
     const ownerPhone = normalizePhone(dto.phone);
     if (!ownerPhone) {
       throw new BadRequestException(
@@ -225,6 +228,7 @@ export class AuthService {
   }
 
   async ownerLogin(dto: OwnerLoginDto): Promise<OwnerLoginResponseDto> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
     const phone = normalizePhone(dto.phone);
 
     if (!phone) {
@@ -283,6 +287,7 @@ export class AuthService {
   async platformAdminLogin(
     dto: PlatformAdminLoginDto,
   ): Promise<PlatformAdminLoginResponseDto> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
     const raw = dto.phone.trim().toLowerCase();
     const phone = normalizePhone(dto.phone) ?? raw;
 

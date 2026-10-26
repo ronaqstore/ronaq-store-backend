@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from '../services/auth.service.js';
+import { TurnstileService } from '../services/turnstile.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -39,6 +40,14 @@ describe('AuthController', () => {
           useValue: {
             get: jest.fn().mockReturnValue({ jwtSecret: 'test-secret' }),
             auth: { jwtSecret: 'test-secret' },
+            turnstileEnabled: false,
+            turnstileSecretKey: '',
+          },
+        },
+        {
+          provide: TurnstileService,
+          useValue: {
+            assertValidToken: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

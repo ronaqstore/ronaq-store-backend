@@ -34,4 +34,12 @@ export class PlatformAdminLoginDto {
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   rememberMe?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Cloudflare Turnstile token from the login widget.',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(1, 2048)
+  turnstileToken?: string;
 }

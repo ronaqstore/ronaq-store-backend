@@ -97,4 +97,12 @@ export class RegisterOwnerDto {
   @IsString()
   @MaxLength(30)
   shopPhone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Cloudflare Turnstile token from the register widget.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  turnstileToken?: string;
 }
