@@ -57,9 +57,9 @@ export class CreateShopResponseDto {
 
   @ApiProperty({
     example:
-      'http://localhost:3000/setup-password?token=9f2c1a4b7e6d5c8a0b1f2e3d4c5b6a79887766554433221100ffeeddccbbaa99',
+      'https://admin.example.com/setup-password?token=9f2c1a4b7e6d5c8a0b1f2e3d4c5b6a79887766554433221100ffeeddccbbaa99',
     description:
-      'Complete URL to send to the owner on WhatsApp. Shown ONCE — only a hash is stored, so it cannot be retrieved later. Reissue a new link if lost.',
+      'Complete URL built from APP_BASE_URL (local or Vercel) to send on WhatsApp. Shown ONCE — only a hash is stored, so it cannot be retrieved later. Reissue a new link if lost.',
   })
   setupUrl: string;
 

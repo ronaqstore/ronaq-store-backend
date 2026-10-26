@@ -49,7 +49,7 @@ const configStub = {
   jwtExpiresIn: '24h',
   bcryptRounds: 10,
   passwordSetupTokenTtlMinutes: 1440,
-  appBaseUrl: 'http://localhost:3000',
+  appBaseUrl: 'http://localhost:3006',
 };
 
 const activeShop = {
@@ -264,7 +264,7 @@ describe('AuthService', () => {
       const tokenInUrl = new URL(res.setupUrl).searchParams.get('token');
       expect(tokenInUrl).toHaveLength(64);
       expect(
-        res.setupUrl.startsWith('http://localhost:3000/setup-password?'),
+        res.setupUrl.startsWith('http://localhost:3006/setup-password?'),
       ).toBe(true);
       expect(res.setupUrl).not.toContain(update.passwordSetupTokenHash);
     });

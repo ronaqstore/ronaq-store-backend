@@ -49,6 +49,7 @@ import { ChangeStoreSlugDto } from '../dto/change-store-slug.dto.js';
 import { ListShopsQueryDto } from '../dto/list-shops-query.dto.js';
 import { ResponsePlatformShopDto } from '../dto/response-platform-shop.dto.js';
 import { PlatformOverviewResponseDto } from '../dto/platform-overview-response.dto.js';
+import { PasswordSetupLinkResponseDto } from '../dto/password-setup-link-response.dto.js';
 import {
   accessStatusWhere,
   toPlatformShopResponse,
@@ -488,6 +489,51 @@ export class PlatformAdminService {
       ownerName: owner?.name ?? null,
       ownerPhone: owner?.phone ?? null,
       hasPassword: Boolean(owner?.passwordHash),
+    };
+  }
+
+  async issuePasswordSetupLink(
+    shopId: string,
+  ): Promise<PasswordSetupLinkResponseDto> {
+    const shop = await this.prisma.shop.findUnique({
+      where: { id: shopId },
+      include: {
+        users: {
+          select: { id: true, name: true, phone: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!shop) {
+      throw new NotFoundException(resourceNotFound('Shop', shopId));
+    }
+
+    if (shop.users.length > 1) {
+      throw new BadRequestException(oneOwnerPerShop(shop.name));
+    }
+
+    const owner = shop.users[0];
+    if (!owner) {
+      throw new BadRequestException(resourceNotFound('Owner', shopId));
+    }
+
+    const link = await this.authService.buildSetupLink(owner.id);
+
+    logInfo(
+      'platform-admin.service.ts',
+      'issuePasswordSetupLink',
+      `Password setup link issued for shop "${shop.name}"`,
+      { shopId: shop.id, ownerId: owner.id },
+    );
+
+    return {
+      shopId: shop.id,
+      ownerId: owner.id,
+      ownerName: owner.name,
+      ownerPhone: owner.phone,
+      setupUrl: link.setupUrl,
+      setupLinkExpiresAt: link.expiresAt,
     };
   }
 

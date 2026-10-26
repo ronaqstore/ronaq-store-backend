@@ -115,7 +115,7 @@ const prismaStub = {
 
 const authStub = {
   buildSetupLink: jest.fn(() => ({
-    setupUrl: 'http://localhost:3000/setup-password?token=abc123',
+    setupUrl: 'http://localhost:3006/setup-password?token=abc123',
     expiresAt: new Date(Date.now() + 86_400_000),
   })),
 };

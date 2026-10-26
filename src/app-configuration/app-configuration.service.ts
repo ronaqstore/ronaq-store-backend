@@ -24,7 +24,7 @@ export class AppConfigurationService {
       CORS_ORIGINS: Joi.string().required(),
       APP_BASE_URL: Joi.string()
         .uri({ scheme: ['http', 'https'] })
-        .default('http://localhost:3000'),
+        .default('http://localhost:3006'),
       JWT_EXPIRES_IN: Joi.string().default('24h'),
       BCRYPT_ROUNDS: Joi.number()
         .integer()
@@ -144,7 +144,7 @@ export class AppConfigurationService {
 
   get appBaseUrl(): string {
     const value =
-      this.configService.get<string>('APP_BASE_URL') ?? 'http://localhost:3000';
+      this.configService.get<string>('APP_BASE_URL') ?? 'http://localhost:3006';
     return value.replace(/\/+$/, '');
   }
 
