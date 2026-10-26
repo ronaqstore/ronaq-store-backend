@@ -9,6 +9,7 @@ import {
   CashDirection,
   CashMovementType,
   ReferenceType,
+  UnitStatus,
 } from '../../generated/prisma/enums.js';
 import { CreatePurchaseDto } from '../dto/create-purchase.dto.js';
 import { CancelPurchaseDto } from '../dto/cancel-purchase.dto.js';
@@ -209,6 +210,7 @@ export class PurchasesService {
         const inUse = await this.prisma.inventoryUnit.findFirst({
           where: {
             shopId,
+            status: { not: UnitStatus.VOIDED },
             OR: [{ imei1: { in: allImeis } }, { imei2: { in: allImeis } }],
           },
           select: { imei1: true, imei2: true },

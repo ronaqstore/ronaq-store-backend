@@ -8,6 +8,7 @@ import {
   InventoryMovementType,
   ReferenceType,
   UnitCondition,
+  UnitStatus,
 } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { CreatePurchaseDto } from '../dto/create-purchase.dto.js';
@@ -85,6 +86,7 @@ export class PurchasesWriteService {
       const inUse = await this.prisma.inventoryUnit.findFirst({
         where: {
           shopId,
+          status: { not: UnitStatus.VOIDED },
           OR: [{ imei1: { in: values } }, { imei2: { in: values } }],
         },
         select: { imei1: true, imei2: true },

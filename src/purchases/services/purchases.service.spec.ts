@@ -956,7 +956,12 @@ describe('PurchasesService', () => {
         if (sql.includes('FROM purchases')) return [{ status: 'ACTIVE' }];
         if (sql.includes('FROM inventory_units'))
           return [
-            { id: UNIT_ID, status: 'IN_STOCK', imei1: '111223344556677' },
+            {
+              id: UNIT_ID,
+              status: 'IN_STOCK',
+              imei1: '111223344556677',
+              imei2: '111223344556688',
+            },
           ];
         if (sql.includes('stock_levels')) return [{ quantity_on_hand: 40 }];
         return [];
@@ -993,7 +998,10 @@ describe('PurchasesService', () => {
 
       expect(tx.inventoryUnit.update).toHaveBeenCalledWith({
         where: { id: UNIT_ID },
-        data: { status: 'VOIDED' },
+        data: expect.objectContaining({
+          status: 'VOIDED',
+          imei1: `111223344556677_VOID_${UNIT_ID}`,
+        }),
       });
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({

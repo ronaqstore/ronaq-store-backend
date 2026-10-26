@@ -82,7 +82,7 @@ export class PurchasesCancelService {
           productId: true,
           quantity: true,
           product: { select: { name: true, trackingType: true } },
-          inventoryUnits: { select: { id: true, imei1: true } },
+          inventoryUnits: { select: { id: true, imei1: true, imei2: true } },
         },
       });
 
@@ -92,9 +92,9 @@ export class PurchasesCancelService {
         if (item.product.trackingType === 'SERIALIZED') {
           for (const unit of item.inventoryUnits) {
             const lockedUnit = await tx.$queryRaw<
-              Array<{ id: string; status: string; imei1: string }>
+              Array<{ id: string; status: string; imei1: string; imei2: string }>
             >`
-              SELECT id, status, imei1 FROM inventory_units
+              SELECT id, status, imei1, imei2 FROM inventory_units
               WHERE id = ${unit.id} AND shop_id = ${shopId}
               FOR UPDATE
             `;
@@ -115,7 +115,13 @@ export class PurchasesCancelService {
 
             await tx.inventoryUnit.update({
               where: { id: unit.id },
-              data: { status: UnitStatus.VOIDED },
+              data: {
+                status: UnitStatus.VOIDED,
+                imei1: `${lockedUnit[0].imei1}_VOID_${unit.id}`,
+                ...(lockedUnit[0].imei2
+                  ? { imei2: `${lockedUnit[0].imei2}_VOID_${unit.id}` }
+                  : {}),
+              },
             });
             await tx.inventoryMovement.create({
               data: {
