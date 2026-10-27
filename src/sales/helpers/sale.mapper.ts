@@ -91,6 +91,7 @@ export function mapSaleToResponse(row: SaleWithLines): ResponseSaleDto {
       returnAmount: Number(ret.returnAmount),
       status: ret.status,
       notes: ret.notes,
+      clientRequestId: ret.clientRequestId,
       createdById: ret.createdById,
       createdAt: ret.createdAt,
       updatedAt: ret.updatedAt,

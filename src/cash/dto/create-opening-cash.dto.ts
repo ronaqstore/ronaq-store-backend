@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
   Max,
@@ -12,6 +13,15 @@ import {
 } from 'class-validator';
 
 export class CreateOpeningCashDto {
+  @ApiPropertyOptional({
+    description:
+      'Double-tap protection. Generate ONE uuid per opened Save screen and reuse it if the request is retried.',
+    example: '01924f0a-0000-7000-8000-00000000beef',
+  })
+  @IsOptional()
+  @IsUUID()
+  clientRequestId?: string;
+
   @ApiProperty({
     description:
       'Cash in the drawer on day one, in PAISA. Rs 500,000 = 50000000. Must be greater than zero.',

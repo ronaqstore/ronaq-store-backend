@@ -16,6 +16,14 @@ import {
 export class CreateExpenseDto {
   @ApiProperty({
     description:
+      'Double-tap protection. Generate ONE uuid per opened Save screen and reuse it if the request is retried. If this id was already saved the system returns success instead of creating a second expense.',
+    example: '01924f0a-0000-7000-8000-00000000beef',
+  })
+  @IsUUID()
+  clientRequestId: string;
+
+  @ApiProperty({
+    description:
       'Expense category this cost belongs to. Must belong to this shop.',
     example: '01924f0a-0000-7000-8000-000000000101',
   })

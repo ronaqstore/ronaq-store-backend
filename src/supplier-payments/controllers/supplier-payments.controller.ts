@@ -98,6 +98,7 @@ export class SupplierPaymentsController {
           shopId: req.user?.shopId,
           supplierId: createSupplierPaymentDto?.supplierId,
           purchaseId: createSupplierPaymentDto?.purchaseId,
+          clientRequestId: createSupplierPaymentDto?.clientRequestId,
         },
       );
       if (error instanceof HttpException) throw error;

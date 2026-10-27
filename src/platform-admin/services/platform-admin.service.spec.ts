@@ -87,9 +87,15 @@ const txStub = {
       return { id: 'supplier-1', ...data };
     }),
   },
+  auditLog: {
+    create: jest.fn().mockResolvedValue({}),
+  },
 };
 
 const prismaStub = {
+  auditLog: {
+    create: jest.fn().mockResolvedValue({}),
+  },
   shop: {
     findUnique: jest.fn(),
     findMany: jest.fn(),
@@ -401,6 +407,14 @@ describe('PlatformAdminService', () => {
           },
         }),
       );
+      expect(prismaStub.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: 'shop-1',
+          action: 'SUBSCRIPTION_UPDATE',
+          entityType: 'Shop',
+          entityId: 'shop-1',
+        }),
+      });
       expect(res.isAccessible).toBe(true);
     });
 

@@ -31,6 +31,10 @@ import {
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  isUniqueConstraintViolation,
+  violatedColumn,
+} from '../../helpers/prisma-error-helper.js';
 
 const EXPENSE_INCLUDE = {
   category: { select: { name: true } },
@@ -45,6 +49,7 @@ export type CreateExpenseResult =
 
 const CREATED = 'Expense recorded successfully';
 const CANCELLED = 'Expense cancelled successfully';
+const ALREADY_SAVED = 'Expense already saved';
 
 @Injectable()
 export class ExpensesService {
@@ -57,6 +62,14 @@ export class ExpensesService {
     shopId: string,
     userId: string,
   ): Promise<CreateExpenseResult> {
+    const existing = await this.prisma.expense.findFirst({
+      where: { shopId, clientRequestId: dto.clientRequestId },
+      select: { id: true },
+    });
+    if (existing) {
+      return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+    }
+
     const category = await this.prisma.expenseCategory.findFirst({
       where: { id: dto.categoryId, shopId },
       select: { id: true },
@@ -69,62 +82,73 @@ export class ExpensesService {
 
     const amount = BigInt(dto.amount);
 
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      const shop = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
-      `;
-      if (!shop?.length) {
-        throw new NotFoundException(resourceNotFound('Shop', shopId));
-      }
+    try {
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        const shop = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
+        `;
+        if (!shop?.length) {
+          throw new NotFoundException(resourceNotFound('Shop', shopId));
+        }
 
-      const overdraftProbe = await probeCashOverdraft(
-        tx,
-        shopId,
-        amount,
-        dto.confirmOverdraft,
-      );
-      if (overdraftProbe.kind === 'overdraft') {
-        return {
-          kind: 'overdraft' as const,
-          shortfall: overdraftProbe.shortfall,
-        };
-      }
-      const overdraft = overdraftProbe.overdraft;
-      const expenseMoment = resolveTransactionDate(dto.expenseDate);
-
-      const expense = await tx.expense.create({
-        data: {
+        const overdraftProbe = await probeCashOverdraft(
+          tx,
           shopId,
-          categoryId: dto.categoryId,
           amount,
-          expenseDate: expenseMoment,
-          description: dto.description?.trim() ? dto.description : null,
-          createdById: userId,
-        },
-        select: { id: true },
+          dto.confirmOverdraft,
+        );
+        if (overdraftProbe.kind === 'overdraft') {
+          return {
+            kind: 'overdraft' as const,
+            shortfall: overdraftProbe.shortfall,
+          };
+        }
+        const overdraft = overdraftProbe.overdraft;
+        const expenseMoment = resolveTransactionDate(dto.expenseDate);
+
+        const expense = await tx.expense.create({
+          data: {
+            shopId,
+            categoryId: dto.categoryId,
+            amount,
+            expenseDate: expenseMoment,
+            description: dto.description?.trim() ? dto.description : null,
+            clientRequestId: dto.clientRequestId,
+            createdById: userId,
+          },
+          select: { id: true },
+        });
+
+        await tx.cashMovement.create({
+          data: {
+            shopId,
+            type: CashMovementType.EXPENSE,
+            direction: CashDirection.OUT,
+            amount,
+            movementDate: expenseMoment,
+            referenceType: ReferenceType.EXPENSE,
+            referenceId: expense.id,
+            isOverdraft: overdraft,
+            createdById: userId,
+          },
+        });
+
+        return { kind: 'created' as const };
       });
 
-      await tx.cashMovement.create({
-        data: {
-          shopId,
-          type: CashMovementType.EXPENSE,
-          direction: CashDirection.OUT,
-          amount,
-          movementDate: expenseMoment,
-          referenceType: ReferenceType.EXPENSE,
-          referenceId: expense.id,
-          isOverdraft: overdraft,
-          createdById: userId,
-        },
-      });
-
-      return { kind: 'created' as const };
-    });
-
-    if (outcome.kind === 'overdraft') {
-      return new PurchaseOverdraftResponseDto(outcome.shortfall, 'expense');
+      if (outcome.kind === 'overdraft') {
+        return new PurchaseOverdraftResponseDto(outcome.shortfall, 'expense');
+      }
+      return new StatusBaseResponseDTO(true, CREATED);
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+      }
+      throw error;
     }
-    return new StatusBaseResponseDTO(true, CREATED);
   }
 
   async cancelExpense(
@@ -135,7 +159,7 @@ export class ExpensesService {
   ): Promise<StatusBaseResponseDTO> {
     const expense = await this.prisma.expense.findFirst({
       where: { id, shopId },
-      select: { id: true, status: true, amount: true },
+      select: { id: true, status: true, amount: true, categoryId: true },
     });
     if (!expense) {
       throw new NotFoundException(resourceNotFound('Expense', id));
@@ -204,6 +228,21 @@ export class ExpensesService {
           reversesMovementId: original.id,
           note: dto.cancelReason,
           createdById: userId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          shopId,
+          userId,
+          action: 'EXPENSE_CANCEL',
+          entityType: 'Expense',
+          entityId: id,
+          reason: dto.cancelReason,
+          metadata: {
+            amount: Number(expense.amount),
+            categoryId: expense.categoryId,
+          },
         },
       });
     });
@@ -302,6 +341,7 @@ export class ExpensesService {
       cancelledAt: row.cancelledAt,
       cancelReason: row.cancelReason,
       cancelledById: row.cancelledById,
+      clientRequestId: row.clientRequestId,
       createdById: row.createdById,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

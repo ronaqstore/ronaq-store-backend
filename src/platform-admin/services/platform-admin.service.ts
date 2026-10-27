@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
-import { ShopStatus } from '../../generated/prisma/enums.js';
+import {
+  ShopStatus,
+  SubscriptionStatus,
+} from '../../generated/prisma/enums.js';
 import { AuthService } from '../../auth/services/auth.service.js';
 import {
   normalizePhone,
@@ -261,6 +264,8 @@ export class PlatformAdminService {
             phone: dto.shopPhone ? normalizePhoneOrRaw(dto.shopPhone) : null,
             address: dto.shopAddress?.trim() ?? null,
             status: ShopStatus.ACTIVE,
+            subscriptionStatus: SubscriptionStatus.TRIALING,
+            trialEndsAt: subscriptionEndsAt,
             subscriptionEndsAt,
           },
         });
@@ -390,7 +395,11 @@ export class PlatformAdminService {
       throw new NotFoundException(resourceNotFound('Shop', shopId));
     }
 
-    if (dto.subscriptionEndsAt === undefined && dto.isActive === undefined) {
+    if (
+      dto.subscriptionEndsAt === undefined &&
+      dto.isActive === undefined &&
+      dto.subscriptionStatus === undefined
+    ) {
       throw new BadRequestException(
         'Nothing to update. Send subscriptionEndsAt to renew, or isActive to suspend / reactivate.',
       );
@@ -399,7 +408,12 @@ export class PlatformAdminService {
     const data: {
       subscriptionEndsAt?: Date;
       status?: ShopStatus;
+      subscriptionStatus?: SubscriptionStatus;
     } = {};
+
+    if (dto.subscriptionStatus !== undefined) {
+      data.subscriptionStatus = dto.subscriptionStatus;
+    }
 
     if (dto.subscriptionEndsAt !== undefined) {
       const endsAt = new Date(dto.subscriptionEndsAt);
@@ -429,6 +443,21 @@ export class PlatformAdminService {
       data,
     });
 
+    await this.prisma.auditLog.create({
+      data: {
+        shopId: updated.id,
+        action: 'SUBSCRIPTION_UPDATE',
+        entityType: 'Shop',
+        entityId: updated.id,
+        metadata: {
+          status: updated.status,
+          subscriptionStatus: updated.subscriptionStatus,
+          subscriptionEndsAt: updated.subscriptionEndsAt.toISOString(),
+          isActive: dto.isActive,
+        },
+      },
+    });
+
     logInfo(
       'platform-admin.service.ts',
       'updateSubscription',
@@ -436,6 +465,7 @@ export class PlatformAdminService {
       {
         shopId: updated.id,
         status: updated.status,
+        subscriptionStatus: updated.subscriptionStatus,
         subscriptionEndsAt: updated.subscriptionEndsAt.toISOString(),
       },
     );
@@ -444,6 +474,8 @@ export class PlatformAdminService {
       shopId: updated.id,
       shopName: updated.name,
       status: updated.status,
+      subscriptionStatus: updated.subscriptionStatus,
+      trialEndsAt: updated.trialEndsAt,
       subscriptionEndsAt: updated.subscriptionEndsAt,
       isAccessible:
         updated.status === ShopStatus.ACTIVE &&

@@ -442,6 +442,7 @@ async function main() {
         amount: paymentAmount,
         paymentDate: new Date(),
         status: 'ACTIVE',
+        clientRequestId: crypto.randomUUID(),
         notes: 'Advance cash payment against invoice INV-2026-9901',
         createdById: user.id,
       },
@@ -606,6 +607,7 @@ async function main() {
         expenseDate: new Date(),
         description: 'PTCL Flash Fiber Bill',
         status: 'ACTIVE',
+        clientRequestId: crypto.randomUUID(),
         createdById: user.id,
       },
     });

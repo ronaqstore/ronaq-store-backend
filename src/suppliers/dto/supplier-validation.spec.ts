@@ -141,6 +141,26 @@ describe('Supplier update DTO validation', () => {
     await expect(validate(dto, pipeOptions)).resolves.toEqual([]);
   });
 
+  it('accepts null to clear optional fields on update', async () => {
+    const dto = plainToInstance(UpdateSupplierDto, {
+      phone: null,
+      cnic: null,
+      address: null,
+      notes: null,
+    });
+
+    await expect(validate(dto, pipeOptions)).resolves.toEqual([]);
+  });
+
+  it.each([['phone'], ['cnic'], ['address'], ['notes']])(
+    'accepts null for %s individually on update',
+    async (field) => {
+      const dto = plainToInstance(UpdateSupplierDto, { [field]: null });
+
+      await expect(validate(dto, pipeOptions)).resolves.toEqual([]);
+    },
+  );
+
   it('rejects a negative openingBalance on update too', async () => {
     const dto = plainToInstance(UpdateSupplierDto, { openingBalance: -5 });
 

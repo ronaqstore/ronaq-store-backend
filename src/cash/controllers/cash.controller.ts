@@ -80,6 +80,7 @@ export class CashController {
     } catch (error) {
       logError('cash.controller.ts', 'createOpeningCash', error, {
         shopId: req.user?.shopId,
+        clientRequestId: createOpeningCashDto?.clientRequestId,
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to record opening cash');
@@ -117,6 +118,7 @@ export class CashController {
     } catch (error) {
       logError('cash.controller.ts', 'createOwnerInvestment', error, {
         shopId: req.user?.shopId,
+        clientRequestId: createOwnerInvestmentDto?.clientRequestId,
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(
@@ -160,6 +162,7 @@ export class CashController {
     } catch (error) {
       logError('cash.controller.ts', 'createOwnerWithdrawal', error, {
         shopId: req.user?.shopId,
+        clientRequestId: createOwnerWithdrawalDto?.clientRequestId,
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException(

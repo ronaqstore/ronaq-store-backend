@@ -37,7 +37,13 @@ export class PaymentsCancelService {
   ): Promise<CancelPaymentResult> {
     const payment = await this.prisma.payment.findFirst({
       where: { id, shopId },
-      select: { id: true, status: true, amount: true },
+      select: {
+        id: true,
+        status: true,
+        amount: true,
+        saleId: true,
+        customerId: true,
+      },
     });
     if (!payment) {
       throw new NotFoundException(resourceNotFound('Payment', id));
@@ -100,6 +106,23 @@ export class PaymentsCancelService {
           cancelledAt: now,
           cancelReason: dto.cancelReason,
           cancelledById: userId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          shopId,
+          userId,
+          action: 'PAYMENT_CANCEL',
+          entityType: 'Payment',
+          entityId: id,
+          reason: dto.cancelReason,
+          metadata: {
+            amount: Number(amount),
+            saleId: payment.saleId,
+            customerId: payment.customerId,
+            isOverdraft: overdraft,
+          },
         },
       });
 

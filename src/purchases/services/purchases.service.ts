@@ -163,6 +163,7 @@ export class PurchasesService {
                 purchaseId: purchase.id,
                 amount: paidNow,
                 paymentDate: purchaseMoment,
+                clientRequestId: dto.clientRequestId,
                 createdById: userId,
               },
             });

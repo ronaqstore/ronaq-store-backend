@@ -35,12 +35,14 @@ export type LockedSaleLine =
   | {
       line: ValidatedSaleLine;
       unitId: string;
+      imei: string;
       unitCost: bigint;
       available?: never;
     }
   | {
       line: ValidatedSaleLine;
       unitId?: never;
+      imei?: never;
       unitCost: bigint;
       available: number;
     };
@@ -163,7 +165,12 @@ export class SalesLineWriterService {
       );
     }
 
-    return { line, unitId: unit.id, unitCost: BigInt(unit.unit_cost) };
+    return {
+      line,
+      unitId: unit.id,
+      imei: unit.imei1,
+      unitCost: BigInt(unit.unit_cost),
+    };
   }
 
   async lockQuantityLine(
@@ -215,19 +222,41 @@ export class SalesLineWriterService {
     });
 
     if (locked.unitId) {
-      await tx.inventoryUnit.update({
-        where: { id: locked.unitId },
-        data: { status: UnitStatus.SOLD },
-      });
+      const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE inventory_units
+        SET status = ${UnitStatus.SOLD}::"UnitStatus", updated_at = now()
+        WHERE id = ${locked.unitId}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND status = ${UnitStatus.IN_STOCK}::"UnitStatus"
+        RETURNING id
+      `;
+      if (!updatedUnits?.length) {
+        throw new BadRequestException(
+          unitNotAvailableForSale(
+            line.productName,
+            locked.imei,
+            'NOT_IN_STOCK',
+          ),
+        );
+      }
     } else {
       const onHand = locked.available;
       if (onHand === undefined) {
         throw new BadRequestException('Stock level missing for quantity sale');
       }
-      await tx.stockLevel.update({
-        where: { productId: line.productId },
-        data: { quantityOnHand: onHand - line.quantity },
-      });
+      const updatedStock = await tx.$queryRaw<Array<{ product_id: string }>>`
+        UPDATE stock_levels
+        SET quantity_on_hand = quantity_on_hand - ${line.quantity}, updated_at = now()
+        WHERE product_id = ${line.productId}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND quantity_on_hand >= ${line.quantity}
+        RETURNING product_id
+      `;
+      if (!updatedStock?.length) {
+        throw new BadRequestException(
+          insufficientStock(line.productName, onHand, line.quantity),
+        );
+      }
     }
 
     await tx.inventoryMovement.create({

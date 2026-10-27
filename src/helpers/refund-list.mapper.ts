@@ -6,6 +6,7 @@ type RefundRow = {
   refundDate: Date;
   method: string;
   notes: string | null;
+  clientRequestId?: string | null;
 };
 
 export function mapRefundRows(refunds: RefundRow[]): ResponseRefundDto[] {
@@ -15,5 +16,6 @@ export function mapRefundRows(refunds: RefundRow[]): ResponseRefundDto[] {
     refundDate: refund.refundDate,
     method: refund.method,
     notes: refund.notes,
+    clientRequestId: refund.clientRequestId ?? null,
   }));
 }

@@ -12,6 +12,7 @@ model SaleReturn {
   reason       String // required
   returnAmount BigInt       @map("return_amount")
   status       RecordStatus @default(ACTIVE)
+  clientRequestId String    @map("client_request_id") @db.Uuid
   notes        String?
   createdById  String       @map("created_by_id") @db.Uuid
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -25,6 +26,7 @@ model SaleReturn {
   items   ReturnItem[]
   refunds Refund[]
 
+  @@unique([shopId, clientRequestId])
   @@index([shopId, returnDate])
   @@index([saleId])
   @@map("returns")
@@ -46,6 +48,7 @@ model ReturnItem {
 
   // A phone line (quantity 1) can be returned once. NULL unit (accessories) = partial returns allowed.
   @@unique([saleItemId, inventoryUnitId])
+  @@unique([returnId, saleItemId])
   @@index([returnId])
   @@map("return_items")
 }
@@ -58,6 +61,7 @@ model Refund {
   refundDate  DateTime      @map("refund_date") @db.Timestamptz(3)
   method      PaymentMethod @default(CASH)
   notes       String?
+  clientRequestId String?   @map("client_request_id") @db.Uuid
   createdById String        @map("created_by_id") @db.Uuid
   createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -65,6 +69,7 @@ model Refund {
   saleReturn SaleReturn @relation(fields: [returnId], references: [id], onDelete: Restrict)
   createdBy  User       @relation("RefundCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
+  @@unique([shopId, clientRequestId])
   @@index([returnId])
   @@index([shopId, refundDate])
   @@map("refunds")

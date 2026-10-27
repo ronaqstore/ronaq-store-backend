@@ -37,6 +37,7 @@ export function mapSupplierPaymentToResponse(
     cancelledAt: row.cancelledAt,
     cancelReason: row.cancelReason,
     cancelledById: row.cancelledById,
+    clientRequestId: row.clientRequestId,
     notes: row.notes,
     createdById: row.createdById,
     createdAt: row.createdAt,

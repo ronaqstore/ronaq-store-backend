@@ -14,6 +14,7 @@ model CashMovement {
   // REVERSAL rows point to the movement they undo. @unique = one reversal per movement.
   reversesMovementId String?          @unique @map("reverses_movement_id") @db.Uuid
   isOverdraft        Boolean          @default(false) @map("is_overdraft") // saved after a "cash below zero" warning
+  clientRequestId    String?          @map("client_request_id") @db.Uuid
   note               String?
   createdById        String           @map("created_by_id") @db.Uuid
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -23,6 +24,7 @@ model CashMovement {
   reversesMovement CashMovement? @relation("MovementReversal", fields: [reversesMovementId], references: [id], onDelete: Restrict)
   reversedBy       CashMovement? @relation("MovementReversal")
 
+  @@unique([shopId, clientRequestId])
   @@index([shopId, movementDate])
   @@index([shopId, type])
   @@index([referenceType, referenceId])

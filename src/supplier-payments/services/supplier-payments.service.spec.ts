@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { SupplierPaymentsService } from './supplier-payments.service.js';
 import { SupplierPaymentsCancelService } from './supplier-payments-cancel.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -36,6 +37,7 @@ interface TxStub {
     aggregate: jest.Mock;
     findFirst: jest.Mock;
   };
+  auditLog: { create: jest.Mock };
 }
 
 function makeTx(overrides: Partial<TxStub> = {}): TxStub {
@@ -68,6 +70,9 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         }),
       ),
     },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
+    },
     ...overrides,
   };
   return tx;
@@ -75,6 +80,7 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
 
 function paymentRequest(overrides: Record<string, unknown> = {}) {
   return {
+    clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
     supplierId: SUPPLIER_ID,
     purchaseId: PURCHASE_ID,
     amount: 9000000,
@@ -109,6 +115,7 @@ describe('SupplierPaymentsService', () => {
       id: SUPPLIER_ID,
       name: 'ABC Mobiles',
     });
+    prismaStub.supplierPayment.findFirst.mockResolvedValue(null);
   });
 
   it('should be defined', () => {
@@ -207,6 +214,73 @@ describe('SupplierPaymentsService', () => {
       expect(tx.cashMovement.create.mock.calls[1][0].data.note).toBe(
         'Paid in cash',
       );
+    });
+  });
+
+  describe('createSupplierPayment — idempotency', () => {
+    it('returns "already saved" without opening a transaction when clientRequestId exists', async () => {
+      prismaStub.supplierPayment.findFirst.mockResolvedValue({
+        id: PAYMENT_ID,
+      });
+
+      const res = await service.createSupplierPayment(
+        paymentRequest(),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Supplier payment already saved',
+      });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      expect(tx.supplierPayment.create).not.toHaveBeenCalled();
+    });
+
+    it('scopes the idempotency lookup to the shop', async () => {
+      prismaStub.supplierPayment.findFirst.mockResolvedValue({
+        id: PAYMENT_ID,
+      });
+
+      await service.createSupplierPayment(paymentRequest(), SHOP_ID, USER_ID);
+
+      expect(prismaStub.supplierPayment.findFirst).toHaveBeenCalledWith({
+        where: { shopId: SHOP_ID, clientRequestId: expect.any(String) },
+        select: { id: true },
+      });
+    });
+
+    it('maps a racing P2002 on the idempotency index to the replay message', async () => {
+      prismaStub.$transaction.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.0.0',
+          meta: {
+            driverAdapterError: {
+              name: 'DriverAdapterError',
+              cause: {
+                originalCode: '23505',
+                kind: 'UniqueConstraintViolation',
+                constraint: {
+                  index: 'supplier_payments_shop_id_client_request_id_key',
+                },
+                table: 'supplier_payments',
+              },
+            },
+          },
+        }),
+      );
+
+      const res = await service.createSupplierPayment(
+        paymentRequest(),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Supplier payment already saved',
+      });
     });
   });
 
@@ -578,6 +652,16 @@ describe('SupplierPaymentsService', () => {
           cancelReason: 'Paid the wrong supplier',
           cancelledById: USER_ID,
           cancelledAt: expect.any(Date),
+        }),
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: SHOP_ID,
+          userId: USER_ID,
+          action: 'SUPPLIER_PAYMENT_CANCEL',
+          entityType: 'SupplierPayment',
+          entityId: PAYMENT_ID,
+          reason: 'Paid the wrong supplier',
         }),
       });
     });

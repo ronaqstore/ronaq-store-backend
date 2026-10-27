@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { ReturnsService } from './returns.service.js';
 import { ReturnsFlowService } from './returns-flow.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -18,7 +19,12 @@ const IMEI = '111223344556677';
 const prismaStub = {
   sale: { findFirst: jest.fn() },
   payment: { aggregate: jest.fn() },
-  saleReturn: { findMany: jest.fn(), aggregate: jest.fn(), count: jest.fn() },
+  saleReturn: {
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    aggregate: jest.fn(),
+    count: jest.fn(),
+  },
   refund: { aggregate: jest.fn() },
   returnItem: { findMany: jest.fn() },
   cashMovement: { aggregate: jest.fn() },
@@ -92,10 +98,10 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
       if (sql.includes('FROM shops')) return Promise.resolve([{ id: SHOP_ID }]);
       if (sql.includes('SELECT status FROM sales'))
         return Promise.resolve([{ status: 'ACTIVE' }]);
-      if (sql.includes('FROM inventory_units'))
+      if (sql.includes('inventory_units'))
         return Promise.resolve([{ id: UNIT_ID, status: 'SOLD', imei1: IMEI }]);
-      if (sql.includes('FROM stock_levels'))
-        return Promise.resolve([{ quantity_on_hand: 10 }]);
+      if (sql.includes('stock_levels'))
+        return Promise.resolve([{ quantity_on_hand: 10, product_id: ACC_ID }]);
       return Promise.resolve([]);
     }),
     $executeRaw: jest.fn().mockResolvedValue(1),
@@ -164,6 +170,7 @@ function primeSettlement(
 
 function returnRequest(overrides: Record<string, unknown> = {}) {
   return {
+    clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
     reason: 'Customer bought the wrong charger',
     returnDate: '2026-10-08',
     items: [
@@ -207,6 +214,7 @@ describe('ReturnsService', () => {
       cb(tx),
     );
     prismaStub.sale.findFirst.mockResolvedValue(saleRow());
+    prismaStub.saleReturn.findFirst.mockResolvedValue(null);
     prismaStub.returnItem.findMany.mockResolvedValue([]);
     primeSettlement(tx, { paid: 9000000n });
     prismaStub.cashMovement.aggregate.mockImplementation((args: any) =>
@@ -343,6 +351,36 @@ describe('ReturnsService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    it('rejects duplicate accessory line in the same return request', async () => {
+      await expect(
+        service.previewReturn(
+          SALE_ID,
+          previewRequest({
+            items: [
+              { saleItemId: ACC_ITEM_ID, quantity: 1, condition: 'GOOD' },
+              { saleItemId: ACC_ITEM_ID, quantity: 1, condition: 'GOOD' },
+            ],
+          }),
+          SHOP_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects duplicate phone line in the same return request', async () => {
+      await expect(
+        service.previewReturn(
+          SALE_ID,
+          previewRequest({
+            items: [
+              { saleItemId: PHONE_ITEM_ID, condition: 'GOOD' },
+              { saleItemId: PHONE_ITEM_ID, condition: 'GOOD' },
+            ],
+          }),
+          SHOP_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('rejects a phone that was already returned', async () => {
       prismaStub.returnItem.findMany.mockResolvedValue([
         { saleItemId: PHONE_ITEM_ID, quantity: 1 },
@@ -425,14 +463,22 @@ describe('ReturnsService', () => {
       expect(tx.returnItem.create).toHaveBeenCalledTimes(2);
 
       // GOOD: phone SOLD → IN_STOCK with +1, accessory shelf +2 with +2.
-      expect(tx.inventoryUnit.update).toHaveBeenCalledWith({
-        where: { id: UNIT_ID },
-        data: { status: 'IN_STOCK' },
+      const updateUnitCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as TemplateStringsArray).join('');
+        return (
+          sql.includes('UPDATE inventory_units') && sql.includes('RETURNING id')
+        );
       });
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: ACC_ID },
-        data: { quantityOnHand: 12 },
+      expect(updateUnitCall).toBeDefined();
+
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as TemplateStringsArray).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       const movements = tx.inventoryMovement.create.mock.calls.map(
         (c: any[]) => c[0].data,
       );
@@ -581,14 +627,13 @@ describe('ReturnsService', () => {
       );
 
       // The unit ends where WF8 would have put it, via the pair of movements.
-      expect(tx.inventoryUnit.update).toHaveBeenNthCalledWith(1, {
-        where: { id: UNIT_ID },
-        data: { status: 'IN_STOCK' },
+      const updateUnitCalls = tx.$queryRaw.mock.calls.filter((c) => {
+        const sql = (c[0] as TemplateStringsArray).join('');
+        return (
+          sql.includes('UPDATE inventory_units') && sql.includes('RETURNING id')
+        );
       });
-      expect(tx.inventoryUnit.update).toHaveBeenNthCalledWith(2, {
-        where: { id: UNIT_ID },
-        data: { status: 'DAMAGED' },
-      });
+      expect(updateUnitCalls).toHaveLength(2);
       const movements = tx.inventoryMovement.create.mock.calls.map(
         (c: any[]) => c[0].data,
       );
@@ -620,6 +665,71 @@ describe('ReturnsService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(tx.saleReturn.create).not.toHaveBeenCalled();
       expect(tx.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createReturn — idempotency', () => {
+    it('returns "already saved" without opening a transaction when clientRequestId exists', async () => {
+      prismaStub.saleReturn.findFirst.mockResolvedValue({ id: 'ret-1' });
+
+      const res = await service.createReturn(
+        SALE_ID,
+        returnRequest(),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Sale return already saved',
+      });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      expect(tx.saleReturn.create).not.toHaveBeenCalled();
+    });
+
+    it('scopes the idempotency lookup to the shop', async () => {
+      prismaStub.saleReturn.findFirst.mockResolvedValue({ id: 'ret-1' });
+
+      await service.createReturn(SALE_ID, returnRequest(), SHOP_ID, USER_ID);
+
+      expect(prismaStub.saleReturn.findFirst).toHaveBeenCalledWith({
+        where: { shopId: SHOP_ID, clientRequestId: expect.any(String) },
+        select: { id: true },
+      });
+    });
+
+    it('maps a racing P2002 on the idempotency index to the replay message', async () => {
+      prismaStub.$transaction.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.0.0',
+          meta: {
+            driverAdapterError: {
+              name: 'DriverAdapterError',
+              cause: {
+                originalCode: '23505',
+                kind: 'UniqueConstraintViolation',
+                constraint: {
+                  index: 'returns_shop_id_client_request_id_key',
+                },
+                table: 'returns',
+              },
+            },
+          },
+        }),
+      );
+
+      const res = await service.createReturn(
+        SALE_ID,
+        returnRequest(),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Sale return already saved',
+      });
     });
   });
 

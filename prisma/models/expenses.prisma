@@ -28,6 +28,7 @@ model Expense {
   cancelledAt   DateTime?    @map("cancelled_at") @db.Timestamptz(3)
   cancelReason  String?      @map("cancel_reason")
   cancelledById String?      @map("cancelled_by_id") @db.Uuid
+  clientRequestId String     @map("client_request_id") @db.Uuid
   createdById   String       @map("created_by_id") @db.Uuid
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -37,6 +38,7 @@ model Expense {
   createdBy   User            @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   cancelledBy User?           @relation("ExpenseCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
 
+  @@unique([shopId, clientRequestId])
   @@index([shopId, expenseDate])
   @@index([categoryId])
   @@map("expenses")

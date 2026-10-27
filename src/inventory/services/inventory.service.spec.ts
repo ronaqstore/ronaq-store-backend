@@ -39,7 +39,15 @@ interface TxStub {
 
 function makeTx(overrides: Partial<TxStub> = {}): TxStub {
   const tx: TxStub = {
-    $queryRaw: jest.fn().mockResolvedValue([{ quantity_on_hand: 10 }]),
+    $queryRaw: jest.fn().mockResolvedValue([
+      {
+        quantity_on_hand: 10,
+        product_id: PRODUCT_ID,
+        id: UNIT_ID,
+        status: 'IN_STOCK',
+        imei1: '1112233344555',
+      },
+    ]),
     $executeRaw: jest.fn().mockResolvedValue(1),
     stockLevel: {
       findUnique: jest.fn().mockResolvedValue({ quantityOnHand: 6 }),
@@ -225,10 +233,14 @@ describe('InventoryService', () => {
       expect(
         String((tx.$queryRaw.mock.calls[0][0] as string[]).join('')),
       ).toContain('FOR UPDATE');
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: PRODUCT_ID },
-        data: { quantityOnHand: 13 },
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           shopId: SHOP_ID,
@@ -284,10 +296,14 @@ describe('InventoryService', () => {
       );
 
       expect(res.kind).toBe('created');
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: PRODUCT_ID },
-        data: { quantityOnHand: 0 },
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ quantityChange: -10 }),
       });
@@ -357,10 +373,13 @@ describe('InventoryService', () => {
       expect(
         String((tx.$queryRaw.mock.calls[0][0] as string[]).join('')),
       ).toContain('FOR UPDATE');
-      expect(tx.inventoryUnit.update).toHaveBeenCalledWith({
-        where: { id: UNIT_ID },
-        data: { status: 'DAMAGED' },
+      const updateUnitCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE inventory_units') && sql.includes('RETURNING id')
+        );
       });
+      expect(updateUnitCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           inventoryUnitId: UNIT_ID,

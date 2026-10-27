@@ -83,6 +83,7 @@ export function mapReturnToResponse(row: ReturnWithRefs): ResponseReturnDto {
     returnAmount: Number(row.returnAmount),
     status: row.status,
     notes: row.notes,
+    clientRequestId: row.clientRequestId,
     createdById: row.createdById,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

@@ -7,8 +7,10 @@ model Shop {
   name               String
   phone              String?
   address            String?
-  status             ShopStatus @default(ACTIVE)
-  subscriptionEndsAt DateTime   @map("subscription_ends_at") @db.Timestamptz(3)
+  status             ShopStatus         @default(ACTIVE)
+  subscriptionStatus SubscriptionStatus @default(TRIALING) @map("subscription_status")
+  trialEndsAt        DateTime?          @map("trial_ends_at") @db.Timestamptz(3)
+  subscriptionEndsAt DateTime           @map("subscription_ends_at") @db.Timestamptz(3)
 
   // Automatic numbers (S-0001, P-0001). Read + increase inside the same transaction
   // that saves the sale / purchase (UPDATE ... RETURNING).
@@ -42,6 +44,7 @@ model Shop {
   cashReconciliations CashReconciliation[]
   storeSettings       ShopStoreSettings?
   productImages       ProductImage[]
+  auditLogs           AuditLog[]
 
   @@map("shops")
 }
@@ -82,6 +85,7 @@ model User {
   createdReturns            SaleReturn[]         @relation("ReturnCreatedBy")
   createdRefunds            Refund[]             @relation("RefundCreatedBy")
   createdReconciliations    CashReconciliation[] @relation("ReconciliationCreatedBy")
+  auditLogs                 AuditLog[]
 
   @@index([shopId])
   @@map("users")

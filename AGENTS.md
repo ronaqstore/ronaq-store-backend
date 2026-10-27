@@ -577,10 +577,8 @@ reject edit/deactivate with **403**. Names are **not** unique.
 4. Cash < 0 → **200** `{confirmOverdraft, shortfall, message}`, nothing
    written → retry `confirmOverdraft: true` → **201** (same prompt shape as
    WF6, reused `PurchaseOverdraftResponseDto`).
-5. No `clientRequestId` on `supplier_payments` — the ERD grants idempotency
-   keys to sales, purchases and payments only, so double-tap protection comes
-   from the per-supplier row lock, not a replay key. Do not add a column
-   without asking.
+5. `clientRequestId` on `supplier_payments` — gives idempotency via
+   `(shopId, clientRequestId)` unique key, protecting against double-tap payouts.
 
 **WF8 🔧 Stock adjustment, damaged & lost** ✅ **BUILT** —
 `POST /inventory/adjustments`, `GET /inventory/adjustments`.
@@ -974,9 +972,8 @@ surface can never drift apart.
   lock two payments to *different* suppliers would both pass the soft cash
   warning on the same balance). Then the **supplier row** — the remaining-
   outstanding check is re-run **under the supplier lock**, and the
-  pre-transaction supplier read is only the 404 tenant check. There is no
-  `clientRequestId` column (ERD grants one to sales/purchases/payments only),
-  so the supplier lock is the double-tap guard too.
+  pre-transaction supplier read is only the 404 tenant check. `clientRequestId`
+  on `supplier_payments` provides DB-enforced replay idempotency alongside the supplier lock.
 - `notes` is stored as `null` when blank — on both the payment and its cash row.
 - Payment validation order inside the tx: bill belongs to this supplier →
   not CANCELLED → not opening stock → amount ≤ remaining → cash ≥ 0.
@@ -1220,8 +1217,8 @@ surface can never drift apart.
   statement is `SELECT id FROM shops … FOR UPDATE`, then a
   `findFirst({ type: OPENING_CASH })` → 400 `openingCashAlreadySet()`
   (`src/errors/error.builder.ts`). The lock makes a concurrent double-tap
-  lose instead of writing two opening rows — this check *is* the
-  double-tap guard (no `clientRequestId` column exists on cash_movements).
+  lose instead of writing two opening rows (`clientRequestId` also gives
+  replay protection across cash movement endpoints).
 - `date` defaults to `businessToday()` (Asia/Karachi), stored like other
   business dates: `new Date('YYYY-MM-DD')` = UTC midnight. No overdraft
   prompt — opening cash only ever adds money.

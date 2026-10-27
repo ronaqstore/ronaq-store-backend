@@ -75,6 +75,25 @@ describe('Customer DTO validation', () => {
     await expect(validate(dto)).resolves.toEqual([]);
   });
 
+  it('accepts null to clear optional fields on update', async () => {
+    const dto = plainToInstance(UpdateCustomerDto, {
+      phone: null,
+      address: null,
+      notes: null,
+    });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it.each([['phone'], ['address'], ['notes']])(
+    'accepts null for %s individually on update',
+    async (field) => {
+      const dto = plainToInstance(UpdateCustomerDto, { [field]: null });
+
+      await expect(validate(dto)).resolves.toEqual([]);
+    },
+  );
+
   it('accepts an openingBalance correction on update', async () => {
     const dto = plainToInstance(UpdateCustomerDto, { openingBalance: 7500000 });
 

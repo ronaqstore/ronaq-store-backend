@@ -82,6 +82,7 @@ export class ExpensesController {
     } catch (error) {
       logError('expenses.controller.ts', 'createExpense', error, {
         shopId: req.user?.shopId,
+        clientRequestId: createExpenseDto?.clientRequestId,
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to record expense');

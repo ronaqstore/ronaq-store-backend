@@ -130,6 +130,7 @@ export class SaleReturnsController {
       logError('returns.controller.ts', 'createReturn', error, {
         shopId: req.user?.shopId,
         saleId: id,
+        clientRequestId: createReturnDto?.clientRequestId,
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to record return');

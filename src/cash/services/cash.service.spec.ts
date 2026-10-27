@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { CashService } from './cash.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
@@ -117,6 +118,7 @@ describe('CashService', () => {
           amount: 50000000n,
           movementDate: new Date('2026-10-01'),
           note: 'Day one',
+          clientRequestId: null,
           createdById: USER_ID,
         },
       });
@@ -182,6 +184,7 @@ describe('CashService', () => {
           amount: 20000000n,
           movementDate: new Date('2026-10-08'),
           note: 'Restock money',
+          clientRequestId: null,
           createdById: USER_ID,
         },
       });
@@ -200,6 +203,61 @@ describe('CashService', () => {
       );
       const call = prismaStub.cashMovement.create.mock.calls[0][0];
       expect(businessToday(call.data.movementDate)).toBe(businessToday());
+    });
+
+    it('returns "recorded successfully" without inserting when clientRequestId already exists', async () => {
+      prismaStub.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
+
+      const res = await service.createOwnerInvestment(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 20000000,
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Owner investment recorded successfully',
+      });
+      expect(prismaStub.cashMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('maps racing P2002 on clientRequestId to success', async () => {
+      prismaStub.cashMovement.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.0.0',
+          meta: {
+            driverAdapterError: {
+              name: 'DriverAdapterError',
+              cause: {
+                originalCode: '23505',
+                kind: 'UniqueConstraintViolation',
+                constraint: {
+                  index: 'cash_movements_shop_id_client_request_id_key',
+                },
+                table: 'cash_movements',
+              },
+            },
+          },
+        }),
+      );
+
+      const res = await service.createOwnerInvestment(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 20000000,
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Owner investment recorded successfully',
+      });
     });
   });
 
@@ -225,6 +283,7 @@ describe('CashService', () => {
           amount: 5000000n,
           movementDate: new Date('2026-10-08'),
           note: null,
+          clientRequestId: null,
           isOverdraft: false,
           createdById: USER_ID,
         },
@@ -296,6 +355,62 @@ describe('CashService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
+
+    it('returns "recorded successfully" without opening transaction when clientRequestId already exists', async () => {
+      prismaStub.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
+
+      const res = await service.createOwnerWithdrawal(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 5000000,
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Owner withdrawal recorded successfully',
+      });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('maps racing P2002 on clientRequestId to success', async () => {
+      prismaStub.$transaction.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.0.0',
+          meta: {
+            driverAdapterError: {
+              name: 'DriverAdapterError',
+              cause: {
+                originalCode: '23505',
+                kind: 'UniqueConstraintViolation',
+                constraint: {
+                  index: 'cash_movements_shop_id_client_request_id_key',
+                },
+                table: 'cash_movements',
+              },
+            },
+          },
+        }),
+      );
+
+      const res = await service.createOwnerWithdrawal(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 5000000,
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Owner withdrawal recorded successfully',
+      });
+    });
   });
 
   describe('getCashMovements', () => {
@@ -337,6 +452,7 @@ describe('CashService', () => {
             reversesMovementId: null,
             isOverdraft: false,
             note: 'October rent',
+            clientRequestId: null,
             createdById: USER_ID,
             createdAt: movementRow.createdAt,
           },

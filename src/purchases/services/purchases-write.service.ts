@@ -199,10 +199,19 @@ export class PurchasesWriteService {
     );
 
     if (current) {
-      await tx.stockLevel.update({
-        where: { productId: line.productId },
-        data: { quantityOnHand: newQty, avgUnitCost: BigInt(newAvg) },
-      });
+      const updatedStock = await tx.$queryRaw<Array<{ product_id: string }>>`
+        UPDATE stock_levels
+        SET quantity_on_hand = ${newQty}, avg_unit_cost = ${BigInt(newAvg)}, updated_at = now()
+        WHERE product_id = ${line.productId}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND quantity_on_hand = ${oldQty}
+        RETURNING product_id
+      `;
+      if (!updatedStock?.length) {
+        throw new BadRequestException(
+          'Stock level changed concurrently during purchase write',
+        );
+      }
     } else {
       await tx.stockLevel.create({
         data: {

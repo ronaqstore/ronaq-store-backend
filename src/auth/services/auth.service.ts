@@ -12,7 +12,11 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
-import { ShopStatus, UserStatus } from '../../generated/prisma/enums.js';
+import {
+  ShopStatus,
+  SubscriptionStatus,
+  UserStatus,
+} from '../../generated/prisma/enums.js';
 import {
   currentPasswordIncorrect,
   invalidCredentials,
@@ -126,6 +130,8 @@ export class AuthService {
             : ownerPhone,
           address: resolvedAddress,
           status: ShopStatus.ACTIVE,
+          subscriptionStatus: SubscriptionStatus.TRIALING,
+          trialEndsAt: subscriptionEndsAt,
           subscriptionEndsAt,
         },
       });
@@ -460,6 +466,8 @@ export class AuthService {
         id: user.shop.id,
         name: user.shop.name,
         shopStatus: user.shop.status,
+        subscriptionStatus: user.shop.subscriptionStatus,
+        trialEndsAt: user.shop.trialEndsAt,
         subscriptionEndsAt: user.shop.subscriptionEndsAt,
       },
     };

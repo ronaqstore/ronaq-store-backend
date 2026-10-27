@@ -46,6 +46,7 @@ interface TxStub {
     findFirst: jest.Mock;
     aggregate: jest.Mock;
   };
+  auditLog: { create: jest.Mock };
 }
 
 /**
@@ -91,6 +92,9 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
           },
         }),
       ),
+    },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
     },
     ...overrides,
   };
@@ -347,8 +351,10 @@ describe('SalesService', () => {
     it('read+increments next_sale_no to S-0007', async () => {
       await service.createSale(serialiseSaleRequest(), SHOP_ID, USER_ID);
 
-      const counterSql = tx.$queryRaw.mock.calls[0][0] as string[];
-      expect(counterSql.join('')).toContain('next_sale_no');
+      const counterCall = tx.$queryRaw.mock.calls.find((c: any) =>
+        (c[0] as string[]).join('').includes('next_sale_no'),
+      );
+      expect(counterCall).toBeDefined();
       expect(tx.sale.create.mock.calls[0][0].data.saleNo).toBe('S-0007');
     });
   });
@@ -489,10 +495,13 @@ describe('SalesService', () => {
           total: 10000000n,
         }),
       );
-      expect(tx.inventoryUnit.update).toHaveBeenCalledWith({
-        where: { id: UNIT_ID },
-        data: { status: 'SOLD' },
+      const updateUnitCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE inventory_units') && sql.includes('RETURNING id')
+        );
       });
+      expect(updateUnitCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           type: 'SALE',
@@ -544,6 +553,31 @@ describe('SalesService', () => {
           USER_ID,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('fails when atomic unit update matches 0 rows (race condition)', async () => {
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = (strings as string[])?.join('') ?? '';
+        if (sql.includes('UPDATE inventory_units')) {
+          return Promise.resolve([]);
+        }
+        if (sql.includes('inventory_units')) {
+          return lockUnitResult();
+        }
+        return Promise.resolve([{ next: 7 }]);
+      });
+
+      await expect(
+        service.createSale(
+          serialiseSaleRequest({
+            items: [phoneLine],
+            paidNow: 10000000,
+            customerId: CUSTOMER_ID,
+          }),
+          SHOP_ID,
+          USER_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rejects a phone line without inventoryUnitId', async () => {
@@ -628,10 +662,14 @@ describe('SalesService', () => {
       );
       expect(lockCall?.[0].join('')).toContain('FOR UPDATE');
 
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: QUANTITY_PRODUCT_ID },
-        data: { quantityOnHand: 8 },
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           type: 'SALE',
@@ -660,6 +698,25 @@ describe('SalesService', () => {
         service.createSale(serialiseSaleRequest(), SHOP_ID, USER_ID),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(tx.saleItem.create).not.toHaveBeenCalled();
+    });
+
+    it('fails when atomic stock update matches 0 rows (concurrent depletion race)', async () => {
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = (strings as string[])?.join('') ?? '';
+        if (sql.includes('UPDATE stock_levels')) {
+          return Promise.resolve([]);
+        }
+        if (sql.includes('stock_levels')) {
+          return Promise.resolve([
+            { quantity_on_hand: 10, avg_unit_cost: 50000n },
+          ]);
+        }
+        return Promise.resolve([{ next: 7 }]);
+      });
+
+      await expect(
+        service.createSale(serialiseSaleRequest(), SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rejects selling a product with no stock row at all', async () => {
@@ -692,6 +749,114 @@ describe('SalesService', () => {
         },
       });
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createSale — below-cost sale guard', () => {
+    const guardPhoneLine = {
+      productId: SERIAL_PRODUCT_ID,
+      quantity: 1,
+      unitPrice: 10000000,
+      inventoryUnitId: UNIT_ID,
+    };
+
+    function lockPhoneResult(overrides: Record<string, unknown> = {}) {
+      return Promise.resolve([
+        {
+          id: UNIT_ID,
+          status: 'IN_STOCK',
+          imei1: '111',
+          unit_cost: 9000000n,
+          ...overrides,
+        },
+      ]);
+    }
+
+    it('prompts and writes nothing when a phone is sold below cost without confirmBelowCost', async () => {
+      tx.$queryRaw.mockImplementation((strings: any) =>
+        strings?.[0]?.includes('inventory_units')
+          ? lockPhoneResult({ unit_cost: 9000000n })
+          : Promise.resolve([{ next: 7 }]),
+      );
+
+      const res = await service.createSale(
+        serialiseSaleRequest({
+          items: [{ ...guardPhoneLine, unitPrice: 8000000 }],
+          paidNow: 8000000,
+          customerId: CUSTOMER_ID,
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual(
+        expect.objectContaining({
+          confirmBelowCost: true,
+          shortfall: 1000000,
+          items: [
+            expect.objectContaining({
+              productName: 'Samsung A15',
+              unitPrice: 8000000,
+              unitCost: 9000000,
+              shortfall: 1000000,
+            }),
+          ],
+        }),
+      );
+      expect(tx.sale.create).not.toHaveBeenCalled();
+    });
+
+    it('saves a below-cost phone sale when confirmBelowCost is true', async () => {
+      tx.$queryRaw.mockImplementation((strings: any) =>
+        strings?.[0]?.includes('inventory_units')
+          ? lockPhoneResult({ unit_cost: 9000000n })
+          : Promise.resolve([{ next: 7 }]),
+      );
+
+      const res = await service.createSale(
+        serialiseSaleRequest({
+          items: [{ ...guardPhoneLine, unitPrice: 8000000 }],
+          paidNow: 8000000,
+          customerId: CUSTOMER_ID,
+          confirmBelowCost: true,
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Sale created successfully',
+      });
+      expect(tx.sale.create).toHaveBeenCalled();
+    });
+
+    it('prompts and writes nothing when an accessory is sold below cost without confirmBelowCost', async () => {
+      const res = await service.createSale(
+        serialiseSaleRequest({
+          items: [
+            { productId: QUANTITY_PRODUCT_ID, quantity: 2, unitPrice: 40000 },
+          ],
+          paidNow: 80000,
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual(
+        expect.objectContaining({
+          confirmBelowCost: true,
+          shortfall: 20000,
+          items: [
+            expect.objectContaining({
+              unitPrice: 40000,
+              unitCost: 50000,
+              shortfall: 20000,
+            }),
+          ],
+        }),
+      );
+      expect(tx.sale.create).not.toHaveBeenCalled();
     });
   });
 
@@ -896,9 +1061,10 @@ describe('SalesService', () => {
         const sql = strings?.join('') ?? '';
         if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
         if (sql.includes('FROM sales')) return [{ status: 'ACTIVE' }];
-        if (sql.includes('FROM inventory_units'))
+        if (sql.includes('inventory_units'))
           return [{ id: UNIT_ID, status: 'SOLD', imei1: '111223344556677' }];
-        if (sql.includes('stock_levels')) return [{ quantity_on_hand: 3 }];
+        if (sql.includes('stock_levels'))
+          return [{ quantity_on_hand: 3, product_id: QUANTITY_PRODUCT_ID }];
         return [];
       });
     });
@@ -924,6 +1090,16 @@ describe('SalesService', () => {
           cancelledAt: expect.any(Date),
         }),
       });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: SHOP_ID,
+          userId: USER_ID,
+          action: 'SALE_CANCEL',
+          entityType: 'Sale',
+          entityId: 'sale-1',
+          reason: 'Wrong IMEI',
+        }),
+      });
     });
 
     it('locks the sale row FOR UPDATE inside the transaction', async () => {
@@ -940,10 +1116,13 @@ describe('SalesService', () => {
 
       await service.cancelSale('sale-1', cancelDto, SHOP_ID, USER_ID);
 
-      expect(tx.inventoryUnit.update).toHaveBeenCalledWith({
-        where: { id: UNIT_ID },
-        data: { status: 'IN_STOCK' },
+      const updateUnitCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE inventory_units') && sql.includes('RETURNING id')
+        );
       });
+      expect(updateUnitCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           shopId: SHOP_ID,
@@ -981,10 +1160,14 @@ describe('SalesService', () => {
 
       await service.cancelSale('sale-1', cancelDto, SHOP_ID, USER_ID);
 
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: QUANTITY_PRODUCT_ID },
-        data: { quantityOnHand: 5 },
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           type: 'SALE_CANCEL',

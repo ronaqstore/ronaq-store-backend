@@ -13,11 +13,20 @@ import {
   Matches,
   Max,
   Min,
+  IsUUID,
   ValidateNested,
 } from 'class-validator';
 import { ReturnItemDto } from './return-item.dto.js';
 
 export class CreateReturnDto {
+  @ApiProperty({
+    description:
+      'Double-tap protection. Generate ONE uuid per opened Save screen and reuse it if the request is retried. If this id was already saved the system returns success instead of creating a second return.',
+    example: '01924f0a-0000-7000-8000-00000000beef',
+  })
+  @IsUUID()
+  clientRequestId: string;
+
   @ApiProperty({
     description:
       'Why the items are coming back. Required — a stock or cash change with no reason is a lie in the ledger. 1–1000 chars after trim.',

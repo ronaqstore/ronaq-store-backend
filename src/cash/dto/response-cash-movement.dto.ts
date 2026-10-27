@@ -48,6 +48,9 @@ export class ResponseCashMovementDto {
   @ApiPropertyOptional({ example: 'October electricity bill' })
   note: string | null;
 
+  @ApiPropertyOptional({ example: '01924f0a-0000-7000-8000-00000000beef' })
+  clientRequestId?: string | null;
+
   @ApiProperty({ example: 'user-uuid' })
   createdById: string;
 

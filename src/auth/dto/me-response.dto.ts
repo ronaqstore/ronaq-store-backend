@@ -1,6 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ShopStatus,
+  SubscriptionStatus,
   UserRole,
   UserStatus,
 } from '../../generated/prisma/enums.js';
@@ -14,6 +15,20 @@ export class MeShopDto {
 
   @ApiProperty({ enum: ShopStatus, example: ShopStatus.ACTIVE })
   shopStatus: ShopStatus;
+
+  @ApiProperty({
+    enum: SubscriptionStatus,
+    example: SubscriptionStatus.TRIALING,
+    description: 'Current subscription status: TRIALING, ACTIVE, or EXPIRED.',
+  })
+  subscriptionStatus: SubscriptionStatus;
+
+  @ApiPropertyOptional({
+    example: '2026-11-05T09:20:00.000Z',
+    nullable: true,
+    description: 'Free trial end timestamp, if applicable.',
+  })
+  trialEndsAt?: Date | null;
 
   @ApiProperty({
     example: '2026-11-05T09:20:00.000Z',

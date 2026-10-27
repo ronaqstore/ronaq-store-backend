@@ -43,7 +43,7 @@ export class PurchasesCancelService {
   ): Promise<StatusBaseResponseDTO> {
     const purchase = await this.prisma.purchase.findFirst({
       where: { id, shopId },
-      select: { id: true, status: true, purchaseNo: true },
+      select: { id: true, status: true, purchaseNo: true, supplierId: true },
     });
     if (!purchase) {
       throw new NotFoundException(resourceNotFound('Purchase', id));
@@ -118,16 +118,26 @@ export class PurchasesCancelService {
               );
             }
 
-            await tx.inventoryUnit.update({
-              where: { id: unit.id },
-              data: {
-                status: UnitStatus.VOIDED,
-                imei1: `${lockedUnit[0].imei1}_VOID_${unit.id}`,
-                ...(lockedUnit[0].imei2
-                  ? { imei2: `${lockedUnit[0].imei2}_VOID_${unit.id}` }
-                  : {}),
-              },
-            });
+            const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`
+              UPDATE inventory_units
+              SET status = ${UnitStatus.VOIDED}::"UnitStatus",
+                  imei1 = ${`${lockedUnit[0].imei1}_VOID_${unit.id}`},
+                  imei2 = ${lockedUnit[0].imei2 ? `${lockedUnit[0].imei2}_VOID_${unit.id}` : null},
+                  updated_at = now()
+              WHERE id = ${unit.id}::uuid
+                AND shop_id = ${shopId}::uuid
+                AND status = ${UnitStatus.IN_STOCK}::"UnitStatus"
+              RETURNING id
+            `;
+            if (!updatedUnits?.length) {
+              throw new BadRequestException(
+                purchaseCancelUnitNotInStock(
+                  purchase.purchaseNo,
+                  lockedUnit[0].imei1,
+                  lockedUnit[0].status,
+                ),
+              );
+            }
             await tx.inventoryMovement.create({
               data: {
                 shopId,
@@ -160,10 +170,19 @@ export class PurchasesCancelService {
           );
         }
 
-        await tx.stockLevel.update({
-          where: { productId: item.productId },
-          data: { quantityOnHand: available - item.quantity },
-        });
+        const updatedStock = await tx.$queryRaw<Array<{ product_id: string }>>`
+          UPDATE stock_levels
+          SET quantity_on_hand = quantity_on_hand - ${item.quantity}, updated_at = now()
+          WHERE product_id = ${item.productId}::uuid
+            AND shop_id = ${shopId}::uuid
+            AND quantity_on_hand >= ${item.quantity}
+          RETURNING product_id
+        `;
+        if (!updatedStock?.length) {
+          throw new BadRequestException(
+            insufficientStock(item.product.name, available, item.quantity),
+          );
+        }
         await tx.inventoryMovement.create({
           data: {
             shopId,
@@ -227,6 +246,22 @@ export class PurchasesCancelService {
           cancelledAt: now,
           cancelReason: dto.cancelReason,
           cancelledById: userId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          shopId,
+          userId,
+          action: 'PURCHASE_CANCEL',
+          entityType: 'Purchase',
+          entityId: id,
+          reason: dto.cancelReason,
+          metadata: {
+            purchaseNo: purchase.purchaseNo,
+            supplierId: purchase.supplierId,
+            itemCount: items.length,
+          },
         },
       });
     });

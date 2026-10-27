@@ -7,6 +7,12 @@ enum ShopStatus {
   SUSPENDED
 }
 
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  EXPIRED
+}
+
 enum UserRole {
   OWNER
   // later: MANAGER, CASHIER

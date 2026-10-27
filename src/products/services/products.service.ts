@@ -55,7 +55,6 @@ export class ProductsService {
   async createProduct(
     dto: CreateProductDto,
     shopId: string,
-
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
@@ -208,7 +207,6 @@ export class ProductsService {
     id: string,
     dto: UpdateProductDto,
     shopId: string,
-
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const existing = await this.prisma.product.findFirst({

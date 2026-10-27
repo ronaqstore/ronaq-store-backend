@@ -109,6 +109,9 @@ ALTER TABLE returns
   ADD CONSTRAINT returns_amount_chk CHECK (return_amount >= 0),
   ADD CONSTRAINT returns_reason_chk CHECK (length(btrim(reason)) > 0);
 ALTER TABLE return_items ADD CONSTRAINT return_items_qty_chk CHECK (quantity > 0);
+-- Uniqueness of return items:
+-- 1) (sale_item_id, inventory_unit_id) UNIQUE: a phone line can only ever be returned once.
+-- 2) (return_id, sale_item_id) UNIQUE: each sale item (phone or accessory) can appear at most once per return.
 ALTER TABLE refunds      ADD CONSTRAINT refunds_amount_chk   CHECK (amount > 0);
 ALTER TABLE cash_reconciliations
   ADD CONSTRAINT cash_recon_amounts_chk CHECK (system_cash >= 0 AND counted_cash >= 0 AND difference = counted_cash - system_cash),
@@ -127,6 +130,9 @@ CREATE UNIQUE INDEX users_one_owner_per_shop ON users (shop_id) WHERE role = 'OW
 CREATE UNIQUE INDEX payments_idempotency_uq
   ON payments (shop_id, client_request_id, COALESCE(sale_id, '00000000-0000-0000-0000-000000000000'::uuid));
 
+-- Double-save protection for other financial mutations (expenses, supplier_payments, returns, refunds, cash_movements)
+-- are handled via (shop_id, client_request_id) UNIQUE constraints in Prisma models & schema migrations.
+
 -- Fast dashboard / ledger queries that only look at live records
 CREATE INDEX sales_active_date_idx      ON sales (shop_id, sale_date)           WHERE status = 'ACTIVE';
 CREATE INDEX payments_active_date_idx   ON payments (shop_id, payment_date)     WHERE status = 'ACTIVE';
@@ -134,17 +140,27 @@ CREATE INDEX expenses_active_date_idx   ON expenses (shop_id, expense_date)     
 CREATE INDEX purchases_active_date_idx  ON purchases (shop_id, purchase_date)   WHERE status = 'ACTIVE';
 CREATE INDEX units_in_stock_idx         ON inventory_units (shop_id, product_id) WHERE status = 'IN_STOCK';
 
+-- Helper for expression indexes on enums (PostgreSQL enum cast is STABLE, index requires IMMUTABLE)
+CREATE OR REPLACE FUNCTION ronaq_enum_label(val anyenum)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT $1::text;
+$$;
+
 -- Unique product variant per shop (case-insensitive & trimmed)
 CREATE UNIQUE INDEX IF NOT EXISTS products_variant_key
   ON products (
     shop_id,
     lower(btrim(name)),
-    lower(coalesce(btrim(model), '')),
-    lower(coalesce(btrim(color), '')),
-    lower(coalesce(btrim(ram), '')),
-    lower(coalesce(btrim(storage), '')),
-    coalesce(pta_status::text, ''),
-    coalesce(authenticity::text, '')
+    lower(btrim(coalesce(model, ''))),
+    lower(btrim(coalesce(color, ''))),
+    lower(btrim(coalesce(ram, ''))),
+    lower(btrim(coalesce(storage, ''))),
+    coalesce(ronaq_enum_label(pta_status), ''),
+    coalesce(ronaq_enum_label(authenticity), '')
   );
 
 -- -----------------------------------------------------------------------------
@@ -153,11 +169,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS products_variant_key
 
 -- 3a. An IMEI can appear only once per shop, across BOTH imei1 and imei2
 --     (the Prisma unique constraints only cover imei1-vs-imei1 and imei2-vs-imei2).
+--     Cancelled purchases VOID the unit; live uniqueness ignores VOIDED units.
 CREATE OR REPLACE FUNCTION inventory_units_imei_guard() RETURNS trigger AS $$
 BEGIN
+  IF NEW.status = 'VOIDED' THEN
+    RETURN NEW;
+  END IF;
   IF EXISTS (
     SELECT 1 FROM inventory_units u
     WHERE u.shop_id = NEW.shop_id AND u.id <> NEW.id
+      AND u.status <> 'VOIDED'
       AND (u.imei1 IN (NEW.imei1, NEW.imei2) OR (u.imei2 IS NOT NULL AND u.imei2 IN (NEW.imei1, NEW.imei2)))
   ) THEN
     RAISE EXCEPTION 'IMEI already exists in this shop' USING ERRCODE = '23505';
@@ -244,7 +265,7 @@ BEGIN
     'products','suppliers','customers',
     'purchases','purchase_items','supplier_payments','inventory_units',
     'sales','sale_items','payments','expenses',
-    'returns','return_items','refunds','cash_reconciliations'
+    'returns','return_items','refunds','cash_reconciliations','audit_logs'
   ] LOOP
     EXECUTE format(
       'CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION forbid_delete()',

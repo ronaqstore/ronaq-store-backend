@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CashReconciliationsService } from './cash-reconciliations.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { businessToday } from '../../helpers/date.helper.js';
 
 const SHOP_ID = 'shop-1';
 const USER_ID = 'user-1';

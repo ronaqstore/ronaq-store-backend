@@ -105,6 +105,35 @@ describe('SalesController', () => {
     });
   });
 
+  it('surfaces the below-cost confirmation prompt', async () => {
+    jest.spyOn(salesService, 'createSale').mockResolvedValue({
+      confirmBelowCost: true,
+      items: [
+        {
+          productName: 'iPhone 15',
+          imei: '123456789012345',
+          unitPrice: 15000000,
+          unitCost: 18000000,
+          shortfall: 3000000,
+        },
+      ],
+      shortfall: 3000000,
+      message: 'Warning: One or more items are being sold below cost',
+    } as any);
+
+    const http = { status: jest.fn() } as any;
+    const res = await controller.createSale(
+      { clientRequestId: 'r' } as any,
+      { user: { shopId: 'shop-1', userId: 'user-1' } } as any,
+      http,
+    );
+
+    expect(res.data).toEqual(
+      expect.objectContaining({ confirmBelowCost: true, shortfall: 3000000 }),
+    );
+    expect(http.status).toHaveBeenCalledWith(200);
+  });
+
   it('preserves a service 400 response', async () => {
     jest
       .spyOn(salesService, 'createSale')

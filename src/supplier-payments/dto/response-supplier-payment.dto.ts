@@ -49,6 +49,9 @@ export class ResponseSupplierPaymentDto {
   @ApiPropertyOptional({ example: null })
   cancelledById?: string | null;
 
+  @ApiProperty({ example: '01924f0a-0000-7000-8000-00000000beef' })
+  clientRequestId: string;
+
   @ApiPropertyOptional({ example: 'Paid in cash at the shop' })
   notes?: string | null;
 

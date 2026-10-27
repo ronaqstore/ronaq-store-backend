@@ -32,7 +32,11 @@ import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-res
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
 import { CancelImpactResponseDto } from '../../common-dto/response/cancel-impact.dto.js';
-import { SalesService, CancelSaleResult } from '../services/sales.service.js';
+import {
+  SalesService,
+  CancelSaleResult,
+  CreateSaleResult,
+} from '../services/sales.service.js';
 import { CreateSaleDto } from '../dto/create-sale.dto.js';
 import { CancelSaleDto } from '../dto/cancel-sale.dto.js';
 import { SaleQueryFilterDto } from '../dto/sale-query.filter.js';
@@ -68,13 +72,15 @@ export class SalesController {
   async createSale(
     @Body() createSaleDto: CreateSaleDto,
     @Req() req: OwnerRequest,
-  ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<ApiSuccessResponseDTO<CreateSaleResult>> {
     try {
       const result = await this.salesService.createSale(
         createSaleDto,
         req.user.shopId,
         req.user.userId,
       );
+      res?.status('confirmBelowCost' in result ? 200 : 201);
       return new ApiSuccessResponseDTO(result.message, result);
     } catch (error) {
       logError('sales.controller.ts', 'createSale', error, {

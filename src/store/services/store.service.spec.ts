@@ -95,6 +95,9 @@ describe('StoreService (owner surface)', () => {
         {
           provide: PrismaService,
           useValue: {
+            auditLog: {
+              create: jest.fn().mockResolvedValue({}),
+            },
             shopStoreSettings: {
               findUnique: jest.fn(),
               findMany: jest.fn().mockResolvedValue([]),
@@ -324,6 +327,18 @@ describe('StoreService (owner surface)', () => {
       expect(prisma.shopStoreSettings.update).toHaveBeenCalledWith({
         where: { shopId: 'shop-1' },
         data: { slug: 'new-address' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: 'shop-1',
+          action: 'STORE_SLUG_CHANGE',
+          entityType: 'ShopStoreSettings',
+          entityId: 'shop-1',
+          metadata: {
+            oldSlug: 'old-address',
+            newSlug: 'new-address',
+          },
+        }),
       });
       expect(clear).toHaveBeenCalled();
       expect(res.message).toBe('Store slug updated to "new-address"');

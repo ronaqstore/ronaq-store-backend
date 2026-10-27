@@ -1,7 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsOptional } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsOptional } from 'class-validator';
+import { SubscriptionStatus } from '../../generated/prisma/enums.js';
 
 export class UpdateSubscriptionDto {
   @ApiPropertyOptional({
@@ -12,6 +13,15 @@ export class UpdateSubscriptionDto {
   @IsOptional()
   @IsDateString()
   subscriptionEndsAt?: string;
+
+  @ApiPropertyOptional({
+    enum: SubscriptionStatus,
+    description: 'Subscription status: TRIALING, ACTIVE, or EXPIRED.',
+    example: SubscriptionStatus.ACTIVE,
+  })
+  @IsOptional()
+  @IsEnum(SubscriptionStatus)
+  subscriptionStatus?: SubscriptionStatus;
 
   @ApiPropertyOptional({
     description:

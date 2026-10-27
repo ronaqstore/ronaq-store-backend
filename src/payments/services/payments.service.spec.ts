@@ -37,6 +37,7 @@ interface TxStub {
     findFirst: jest.Mock;
     aggregate: jest.Mock;
   };
+  auditLog: { create: jest.Mock };
 }
 
 /** Mutable per-test data the $queryRaw dispatcher reads at call time. */
@@ -95,6 +96,9 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
           },
         }),
       ),
+    },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
     },
     ...overrides,
   };
@@ -742,6 +746,16 @@ describe('PaymentsService', () => {
           cancelReason: 'Paid the wrong bill',
           cancelledById: USER_ID,
           cancelledAt: expect.any(Date),
+        }),
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: SHOP_ID,
+          userId: USER_ID,
+          action: 'PAYMENT_CANCEL',
+          entityType: 'Payment',
+          entityId: 'payment-1',
+          reason: 'Paid the wrong bill',
         }),
       });
     });

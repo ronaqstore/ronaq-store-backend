@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { ExpensesService } from './expenses.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
@@ -33,6 +34,7 @@ interface TxStub {
     aggregate: jest.Mock;
     findFirst: jest.Mock;
   };
+  auditLog: { create: jest.Mock };
 }
 
 function makeTx(overrides: Partial<TxStub> = {}): TxStub {
@@ -62,6 +64,9 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
       ),
       findFirst: jest.fn().mockResolvedValue({ id: 'cm-original-1' }),
     },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
+    },
     ...overrides,
   };
   return tx;
@@ -69,6 +74,7 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
 
 function makeExpenseRequest(overrides: Record<string, unknown> = {}) {
   return {
+    clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
     categoryId: CATEGORY_ID,
     amount: 500000,
     expenseDate: '2026-10-06',
@@ -171,6 +177,67 @@ describe('ExpensesService', () => {
       const lockSql = tx.$queryRaw.mock.calls[0][0] as string[];
       expect(lockSql.join('')).toContain('FOR UPDATE');
       expect(lockSql.join('')).toContain('SELECT id FROM shops');
+    });
+  });
+
+  describe('createExpense — idempotency', () => {
+    it('returns "already saved" without opening a transaction when the clientRequestId exists', async () => {
+      prismaStub.expense.findFirst.mockResolvedValue({ id: EXPENSE_ID });
+
+      const res = await service.createExpense(
+        makeExpenseRequest(),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Expense already saved',
+      });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      expect(tx.expense.create).not.toHaveBeenCalled();
+    });
+
+    it('scopes the idempotency lookup to the shop', async () => {
+      prismaStub.expense.findFirst.mockResolvedValue({ id: EXPENSE_ID });
+
+      await service.createExpense(makeExpenseRequest(), SHOP_ID, USER_ID);
+
+      expect(prismaStub.expense.findFirst).toHaveBeenCalledWith({
+        where: { shopId: SHOP_ID, clientRequestId: expect.any(String) },
+        select: { id: true },
+      });
+    });
+
+    it('maps a racing P2002 on the idempotency index to the replay message', async () => {
+      prismaStub.$transaction.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.0.0',
+          meta: {
+            driverAdapterError: {
+              name: 'DriverAdapterError',
+              cause: {
+                originalCode: '23505',
+                kind: 'UniqueConstraintViolation',
+                constraint: { index: 'expenses_shop_id_client_request_id_key' },
+                table: 'expenses',
+              },
+            },
+          },
+        }),
+      );
+
+      const res = await service.createExpense(
+        makeExpenseRequest(),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Expense already saved',
+      });
     });
   });
 
@@ -286,6 +353,16 @@ describe('ExpensesService', () => {
           cancelReason: 'Entered twice by mistake',
           cancelledById: USER_ID,
           cancelledAt: expect.any(Date),
+        }),
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: SHOP_ID,
+          userId: USER_ID,
+          action: 'EXPENSE_CANCEL',
+          entityType: 'Expense',
+          entityId: EXPENSE_ID,
+          reason: 'Entered twice by mistake',
         }),
       });
     });

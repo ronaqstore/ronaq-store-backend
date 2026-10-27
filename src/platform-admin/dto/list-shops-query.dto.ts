@@ -9,10 +9,12 @@ import {
   OptionalSearchQueryProperty,
 } from '../../helpers/query-filter.decorators.js';
 
-export type PlatformShopAccessStatus = 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
+export type PlatformShopAccessStatus =
+  'ACTIVE' | 'TRIALING' | 'EXPIRED' | 'SUSPENDED';
 
 const ACCESS_STATUSES: PlatformShopAccessStatus[] = [
   'ACTIVE',
+  'TRIALING',
   'EXPIRED',
   'SUSPENDED',
 ];

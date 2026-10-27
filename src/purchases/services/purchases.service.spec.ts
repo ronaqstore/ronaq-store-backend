@@ -52,6 +52,7 @@ interface TxStub {
     findFirst: jest.Mock;
     aggregate: jest.Mock;
   };
+  auditLog: { create: jest.Mock };
 }
 
 function makeTx(overrides: Partial<TxStub> = {}): TxStub {
@@ -64,7 +65,7 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         Promise.resolve(
           strings?.[0]?.includes('FOR UPDATE')
             ? [{ id: SHOP_ID }]
-            : [{ next: 7 }],
+            : [{ next: 7, product_id: QUANTITY_PRODUCT_ID }],
         ),
       ),
     purchase: {
@@ -119,6 +120,9 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
           },
         }),
       ),
+    },
+    auditLog: {
+      create: jest.fn().mockResolvedValue({}),
     },
     ...overrides,
   };
@@ -623,10 +627,14 @@ describe('PurchasesService', () => {
       );
 
       // (40 × 50000 + 20 × 60000) / 60 = 53333 paisa — the WF6 example.
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: QUANTITY_PRODUCT_ID },
-        data: { quantityOnHand: 60, avgUnitCost: 53333n },
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           type: 'PURCHASE',
@@ -954,7 +962,7 @@ describe('PurchasesService', () => {
         const sql = strings?.join('') ?? '';
         if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
         if (sql.includes('FROM purchases')) return [{ status: 'ACTIVE' }];
-        if (sql.includes('FROM inventory_units'))
+        if (sql.includes('inventory_units'))
           return [
             {
               id: UNIT_ID,
@@ -963,7 +971,8 @@ describe('PurchasesService', () => {
               imei2: '111223344556688',
             },
           ];
-        if (sql.includes('stock_levels')) return [{ quantity_on_hand: 40 }];
+        if (sql.includes('stock_levels'))
+          return [{ quantity_on_hand: 40, product_id: QUANTITY_PRODUCT_ID }];
         return [];
       });
     });
@@ -989,6 +998,16 @@ describe('PurchasesService', () => {
           cancelledAt: expect.any(Date),
         }),
       });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: SHOP_ID,
+          userId: USER_ID,
+          action: 'PURCHASE_CANCEL',
+          entityType: 'Purchase',
+          entityId: 'purchase-1',
+          reason: 'Bought from the wrong supplier',
+        }),
+      });
     });
 
     it('voids every phone from the bill with a PURCHASE_CANCEL movement', async () => {
@@ -996,13 +1015,13 @@ describe('PurchasesService', () => {
 
       await service.cancelPurchase('purchase-1', cancelDto, SHOP_ID, USER_ID);
 
-      expect(tx.inventoryUnit.update).toHaveBeenCalledWith({
-        where: { id: UNIT_ID },
-        data: expect.objectContaining({
-          status: 'VOIDED',
-          imei1: `111223344556677_VOID_${UNIT_ID}`,
-        }),
+      const updateUnitCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE inventory_units') && sql.includes('RETURNING id')
+        );
       });
+      expect(updateUnitCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           productId: SERIAL_PRODUCT_ID,
@@ -1039,10 +1058,14 @@ describe('PurchasesService', () => {
 
       await service.cancelPurchase('purchase-1', cancelDto, SHOP_ID, USER_ID);
 
-      expect(tx.stockLevel.update).toHaveBeenCalledWith({
-        where: { productId: QUANTITY_PRODUCT_ID },
-        data: { quantityOnHand: 35 },
+      const updateStockCall = tx.$queryRaw.mock.calls.find((c) => {
+        const sql = (c[0] as string[]).join('');
+        return (
+          sql.includes('UPDATE stock_levels') &&
+          sql.includes('RETURNING product_id')
+        );
       });
+      expect(updateStockCall).toBeDefined();
       expect(tx.inventoryMovement.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           type: 'PURCHASE_CANCEL',

@@ -272,10 +272,19 @@ export class InventoryService {
       if (delta === 0) return { kind: 'nochange' as const };
 
       if (rows.length > 0) {
-        await tx.stockLevel.update({
-          where: { productId: product.id },
-          data: { quantityOnHand: countedQuantity },
-        });
+        const updatedStock = await tx.$queryRaw<Array<{ product_id: string }>>`
+          UPDATE stock_levels
+          SET quantity_on_hand = ${countedQuantity}, updated_at = now()
+          WHERE product_id = ${product.id}::uuid
+            AND shop_id = ${shopId}::uuid
+            AND quantity_on_hand = ${currentQty}
+          RETURNING product_id
+        `;
+        if (!updatedStock?.length) {
+          throw new BadRequestException(
+            'Stock level changed concurrently during adjustment',
+          );
+        }
       } else {
         await tx.stockLevel.create({
           data: {
@@ -375,10 +384,19 @@ export class InventoryService {
 
       const status =
         dto.type === 'DAMAGED' ? UnitStatus.DAMAGED : UnitStatus.LOST;
-      await tx.inventoryUnit.update({
-        where: { id: unit.id },
-        data: { status },
-      });
+      const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE inventory_units
+        SET status = ${status}::"UnitStatus", updated_at = now()
+        WHERE id = ${unit.id}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND status = ${UnitStatus.IN_STOCK}::"UnitStatus"
+        RETURNING id
+      `;
+      if (!updatedUnits?.length) {
+        throw new BadRequestException(
+          unitNotInStock(product.name, unit.imei1, unit.status),
+        );
+      }
       await tx.inventoryMovement.create({
         data: {
           shopId,

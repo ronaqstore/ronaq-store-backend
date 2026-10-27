@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { UserRole } from '../../generated/prisma/enums.js';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { SubscriptionStatus, UserRole } from '../../generated/prisma/enums.js';
 
 export class OwnerLoginUserDto {
   @ApiProperty({ example: '01924f0a-0000-0000-0000-000000000000' })
@@ -28,6 +28,20 @@ export class OwnerLoginShopDto {
       'Subscription end. The backend blocks every request once this passes, so the app can warn the owner before expiry.',
   })
   subscriptionEndsAt: Date;
+
+  @ApiProperty({
+    enum: SubscriptionStatus,
+    example: SubscriptionStatus.TRIALING,
+    description: 'Current subscription status: TRIALING, ACTIVE, or EXPIRED.',
+  })
+  subscriptionStatus: SubscriptionStatus;
+
+  @ApiPropertyOptional({
+    example: '2026-11-05T09:20:00.000Z',
+    nullable: true,
+    description: 'Free trial end timestamp, if applicable.',
+  })
+  trialEndsAt?: Date | null;
 }
 
 export class OwnerLoginResponseDto {

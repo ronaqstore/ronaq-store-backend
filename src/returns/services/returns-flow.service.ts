@@ -72,7 +72,7 @@ export class ReturnsFlowService {
   ): Promise<PreparedReturnLine[]> {
     const byId = new Map(sale.items.map((item) => [item.id, item]));
 
-    const seenPhoneLines = new Set<string>();
+    const seenSaleItemLines = new Set<string>();
     const requestedByLine = new Map<string, number>();
     const chosen: Array<{
       saleItemId: string;
@@ -89,6 +89,13 @@ export class ReturnsFlowService {
       }
       const productName = saleItem.product.name;
 
+      if (seenSaleItemLines.has(input.saleItemId)) {
+        throw new BadRequestException(
+          duplicateFieldValue('Return line', 'saleItemId', input.saleItemId),
+        );
+      }
+      seenSaleItemLines.add(input.saleItemId);
+
       if (saleItem.inventoryUnitId) {
         if (input.quantity !== undefined && input.quantity !== 1) {
           throw new BadRequestException(
@@ -99,12 +106,6 @@ export class ReturnsFlowService {
             ),
           );
         }
-        if (seenPhoneLines.has(input.saleItemId)) {
-          throw new BadRequestException(
-            duplicateFieldValue('Return line', 'saleItemId', input.saleItemId),
-          );
-        }
-        seenPhoneLines.add(input.saleItemId);
         chosen.push({
           saleItemId: input.saleItemId,
           quantity: 1,
@@ -114,10 +115,7 @@ export class ReturnsFlowService {
         if (input.quantity === undefined) {
           throw new BadRequestException(returnQuantityRequired(productName));
         }
-        requestedByLine.set(
-          input.saleItemId,
-          (requestedByLine.get(input.saleItemId) ?? 0) + input.quantity,
-        );
+        requestedByLine.set(input.saleItemId, input.quantity);
         chosen.push({
           saleItemId: input.saleItemId,
           quantity: input.quantity,
@@ -287,10 +285,19 @@ export class ReturnsFlowService {
         );
       }
 
-      await tx.inventoryUnit.update({
-        where: { id: unit.id },
-        data: { status: UnitStatus.IN_STOCK },
-      });
+      const updated = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE inventory_units
+        SET status = ${UnitStatus.IN_STOCK}::"UnitStatus", updated_at = now()
+        WHERE id = ${unit.id}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND status = ${UnitStatus.SOLD}::"UnitStatus"
+        RETURNING id
+      `;
+      if (!updated?.length) {
+        throw new BadRequestException(
+          unitNotSoldForReturn(sale.saleNo, unit.imei1, unit.status),
+        );
+      }
       await tx.inventoryMovement.create({
         data: {
           shopId,
@@ -312,12 +319,17 @@ export class ReturnsFlowService {
       FOR UPDATE
     `;
     if (locked?.length) {
-      await tx.stockLevel.update({
-        where: { productId: line.productId },
-        data: {
-          quantityOnHand: Number(locked[0].quantity_on_hand) + line.quantity,
-        },
-      });
+      const updated = await tx.$queryRaw<Array<{ product_id: string }>>`
+        UPDATE stock_levels
+        SET quantity_on_hand = quantity_on_hand + ${line.quantity}, updated_at = now()
+        WHERE product_id = ${line.productId}::uuid AND shop_id = ${shopId}::uuid
+        RETURNING product_id
+      `;
+      if (!updated?.length) {
+        throw new BadRequestException(
+          'Stock level row disappeared during return restore',
+        );
+      }
     } else {
       await tx.stockLevel.create({
         data: {
@@ -349,10 +361,19 @@ export class ReturnsFlowService {
     reason: string,
   ): Promise<void> {
     if (line.inventoryUnitId) {
-      await tx.inventoryUnit.update({
-        where: { id: line.inventoryUnitId },
-        data: { status: UnitStatus.DAMAGED },
-      });
+      const updated = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE inventory_units
+        SET status = ${UnitStatus.DAMAGED}::"UnitStatus", updated_at = now()
+        WHERE id = ${line.inventoryUnitId}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND status = ${UnitStatus.IN_STOCK}::"UnitStatus"
+        RETURNING id
+      `;
+      if (!updated?.length) {
+        throw new BadRequestException(
+          `Inventory unit ${line.inventoryUnitId} cannot be marked damaged because it is not IN_STOCK`,
+        );
+      }
       await tx.inventoryMovement.create({
         data: {
           shopId,

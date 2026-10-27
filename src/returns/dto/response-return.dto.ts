@@ -44,6 +44,9 @@ export class ResponseRefundDto {
 
   @ApiPropertyOptional({ example: 'Returned with the original box' })
   notes?: string | null;
+
+  @ApiPropertyOptional({ example: '01924f0a-0000-7000-8000-00000000beef' })
+  clientRequestId?: string | null;
 }
 
 export class ResponseReturnDto {
@@ -82,6 +85,9 @@ export class ResponseReturnDto {
 
   @ApiPropertyOptional({ example: 'Original box included' })
   notes?: string | null;
+
+  @ApiProperty({ example: '01924f0a-0000-7000-8000-00000000beef' })
+  clientRequestId: string;
 
   @ApiProperty({ example: 'user-uuid' })
   createdById: string;

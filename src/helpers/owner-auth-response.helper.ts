@@ -1,4 +1,7 @@
-import type { UserRole } from '../generated/prisma/enums.js';
+import type {
+  SubscriptionStatus,
+  UserRole,
+} from '../generated/prisma/enums.js';
 
 export type OwnerAuthUserSlice = {
   id: string;
@@ -11,6 +14,8 @@ export type OwnerAuthUserSlice = {
 export type OwnerAuthShopSlice = {
   name: string;
   subscriptionEndsAt: Date;
+  subscriptionStatus?: SubscriptionStatus;
+  trialEndsAt?: Date | null;
 };
 
 export function buildOwnerAuthResponseBody(
@@ -33,6 +38,8 @@ export function buildOwnerAuthResponseBody(
     shop: {
       name: shop.name,
       subscriptionEndsAt: shop.subscriptionEndsAt,
+      subscriptionStatus: shop.subscriptionStatus ?? 'TRIALING',
+      trialEndsAt: shop.trialEndsAt ?? null,
     },
   };
 }

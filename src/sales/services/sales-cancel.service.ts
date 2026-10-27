@@ -196,6 +196,23 @@ export class SalesCancelService {
         },
       });
 
+      await tx.auditLog.create({
+        data: {
+          shopId,
+          userId,
+          action: 'SALE_CANCEL',
+          entityType: 'Sale',
+          entityId: id,
+          reason: dto.cancelReason,
+          metadata: {
+            saleNo: sale.saleNo,
+            refundAmount: Number(refund),
+            itemCount: items.length,
+            isOverdraft: overdraft,
+          },
+        },
+      });
+
       return { kind: 'cancelled' as const };
     });
 
@@ -389,10 +406,19 @@ export class SalesCancelService {
       );
     }
 
-    await tx.inventoryUnit.update({
-      where: { id: unitId },
-      data: { status: UnitStatus.IN_STOCK },
-    });
+    const updated = await tx.$queryRaw<Array<{ id: string }>>`
+      UPDATE inventory_units
+      SET status = ${UnitStatus.IN_STOCK}::"UnitStatus", updated_at = now()
+      WHERE id = ${unitId}::uuid
+        AND shop_id = ${shopId}::uuid
+        AND status = ${UnitStatus.SOLD}::"UnitStatus"
+      RETURNING id
+    `;
+    if (!updated?.length) {
+      throw new BadRequestException(
+        saleCancelUnitNotSold(saleNo, unit.imei1, unit.status),
+      );
+    }
     await tx.inventoryMovement.create({
       data: {
         shopId,
@@ -421,12 +447,17 @@ export class SalesCancelService {
       FOR UPDATE
     `;
     if (locked?.length) {
-      await tx.stockLevel.update({
-        where: { productId },
-        data: {
-          quantityOnHand: Number(locked[0].quantity_on_hand) + quantity,
-        },
-      });
+      const updated = await tx.$queryRaw<Array<{ product_id: string }>>`
+        UPDATE stock_levels
+        SET quantity_on_hand = quantity_on_hand + ${quantity}, updated_at = now()
+        WHERE product_id = ${productId}::uuid AND shop_id = ${shopId}::uuid
+        RETURNING product_id
+      `;
+      if (!updated?.length) {
+        throw new BadRequestException(
+          'Stock level row disappeared during restore',
+        );
+      }
     } else {
       await tx.stockLevel.create({
         data: { productId, shopId, quantityOnHand: quantity, avgUnitCost: 0n },

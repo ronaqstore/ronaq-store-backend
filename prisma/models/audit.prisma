@@ -1,0 +1,23 @@
+// =============================================================================
+// AUDIT LOG : APPEND-ONLY AUDIT TRAIL FOR CANCELLATIONS & ADMIN ACTIONS
+// =============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  shopId     String?  @map("shop_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([shopId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+

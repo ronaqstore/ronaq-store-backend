@@ -1,4 +1,7 @@
-import type { ShopStatus } from '../../generated/prisma/enums.js';
+import type {
+  ShopStatus,
+  SubscriptionStatus,
+} from '../../generated/prisma/enums.js';
 
 export type PlatformShopListRow = {
   id: string;
@@ -6,6 +9,8 @@ export type PlatformShopListRow = {
   phone: string | null;
   address: string | null;
   status: ShopStatus;
+  subscriptionStatus?: SubscriptionStatus;
+  trialEndsAt?: Date | null;
   subscriptionEndsAt: Date;
   createdAt: Date;
   users: Array<{

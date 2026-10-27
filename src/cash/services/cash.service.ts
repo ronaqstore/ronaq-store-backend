@@ -21,12 +21,15 @@ import {
 } from '../../helpers/paginate-helper.js';
 import {
   businessDayRange,
-  businessToday,
   resolveTransactionDate,
 } from '../../helpers/date.helper.js';
 import { openingCashAlreadySet } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { splitSearchTokens } from '../../helpers/tokenized-search.helper.js';
+import {
+  isUniqueConstraintViolation,
+  violatedColumn,
+} from '../../helpers/prisma-error-helper.js';
 
 const CREATED = 'Opening cash recorded successfully';
 const INVESTED = 'Owner investment recorded successfully';
@@ -51,35 +54,56 @@ export class CashService {
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.cashMovement.findFirst({
+        where: { shopId, clientRequestId: dto.clientRequestId },
+        select: { id: true },
+      });
+      if (existing) {
+        return new StatusBaseResponseDTO(true, CREATED);
+      }
+    }
+
     const amount = BigInt(dto.amount);
     const movementDate = resolveTransactionDate(dto.date);
     const note = dto.notes?.trim() ? dto.notes : null;
 
-    await this.prisma.$transaction(async (tx) => {
-      await lockShopForUpdate(tx, shopId);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await lockShopForUpdate(tx, shopId);
 
-      const existing = await tx.cashMovement.findFirst({
-        where: { shopId, type: CashMovementType.OPENING_CASH },
-        select: { id: true },
+        const existing = await tx.cashMovement.findFirst({
+          where: { shopId, type: CashMovementType.OPENING_CASH },
+          select: { id: true },
+        });
+        if (existing) {
+          throw new BadRequestException(openingCashAlreadySet());
+        }
+
+        await tx.cashMovement.create({
+          data: {
+            shopId,
+            type: CashMovementType.OPENING_CASH,
+            direction: CashDirection.IN,
+            amount,
+            movementDate,
+            note,
+            clientRequestId: dto.clientRequestId ?? null,
+            createdById: userId,
+          },
+        });
       });
-      if (existing) {
-        throw new BadRequestException(openingCashAlreadySet());
+
+      return new StatusBaseResponseDTO(true, CREATED);
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, CREATED);
       }
-
-      await tx.cashMovement.create({
-        data: {
-          shopId,
-          type: CashMovementType.OPENING_CASH,
-          direction: CashDirection.IN,
-          amount,
-          movementDate,
-          note,
-          createdById: userId,
-        },
-      });
-    });
-
-    return new StatusBaseResponseDTO(true, CREATED);
+      throw error;
+    }
   }
 
   async createOwnerInvestment(
@@ -87,19 +111,40 @@ export class CashService {
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    await this.prisma.cashMovement.create({
-      data: {
-        shopId,
-        type: CashMovementType.OWNER_INVESTMENT,
-        direction: CashDirection.IN,
-        amount: BigInt(dto.amount),
-        movementDate: resolveTransactionDate(dto.date),
-        note: dto.notes?.trim() ? dto.notes : null,
-        createdById: userId,
-      },
-    });
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.cashMovement.findFirst({
+        where: { shopId, clientRequestId: dto.clientRequestId },
+        select: { id: true },
+      });
+      if (existing) {
+        return new StatusBaseResponseDTO(true, INVESTED);
+      }
+    }
 
-    return new StatusBaseResponseDTO(true, INVESTED);
+    try {
+      await this.prisma.cashMovement.create({
+        data: {
+          shopId,
+          type: CashMovementType.OWNER_INVESTMENT,
+          direction: CashDirection.IN,
+          amount: BigInt(dto.amount),
+          movementDate: resolveTransactionDate(dto.date),
+          note: dto.notes?.trim() ? dto.notes : null,
+          clientRequestId: dto.clientRequestId ?? null,
+          createdById: userId,
+        },
+      });
+
+      return new StatusBaseResponseDTO(true, INVESTED);
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, INVESTED);
+      }
+      throw error;
+    }
   }
 
   async createOwnerWithdrawal(
@@ -107,45 +152,69 @@ export class CashService {
     shopId: string,
     userId: string,
   ): Promise<OwnerWithdrawalResult> {
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.cashMovement.findFirst({
+        where: { shopId, clientRequestId: dto.clientRequestId },
+        select: { id: true },
+      });
+      if (existing) {
+        return new StatusBaseResponseDTO(true, WITHDRAWN);
+      }
+    }
+
     const amount = BigInt(dto.amount);
 
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      await lockShopForUpdate(tx, shopId);
+    try {
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        await lockShopForUpdate(tx, shopId);
 
-      const overdraftProbe = await probeCashOverdraft(
-        tx,
-        shopId,
-        amount,
-        dto.confirmOverdraft,
-      );
-      if (overdraftProbe.kind === 'overdraft') {
-        return {
-          kind: 'overdraft' as const,
-          shortfall: overdraftProbe.shortfall,
-        };
-      }
-      const overdraft = overdraftProbe.overdraft;
-
-      await tx.cashMovement.create({
-        data: {
+        const overdraftProbe = await probeCashOverdraft(
+          tx,
           shopId,
-          type: CashMovementType.OWNER_WITHDRAWAL,
-          direction: CashDirection.OUT,
           amount,
-          movementDate: resolveTransactionDate(dto.date),
-          note: dto.notes?.trim() ? dto.notes : null,
-          isOverdraft: overdraft,
-          createdById: userId,
-        },
+          dto.confirmOverdraft,
+        );
+        if (overdraftProbe.kind === 'overdraft') {
+          return {
+            kind: 'overdraft' as const,
+            shortfall: overdraftProbe.shortfall,
+          };
+        }
+        const overdraft = overdraftProbe.overdraft;
+
+        await tx.cashMovement.create({
+          data: {
+            shopId,
+            type: CashMovementType.OWNER_WITHDRAWAL,
+            direction: CashDirection.OUT,
+            amount,
+            movementDate: resolveTransactionDate(dto.date),
+            note: dto.notes?.trim() ? dto.notes : null,
+            clientRequestId: dto.clientRequestId ?? null,
+            isOverdraft: overdraft,
+            createdById: userId,
+          },
+        });
+
+        return { kind: 'created' as const };
       });
 
-      return { kind: 'created' as const };
-    });
-
-    if (outcome.kind === 'overdraft') {
-      return new PurchaseOverdraftResponseDto(outcome.shortfall, 'withdrawal');
+      if (outcome.kind === 'overdraft') {
+        return new PurchaseOverdraftResponseDto(
+          outcome.shortfall,
+          'withdrawal',
+        );
+      }
+      return new StatusBaseResponseDTO(true, WITHDRAWN);
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, WITHDRAWN);
+      }
+      throw error;
     }
-    return new StatusBaseResponseDTO(true, WITHDRAWN);
   }
 
   async getCashMovements(
@@ -256,6 +325,7 @@ export class CashService {
       reversesMovementId: row.reversesMovementId,
       isOverdraft: row.isOverdraft,
       note: row.note,
+      clientRequestId: row.clientRequestId ?? null,
       createdById: row.createdById,
       createdAt: row.createdAt,
     };

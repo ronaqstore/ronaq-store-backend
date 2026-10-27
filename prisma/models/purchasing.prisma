@@ -92,6 +92,7 @@ model SupplierPayment {
   cancelledAt   DateTime?    @map("cancelled_at") @db.Timestamptz(3)
   cancelReason  String?      @map("cancel_reason")
   cancelledById String?      @map("cancelled_by_id") @db.Uuid
+  clientRequestId String     @map("client_request_id") @db.Uuid
   notes         String?
   createdById   String       @map("created_by_id") @db.Uuid
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -103,6 +104,7 @@ model SupplierPayment {
   createdBy   User      @relation("SupplierPaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   cancelledBy User?     @relation("SupplierPaymentCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
 
+  @@unique([shopId, clientRequestId])
   @@index([shopId, supplierId])
   @@index([purchaseId])
   @@index([shopId, paymentDate])

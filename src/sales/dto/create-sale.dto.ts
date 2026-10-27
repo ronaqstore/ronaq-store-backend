@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsInt,
   IsOptional,
@@ -98,4 +99,13 @@ export class CreateSaleDto {
   @IsString()
   @Length(0, 1000)
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Set true only after the server answered with confirmBelowCost — meaning one or more items are being sold below cost and the owner confirmed the sale.',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  confirmBelowCost?: boolean;
 }

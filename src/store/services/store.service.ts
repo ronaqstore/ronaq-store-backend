@@ -226,6 +226,19 @@ export class StoreService {
         where: { shopId },
         data: { slug: normalized },
       });
+
+      await this.prisma.auditLog.create({
+        data: {
+          shopId,
+          action: 'STORE_SLUG_CHANGE',
+          entityType: 'ShopStoreSettings',
+          entityId: shopId,
+          metadata: {
+            oldSlug: settings.slug,
+            newSlug: normalized,
+          },
+        },
+      });
     } catch (error) {
       if (isUniqueConstraintViolation(error) && violatedColumn(error, 'slug')) {
         throw new BadRequestException(

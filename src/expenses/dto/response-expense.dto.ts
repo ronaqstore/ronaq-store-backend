@@ -37,6 +37,9 @@ export class ResponseExpenseDto {
   @ApiPropertyOptional({ example: null })
   cancelledById: string | null;
 
+  @ApiProperty({ example: '01924f0a-0000-7000-8000-00000000beef' })
+  clientRequestId: string;
+
   @ApiProperty({ example: 'user-uuid' })
   createdById: string;
 

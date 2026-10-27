@@ -48,8 +48,13 @@ import {
 } from './sales-cancel.service.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  BelowCostSaleResponseDto,
+  type BelowCostItem,
+} from '../dto/below-cost-sale-response.dto.js';
 
 export type { CancelSaleResult } from './sales-cancel.service.js';
+export type CreateSaleResult = StatusBaseResponseDTO | BelowCostSaleResponseDto;
 
 const CREATED = 'Sale created successfully';
 const ALREADY_SAVED = 'Sale already saved';
@@ -67,7 +72,7 @@ export class SalesService {
     dto: CreateSaleDto,
     shopId: string,
     userId: string,
-  ): Promise<StatusBaseResponseDTO> {
+  ): Promise<CreateSaleResult> {
     const existing = await this.prisma.sale.findFirst({
       where: { shopId, clientRequestId: dto.clientRequestId },
       select: { id: true },
@@ -116,16 +121,7 @@ export class SalesService {
     const saleMoment = resolveTransactionDate(dto.saleDate);
 
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const rows = await tx.$queryRaw<Array<{ next: number }>>`
-          UPDATE shops SET next_sale_no = next_sale_no + 1
-          WHERE id = ${shopId}
-          RETURNING next_sale_no - 1 AS next
-        `;
-        if (!rows?.length) {
-          throw new NotFoundException(resourceNotFound('Shop', shopId));
-        }
-
+      const outcome = await this.prisma.$transaction(async (tx) => {
         const lockedLines: LockedSaleLine[] = [];
         for (const line of lines) {
           lockedLines.push(
@@ -133,6 +129,43 @@ export class SalesService {
               ? await this.lineWriter.lockPhoneLine(tx, line, shopId)
               : await this.lineWriter.lockQuantityLine(tx, line, shopId),
           );
+        }
+
+        const belowCostItems: BelowCostItem[] = [];
+        let totalBelowCostShortfall = 0;
+        for (const locked of lockedLines) {
+          const price = BigInt(locked.line.unitPrice);
+          if (price < locked.unitCost) {
+            const qty = locked.unitId ? 1 : locked.line.quantity;
+            const lineShortfall = Number(locked.unitCost - price) * qty;
+            totalBelowCostShortfall += lineShortfall;
+            belowCostItems.push({
+              productName: locked.line.productName,
+              ...(locked.imei ? { imei: locked.imei } : {}),
+              unitPrice: Number(price),
+              unitCost: Number(locked.unitCost),
+              shortfall: lineShortfall,
+            });
+          }
+        }
+
+        if (belowCostItems.length > 0 && !dto.confirmBelowCost) {
+          return {
+            kind: 'belowCost' as const,
+            dto: new BelowCostSaleResponseDto(
+              belowCostItems,
+              totalBelowCostShortfall,
+            ),
+          };
+        }
+
+        const rows = await tx.$queryRaw<Array<{ next: number }>>`
+          UPDATE shops SET next_sale_no = next_sale_no + 1
+          WHERE id = ${shopId}
+          RETURNING next_sale_no - 1 AS next
+        `;
+        if (!rows?.length) {
+          throw new NotFoundException(resourceNotFound('Shop', shopId));
         }
 
         const sale = await tx.sale.create({
@@ -182,7 +215,13 @@ export class SalesService {
             },
           });
         }
+
+        return { kind: 'created' as const };
       });
+
+      if (outcome.kind === 'belowCost') {
+        return outcome.dto;
+      }
     } catch (error) {
       if (
         isUniqueConstraintViolation(error) &&

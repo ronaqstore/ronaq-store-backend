@@ -44,12 +44,17 @@ import {
   resourceNotFound,
 } from '../../errors/error.builder.js';
 import {
+  isUniqueConstraintViolation,
+  violatedColumn,
+} from '../../helpers/prisma-error-helper.js';
+import {
   RETURN_INCLUDE,
   mapReturnToResponse,
 } from '../helpers/return.mapper.js';
 import { ReturnsFlowService } from './returns-flow.service.js';
 
 const CREATED = 'Return recorded successfully';
+const ALREADY_SAVED = 'Sale return already saved';
 
 export type CreateReturnResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
@@ -116,6 +121,14 @@ export class ReturnsService {
     shopId: string,
     userId: string,
   ): Promise<CreateReturnResult> {
+    const existing = await this.prisma.saleReturn.findFirst({
+      where: { shopId, clientRequestId: dto.clientRequestId },
+      select: { id: true },
+    });
+    if (existing) {
+      return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+    }
+
     const refundAmount = BigInt(dto.refundAmount ?? 0);
     const first = await this.flow.prepare(
       this.prisma,
@@ -134,120 +147,132 @@ export class ReturnsService {
 
     const returnMoment = resolveTransactionDate(dto.returnDate);
 
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      await lockShopForUpdate(tx, shopId);
+    try {
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        await lockShopForUpdate(tx, shopId);
 
-      const locked = await tx.$queryRaw<Array<{ status: string }>>`
-        SELECT status FROM sales
-        WHERE id = ${saleId} AND shop_id = ${shopId}
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(resourceNotFound('Sale', saleId));
-      }
-      if (locked[0].status !== RecordStatus.ACTIVE) {
-        throw new BadRequestException(
-          cancelledRowMutationForbidden('Sale', first.sale.saleNo),
-        );
-      }
-
-      const fresh = await this.flow.prepare(tx, saleId, shopId, dto.items);
-
-      let overdraft = false;
-      if (refundAmount > 0n) {
-        const after =
-          (await aggregateCurrentCash(tx, shopId)) - Number(refundAmount);
-        if (after < 0) {
-          if (!dto.confirmOverdraft) {
-            return { kind: 'overdraft' as const, shortfall: -after };
-          }
-          overdraft = true;
+        const locked = await tx.$queryRaw<Array<{ status: string }>>`
+          SELECT status FROM sales
+          WHERE id = ${saleId} AND shop_id = ${shopId}
+          FOR UPDATE
+        `;
+        if (!locked?.length) {
+          throw new NotFoundException(resourceNotFound('Sale', saleId));
         }
-      }
-
-      const returnRow = await tx.saleReturn.create({
-        data: {
-          shopId,
-          saleId,
-          customerId: fresh.sale.customerId,
-          returnDate: returnMoment,
-          reason: dto.reason,
-          returnAmount: fresh.settlement.returnAmount,
-          notes: dto.notes?.trim() ? dto.notes : null,
-          createdById: userId,
-        },
-        select: { id: true },
-      });
-
-      for (const line of fresh.lines) {
-        await tx.returnItem.create({
-          data: {
-            shopId,
-            returnId: returnRow.id,
-            saleItemId: line.saleItemId,
-            inventoryUnitId: line.inventoryUnitId,
-            quantity: line.quantity,
-            condition: line.condition,
-          },
-        });
-      }
-
-      for (const line of fresh.lines) {
-        await this.flow.restoreLine(
-          tx,
-          fresh.sale,
-          line,
-          shopId,
-          returnRow.id,
-          dto.reason,
-        );
-        if (line.condition === ReturnCondition.DAMAGED) {
-          await this.flow.writeOffLine(
-            tx,
-            line,
-            shopId,
-            returnRow.id,
-            dto.reason,
+        if (locked[0].status !== RecordStatus.ACTIVE) {
+          throw new BadRequestException(
+            cancelledRowMutationForbidden('Sale', first.sale.saleNo),
           );
         }
-      }
 
-      if (refundAmount > 0n) {
-        const refund = await tx.refund.create({
+        const fresh = await this.flow.prepare(tx, saleId, shopId, dto.items);
+
+        let overdraft = false;
+        if (refundAmount > 0n) {
+          const after =
+            (await aggregateCurrentCash(tx, shopId)) - Number(refundAmount);
+          if (after < 0) {
+            if (!dto.confirmOverdraft) {
+              return { kind: 'overdraft' as const, shortfall: -after };
+            }
+            overdraft = true;
+          }
+        }
+
+        const returnRow = await tx.saleReturn.create({
           data: {
             shopId,
-            returnId: returnRow.id,
-            amount: refundAmount,
-            refundDate: returnMoment,
-            method: PaymentMethod.CASH,
+            saleId,
+            customerId: fresh.sale.customerId,
+            returnDate: returnMoment,
+            reason: dto.reason,
+            returnAmount: fresh.settlement.returnAmount,
+            clientRequestId: dto.clientRequestId,
             notes: dto.notes?.trim() ? dto.notes : null,
             createdById: userId,
           },
           select: { id: true },
         });
-        await tx.cashMovement.create({
-          data: {
+
+        for (const line of fresh.lines) {
+          await tx.returnItem.create({
+            data: {
+              shopId,
+              returnId: returnRow.id,
+              saleItemId: line.saleItemId,
+              inventoryUnitId: line.inventoryUnitId,
+              quantity: line.quantity,
+              condition: line.condition,
+            },
+          });
+        }
+
+        for (const line of fresh.lines) {
+          await this.flow.restoreLine(
+            tx,
+            fresh.sale,
+            line,
             shopId,
-            type: CashMovementType.REFUND,
-            direction: CashDirection.OUT,
-            amount: refundAmount,
-            movementDate: returnMoment,
-            referenceType: ReferenceType.REFUND,
-            referenceId: refund.id,
-            isOverdraft: overdraft,
-            note: dto.reason,
-            createdById: userId,
-          },
-        });
+            returnRow.id,
+            dto.reason,
+          );
+          if (line.condition === ReturnCondition.DAMAGED) {
+            await this.flow.writeOffLine(
+              tx,
+              line,
+              shopId,
+              returnRow.id,
+              dto.reason,
+            );
+          }
+        }
+
+        if (refundAmount > 0n) {
+          const refund = await tx.refund.create({
+            data: {
+              shopId,
+              returnId: returnRow.id,
+              amount: refundAmount,
+              refundDate: returnMoment,
+              method: PaymentMethod.CASH,
+              clientRequestId: dto.clientRequestId,
+              notes: dto.notes?.trim() ? dto.notes : null,
+              createdById: userId,
+            },
+            select: { id: true },
+          });
+          await tx.cashMovement.create({
+            data: {
+              shopId,
+              type: CashMovementType.REFUND,
+              direction: CashDirection.OUT,
+              amount: refundAmount,
+              movementDate: returnMoment,
+              referenceType: ReferenceType.REFUND,
+              referenceId: refund.id,
+              isOverdraft: overdraft,
+              note: dto.reason,
+              createdById: userId,
+            },
+          });
+        }
+
+        return { kind: 'created' as const };
+      });
+
+      if (outcome.kind === 'overdraft') {
+        return new PurchaseOverdraftResponseDto(outcome.shortfall, 'refund');
       }
-
-      return { kind: 'created' as const };
-    });
-
-    if (outcome.kind === 'overdraft') {
-      return new PurchaseOverdraftResponseDto(outcome.shortfall, 'refund');
+      return new StatusBaseResponseDTO(true, CREATED);
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+      }
+      throw error;
     }
-    return new StatusBaseResponseDTO(true, CREATED);
   }
 
   async getReturns(

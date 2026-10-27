@@ -46,11 +46,16 @@ import {
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  isUniqueConstraintViolation,
+  violatedColumn,
+} from '../../helpers/prisma-error-helper.js';
 
 export type CreateSupplierPaymentResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
 
 const CREATED = 'Supplier payment recorded successfully';
+const ALREADY_SAVED = 'Supplier payment already saved';
 
 @Injectable()
 export class SupplierPaymentsService {
@@ -66,6 +71,14 @@ export class SupplierPaymentsService {
     shopId: string,
     userId: string,
   ): Promise<CreateSupplierPaymentResult> {
+    const existing = await this.prisma.supplierPayment.findFirst({
+      where: { shopId, clientRequestId: dto.clientRequestId },
+      select: { id: true },
+    });
+    if (existing) {
+      return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+    }
+
     const supplier = await this.prisma.supplier.findFirst({
       where: { id: dto.supplierId, shopId },
       select: { id: true, name: true },
@@ -76,88 +89,99 @@ export class SupplierPaymentsService {
 
     const amount = BigInt(dto.amount);
 
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      const shop = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
-      `;
-      if (!shop?.length) {
-        throw new NotFoundException(resourceNotFound('Shop', shopId));
-      }
-
-      const locked = await tx.$queryRaw<
-        Array<{ opening_balance: bigint | string }>
-      >`
-        SELECT opening_balance FROM suppliers
-        WHERE id = ${dto.supplierId} AND shop_id = ${shopId}
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(
-          resourceNotFound('Supplier', dto.supplierId),
-        );
-      }
-      const openingBalance = BigInt(locked[0].opening_balance);
-
-      const remaining = dto.purchaseId
-        ? await purchaseRemaining(tx, dto, supplier.name, shopId)
-        : await openingRemaining(tx, dto.supplierId, shopId, openingBalance);
-
-      if (amount > remaining) {
-        throw new BadRequestException(
-          paymentExceedsOutstanding(
-            supplier.name,
-            Number(amount),
-            Number(remaining),
-          ),
-        );
-      }
-
-      let overdraft = false;
-      const after = (await aggregateCurrentCash(tx, shopId)) - Number(amount);
-      if (after < 0) {
-        if (!dto.confirmOverdraft) {
-          return { kind: 'overdraft' as const, shortfall: -after };
+    try {
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        const shop = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
+        `;
+        if (!shop?.length) {
+          throw new NotFoundException(resourceNotFound('Shop', shopId));
         }
-        overdraft = true;
+
+        const locked = await tx.$queryRaw<
+          Array<{ opening_balance: bigint | string }>
+        >`
+          SELECT opening_balance FROM suppliers
+          WHERE id = ${dto.supplierId} AND shop_id = ${shopId}
+          FOR UPDATE
+        `;
+        if (!locked?.length) {
+          throw new NotFoundException(
+            resourceNotFound('Supplier', dto.supplierId),
+          );
+        }
+        const openingBalance = BigInt(locked[0].opening_balance);
+
+        const remaining = dto.purchaseId
+          ? await purchaseRemaining(tx, dto, supplier.name, shopId)
+          : await openingRemaining(tx, dto.supplierId, shopId, openingBalance);
+
+        if (amount > remaining) {
+          throw new BadRequestException(
+            paymentExceedsOutstanding(
+              supplier.name,
+              Number(amount),
+              Number(remaining),
+            ),
+          );
+        }
+
+        let overdraft = false;
+        const after = (await aggregateCurrentCash(tx, shopId)) - Number(amount);
+        if (after < 0) {
+          if (!dto.confirmOverdraft) {
+            return { kind: 'overdraft' as const, shortfall: -after };
+          }
+          overdraft = true;
+        }
+
+        const paymentMoment = resolveTransactionDate(dto.paymentDate);
+
+        const payment = await tx.supplierPayment.create({
+          data: {
+            shopId,
+            supplierId: dto.supplierId,
+            purchaseId: dto.purchaseId ?? null,
+            amount,
+            paymentDate: paymentMoment,
+            clientRequestId: dto.clientRequestId,
+            notes: dto.notes?.trim() ? dto.notes : null,
+            createdById: userId,
+          },
+          select: { id: true },
+        });
+
+        await tx.cashMovement.create({
+          data: {
+            shopId,
+            type: CashMovementType.SUPPLIER_PAYMENT,
+            direction: CashDirection.OUT,
+            amount,
+            movementDate: paymentMoment,
+            referenceType: ReferenceType.SUPPLIER_PAYMENT,
+            referenceId: payment.id,
+            isOverdraft: overdraft,
+            note: dto.notes?.trim() ? dto.notes : null,
+            createdById: userId,
+          },
+        });
+
+        return { kind: 'created' as const };
+      });
+
+      if (outcome.kind === 'overdraft') {
+        return new PurchaseOverdraftResponseDto(outcome.shortfall);
       }
-
-      const paymentMoment = resolveTransactionDate(dto.paymentDate);
-
-      const payment = await tx.supplierPayment.create({
-        data: {
-          shopId,
-          supplierId: dto.supplierId,
-          purchaseId: dto.purchaseId ?? null,
-          amount,
-          paymentDate: paymentMoment,
-          notes: dto.notes?.trim() ? dto.notes : null,
-          createdById: userId,
-        },
-        select: { id: true },
-      });
-
-      await tx.cashMovement.create({
-        data: {
-          shopId,
-          type: CashMovementType.SUPPLIER_PAYMENT,
-          direction: CashDirection.OUT,
-          amount,
-          movementDate: paymentMoment,
-          referenceType: ReferenceType.SUPPLIER_PAYMENT,
-          referenceId: payment.id,
-          isOverdraft: overdraft,
-          note: dto.notes?.trim() ? dto.notes : null,
-          createdById: userId,
-        },
-      });
-
-      return { kind: 'created' as const };
-    });
-
-    if (outcome.kind === 'overdraft') {
-      return new PurchaseOverdraftResponseDto(outcome.shortfall);
+      return new StatusBaseResponseDTO(true, CREATED);
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+      }
+      throw error;
     }
-    return new StatusBaseResponseDTO(true, CREATED);
   }
 
   cancelSupplierPayment(

@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ShopStatus } from '../../generated/prisma/enums.js';
+import {
+  ShopStatus,
+  SubscriptionStatus,
+} from '../../generated/prisma/enums.js';
 import type { PlatformShopAccessStatus } from './list-shops-query.dto.js';
 
 export class ResponsePlatformShopDto {
@@ -31,11 +34,25 @@ export class ResponsePlatformShopDto {
 
   @ApiProperty({
     example: 'ACTIVE',
-    enum: ['ACTIVE', 'EXPIRED', 'SUSPENDED'],
+    enum: ['ACTIVE', 'TRIALING', 'EXPIRED', 'SUSPENDED'],
     description:
       'Derived access state for the admin UI. SUSPENDED wins over EXPIRED.',
   })
   accessStatus: PlatformShopAccessStatus;
+
+  @ApiProperty({
+    enum: SubscriptionStatus,
+    example: SubscriptionStatus.TRIALING,
+    description: 'Current subscription status: TRIALING, ACTIVE, or EXPIRED.',
+  })
+  subscriptionStatus: SubscriptionStatus;
+
+  @ApiPropertyOptional({
+    example: '2026-11-05T00:00:00.000Z',
+    nullable: true,
+    description: 'Free trial end timestamp, if applicable.',
+  })
+  trialEndsAt: Date | null;
 
   @ApiProperty({
     example: true,
