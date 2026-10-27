@@ -15,10 +15,12 @@ export const discountExceedsSubtotal = (
   discount: number,
   subtotal: number,
 ): ErrorResponseDTO => {
+  const discountRs = Math.round(discount / 100).toLocaleString('en-PK');
+  const subtotalRs = Math.round(subtotal / 100).toLocaleString('en-PK');
   return new ErrorResponseDTO(
     'The discount is bigger than the sale subtotal',
     [
-      `A discount of ${discount} paisa cannot be applied to a subtotal of ${subtotal} paisa. Reduce the discount so it fits inside the subtotal.`,
+      `A discount of Rs ${discountRs} cannot be applied to a subtotal of Rs ${subtotalRs}. Reduce the discount so it fits inside the subtotal.`,
     ],
     HttpStatus.BAD_REQUEST,
   );
@@ -28,10 +30,12 @@ export const salePaidExceedsTotal = (
   total: number,
   paidNow: number,
 ): ErrorResponseDTO => {
+  const paidRs = Math.round(paidNow / 100).toLocaleString('en-PK');
+  const totalRs = Math.round(total / 100).toLocaleString('en-PK');
   return new ErrorResponseDTO(
     'The paid amount is bigger than the sale total',
     [
-      `You marked ${paidNow} paisa as paid but the sale total is ${total} paisa. The unpaid part of a sale cannot be negative — reduce the paid amount.`,
+      `You marked Rs ${paidRs} as paid but the sale total is Rs ${totalRs}. The unpaid part of a sale cannot be negative — reduce the paid amount.`,
     ],
     HttpStatus.BAD_REQUEST,
   );

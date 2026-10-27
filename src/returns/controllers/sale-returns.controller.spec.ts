@@ -108,7 +108,7 @@ describe('SaleReturnsController', () => {
       confirmOverdraft: true,
       shortfall: 4000000,
       message:
-        'This refund would take your cash below zero by 4000000 paisa. Send confirmOverdraft: true to save it anyway.',
+        'Warning: You have insufficient cash in your drawer (Shortfall: Rs 40,000). This refund will make your cash balance negative. Do you want to proceed?',
     } as any);
     const http = resStub();
 

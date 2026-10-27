@@ -28,6 +28,8 @@ export class DashboardService {
     const [
       todaySalesAgg,
       todaySaleItems,
+      todayReturnsAgg,
+      todayReturnItems,
       todayExpenseAgg,
       customerOpenings,
       shopSales,
@@ -59,6 +61,27 @@ export class DashboardService {
           },
         },
         select: { unitCost: true, quantity: true },
+      }),
+      this.prisma.saleReturn.aggregate({
+        where: {
+          shopId,
+          status: RecordStatus.ACTIVE,
+          returnDate: { gte: start, lte: end },
+        },
+        _sum: { returnAmount: true },
+      }),
+      this.prisma.returnItem.findMany({
+        where: {
+          shopId,
+          saleReturn: {
+            status: RecordStatus.ACTIVE,
+            returnDate: { gte: start, lte: end },
+          },
+        },
+        select: {
+          quantity: true,
+          saleItem: { select: { unitCost: true } },
+        },
       }),
       this.prisma.expense.aggregate({
         where: {
@@ -138,12 +161,22 @@ export class DashboardService {
       }),
     ]);
 
-    const todaySales = Number(todaySalesAgg._sum.totalAmount ?? 0n);
-    const cogs = todaySaleItems.reduce(
+    const todayGrossSales = Number(todaySalesAgg._sum.totalAmount ?? 0n);
+    const todayReturns = Number(todayReturnsAgg._sum.returnAmount ?? 0n);
+    const todaySales = Math.max(0, todayGrossSales - todayReturns);
+
+    const todayGrossCogs = todaySaleItems.reduce(
       (sum, item) => sum + Number(item.unitCost) * item.quantity,
       0,
     );
+    const todayReturnedCogs = todayReturnItems.reduce(
+      (sum, item) => sum + Number(item.saleItem.unitCost) * item.quantity,
+      0,
+    );
+    const cogs = Math.max(0, todayGrossCogs - todayReturnedCogs);
+
     const todayExpenses = Number(todayExpenseAgg._sum.amount ?? 0n);
+    const todayNetProfit = todaySales - cogs - todayExpenses;
 
     const customerUdhar =
       Number(customerOpenings._sum.openingBalance ?? 0n) +

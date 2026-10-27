@@ -222,7 +222,7 @@ describe('CashController', () => {
       confirmOverdraft: true,
       shortfall: 2000000,
       message:
-        'This withdrawal would take your cash below zero by 2000000 paisa. Send confirmOverdraft: true to save it anyway.',
+        'Warning: You have insufficient cash in your drawer (Shortfall: Rs 20,000). This withdrawal will make your cash balance negative. Do you want to proceed?',
     } as any);
     const http = resStub();
 

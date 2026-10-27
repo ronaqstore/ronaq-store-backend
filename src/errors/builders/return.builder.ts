@@ -73,10 +73,12 @@ export const refundExceedsAvailable = (
   refundAmount: number,
   available: number,
 ): ErrorResponseDTO => {
+  const refundRs = Math.round(refundAmount / 100).toLocaleString('en-PK');
+  const availableRs = Math.round(available / 100).toLocaleString('en-PK');
   return new ErrorResponseDTO(
     'Refund is more than can be given back',
     [
-      `The refund is ${refundAmount} paisa but only ${available} paisa can be returned in cash right now. The return value first cancels the Udhar still owed on the sale, and a refund can never exceed what the customer actually paid (minus earlier refunds). Lower the refund — 0 is allowed.`,
+      `The refund is Rs ${refundRs} but only Rs ${availableRs} can be returned in cash right now. The return value first cancels the Udhar still owed on the sale, and a refund can never exceed what the customer actually paid (minus earlier refunds). Lower the refund — 0 is allowed.`,
     ],
     HttpStatus.BAD_REQUEST,
   );

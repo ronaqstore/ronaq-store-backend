@@ -5,6 +5,7 @@ import {
   HttpException,
   InternalServerErrorException,
   Param,
+  ParseUUIDPipe,
   Post,
   Query,
   Req,
@@ -103,7 +104,7 @@ export class SalesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async cancelSale(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() cancelSaleDto: CancelSaleDto,
     @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
@@ -147,7 +148,7 @@ export class SalesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
@@ -210,7 +211,7 @@ export class SalesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getSaleById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseSaleDto>> {
     try {

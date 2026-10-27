@@ -6,10 +6,12 @@ export const purchasePaidExceedsTotal = (
   totalAmount: number,
   paidNow: number,
 ): ErrorResponseDTO => {
+  const totalRs = Math.round(totalAmount / 100).toLocaleString('en-PK');
+  const paidRs = Math.round(paidNow / 100).toLocaleString('en-PK');
   return new ErrorResponseDTO(
     'Paid amount is more than the purchase total',
     [
-      `This purchase totals ${totalAmount} paisa but ${paidNow} paisa was marked as paid. You cannot pay a supplier more than the bill. Lower the paid amount, or raise a line quantity or cost.`,
+      `This purchase totals Rs ${totalRs} but Rs ${paidRs} was marked as paid. You cannot pay a supplier more than the bill. Lower the paid amount, or raise a line quantity or cost.`,
     ],
     HttpStatus.BAD_REQUEST,
   );
@@ -105,10 +107,12 @@ export const paymentExceedsOutstanding = (
   remaining: number,
 ): ErrorResponseDTO => {
   const exceeded = outstandingExceeded();
+  const amountRs = Math.round(amount / 100).toLocaleString('en-PK');
+  const remainingRs = Math.round(remaining / 100).toLocaleString('en-PK');
   return new ErrorResponseDTO(
     exceeded.error,
     [
-      `You are trying to pay ${amount} paisa but only ${remaining} paisa is left to ${payeeName}. Lower the amount, or pick a different bill.`,
+      `You are trying to pay Rs ${amountRs} but only Rs ${remainingRs} is left to ${payeeName}. Lower the amount, or pick a different bill.`,
       ...exceeded.message,
     ],
     exceeded.statusCode,

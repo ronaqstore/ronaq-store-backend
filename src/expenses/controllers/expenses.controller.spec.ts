@@ -110,7 +110,7 @@ describe('ExpensesController', () => {
       confirmOverdraft: true,
       shortfall: 200000,
       message:
-        'This expense would take your cash below zero by 200000 paisa. Send confirmOverdraft: true to save it anyway.',
+        'Warning: You have insufficient cash in your drawer (Shortfall: Rs 2,000). This expense will make your cash balance negative. Do you want to proceed?',
     });
     const http = resStub();
 

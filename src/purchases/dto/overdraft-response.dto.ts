@@ -15,7 +15,8 @@ export class PurchaseOverdraftResponseDto {
   shortfall: number;
 
   @ApiProperty({
-    example: 'This payment would take your cash below zero by 500000 paisa.',
+    example:
+      'Warning: You have insufficient cash in your drawer (Shortfall: Rs 5,000). Paying this will make your cash balance negative. Do you want to proceed?',
   })
   @IsString()
   message: string;
@@ -23,6 +24,7 @@ export class PurchaseOverdraftResponseDto {
   constructor(shortfall: number, subject: string = 'payment') {
     this.confirmOverdraft = true;
     this.shortfall = shortfall;
-    this.message = `This ${subject} would take your cash below zero by ${shortfall} paisa. Send confirmOverdraft: true to save it anyway.`;
+    const shortfallRs = Math.round(shortfall / 100).toLocaleString('en-PK');
+    this.message = `Warning: You have insufficient cash in your drawer (Shortfall: Rs ${shortfallRs}). This ${subject} will make your cash balance negative. Do you want to proceed?`;
   }
 }

@@ -12,6 +12,7 @@ const prismaStub = {
   customer: { aggregate: jest.fn() },
   payment: { aggregate: jest.fn() },
   saleReturn: { aggregate: jest.fn() },
+  returnItem: { findMany: jest.fn() },
   refund: { aggregate: jest.fn() },
   supplier: { aggregate: jest.fn() },
   purchase: { aggregate: jest.fn() },
@@ -47,6 +48,7 @@ describe('DashboardService', () => {
     prismaStub.saleReturn.aggregate.mockResolvedValue({
       _sum: { returnAmount: null },
     });
+    prismaStub.returnItem.findMany.mockResolvedValue([]);
     prismaStub.refund.aggregate.mockResolvedValue({ _sum: { amount: null } });
     prismaStub.supplier.aggregate.mockResolvedValue({
       _sum: { openingBalance: null },
@@ -103,6 +105,43 @@ describe('DashboardService', () => {
     expect(res.todaySales).toBe(12000000);
     expect(res.todayExpenses).toBe(600000);
     expect(res.todayNetProfit).toBe(4400000);
+  });
+
+  it('deducts today returns from sales and restores COGS for returned units', async () => {
+    prismaStub.sale.aggregate.mockImplementation((args: any) =>
+      Promise.resolve({
+        _sum: {
+          totalAmount: args.where.saleDate ? 47500000n : 47500000n,
+        },
+      }),
+    );
+    prismaStub.saleItem.findMany.mockResolvedValue([
+      { unitCost: 15000000n, quantity: 3 },
+    ]);
+    prismaStub.saleReturn.aggregate.mockImplementation((args: any) =>
+      Promise.resolve({
+        _sum: {
+          returnAmount: args.where.returnDate ? 15750000n : 15750000n,
+        },
+      }),
+    );
+    prismaStub.returnItem.findMany.mockResolvedValue([
+      {
+        quantity: 1,
+        saleItem: { unitCost: 15000000n },
+      },
+    ]);
+    prismaStub.expense.aggregate.mockResolvedValue({
+      _sum: { amount: 600000n },
+    });
+
+    const res = await service.getDashboard({ period: 'today' }, SHOP_ID);
+
+    // net sales = 47500000 - 15750000 = 31750000 (Rs 317,500)
+    expect(res.todaySales).toBe(31750000);
+    // net cogs = (45000000 - 15000000) = 30000000
+    // net profit = 31750000 - 30000000 - 600000 = 1150000 (Rs 11,500)
+    expect(res.todayNetProfit).toBe(1150000);
   });
 
   it('counts only ACTIVE expenses dated today', async () => {
