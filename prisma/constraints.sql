@@ -134,6 +134,19 @@ CREATE INDEX expenses_active_date_idx   ON expenses (shop_id, expense_date)     
 CREATE INDEX purchases_active_date_idx  ON purchases (shop_id, purchase_date)   WHERE status = 'ACTIVE';
 CREATE INDEX units_in_stock_idx         ON inventory_units (shop_id, product_id) WHERE status = 'IN_STOCK';
 
+-- Unique product variant per shop (case-insensitive & trimmed)
+CREATE UNIQUE INDEX IF NOT EXISTS products_variant_key
+  ON products (
+    shop_id,
+    lower(btrim(name)),
+    lower(coalesce(btrim(model), '')),
+    lower(coalesce(btrim(color), '')),
+    lower(coalesce(btrim(ram), '')),
+    lower(coalesce(btrim(storage), '')),
+    coalesce(pta_status::text, ''),
+    coalesce(authenticity::text, '')
+  );
+
 -- -----------------------------------------------------------------------------
 -- 3. Triggers
 -- -----------------------------------------------------------------------------
@@ -171,10 +184,11 @@ CREATE TRIGGER inventory_movements_append_only
   BEFORE UPDATE OR DELETE ON inventory_movements
   FOR EACH ROW EXECUTE FUNCTION forbid_update_delete();
 
--- 3b2. Mobile phones are unique across person tables
---     (users + platform_admins + suppliers + customers).
+-- 3b2. Login phones are unique across login accounts
+--     (users + platform_admins).
 --     Per-table @unique covers same-table duplicates; this trigger blocks
---     the cross-table case (e.g. supplier phone matching a platform admin).
+--     the cross-table case (e.g. shop user phone matching a platform admin).
+--     Customer and supplier phones are scoped per shop (shop_id, phone).
 CREATE OR REPLACE FUNCTION login_phone_global_unique() RETURNS trigger AS $$
 BEGIN
   IF NEW.phone IS NULL THEN
@@ -195,39 +209,22 @@ BEGIN
       USING ERRCODE = '23505';
   END IF;
 
-  IF TG_TABLE_NAME IS DISTINCT FROM 'suppliers' AND EXISTS (
-    SELECT 1 FROM suppliers s WHERE s.phone = NEW.phone
-  ) THEN
-    RAISE EXCEPTION 'mobile phone already registered as supplier'
-      USING ERRCODE = '23505';
-  END IF;
-
-  IF TG_TABLE_NAME IS DISTINCT FROM 'customers' AND EXISTS (
-    SELECT 1 FROM customers c WHERE c.phone = NEW.phone
-  ) THEN
-    RAISE EXCEPTION 'mobile phone already registered as customer'
-      USING ERRCODE = '23505';
-  END IF;
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS users_login_phone_global_unique_trg ON users;
 CREATE TRIGGER users_login_phone_global_unique_trg
   BEFORE INSERT OR UPDATE OF phone ON users
   FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
 
+DROP TRIGGER IF EXISTS platform_admins_login_phone_global_unique_trg ON platform_admins;
 CREATE TRIGGER platform_admins_login_phone_global_unique_trg
   BEFORE INSERT OR UPDATE OF phone ON platform_admins
   FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
 
-CREATE TRIGGER suppliers_login_phone_global_unique_trg
-  BEFORE INSERT OR UPDATE OF phone ON suppliers
-  FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
-
-CREATE TRIGGER customers_login_phone_global_unique_trg
-  BEFORE INSERT OR UPDATE OF phone ON customers
-  FOR EACH ROW EXECUTE FUNCTION login_phone_global_unique();
+DROP TRIGGER IF EXISTS suppliers_login_phone_global_unique_trg ON suppliers;
+DROP TRIGGER IF EXISTS customers_login_phone_global_unique_trg ON customers;
 
 -- 3c. No hard delete of business records. Cancel or deactivate instead.
 --     Master data (categories, brands, expense categories) is deactivated with

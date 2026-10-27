@@ -83,6 +83,8 @@ describe('prisma-error-helper', () => {
       ['products_shop_id_barcode_key', 'barcode', true],
       ['products_shop_id_name_key', 'name', true],
       ['products_shop_id_name_key', 'sku', false],
+      ['products_variant_key', 'variant', true],
+      ['products_variant_key', 'sku', false],
     ])('%s vs %s -> %s', (index, column, expected) => {
       expect(violatedColumn(adapterViolation(index), column)).toBe(expected);
     });

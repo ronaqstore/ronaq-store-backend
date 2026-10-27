@@ -46,6 +46,7 @@ import {
   type CancelSaleResult,
 } from './sales-cancel.service.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { resolveTransactionDate } from '../../helpers/date.helper.js';
 
 export type { CancelSaleResult } from './sales-cancel.service.js';
 
@@ -111,7 +112,7 @@ export class SalesService {
       throw new BadRequestException(customerRequiredForSale());
     }
 
-    const saleMoment = new Date(dto.saleDate);
+    const saleMoment = resolveTransactionDate(dto.saleDate);
 
     try {
       await this.prisma.$transaction(async (tx) => {
@@ -272,12 +273,26 @@ export class SalesService {
     const prismaSortBy =
       sortBy === 'paid' || sortBy === 'outstanding' ? 'saleDate' : sortBy;
 
+    const orderBy =
+      prismaSortBy === 'saleDate'
+        ? [
+            { saleDate: sortOrder },
+            { createdAt: sortOrder },
+            { id: sortOrder },
+          ]
+        : [
+            { [prismaSortBy]: sortOrder },
+            { saleDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ];
+
     const [rows, total] = await Promise.all([
       this.prisma.sale.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [prismaSortBy]: sortOrder },
+        orderBy,
         include: SALE_INCLUDE,
       }),
       this.prisma.sale.count({ where }),

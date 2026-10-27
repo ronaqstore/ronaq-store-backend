@@ -30,6 +30,7 @@ import {
   purchasePaidExceedsTotal,
   resourceNotFound,
 } from '../../errors/error.builder.js';
+import { resolveTransactionDate } from '../../helpers/date.helper.js';
 import {
   isUniqueConstraintViolation,
   violatedColumn,
@@ -154,13 +155,14 @@ export class PurchasesService {
           }
 
           if (paidNow > 0n) {
+            const purchaseMoment = resolveTransactionDate(dto.purchaseDate);
             await tx.supplierPayment.create({
               data: {
                 shopId,
                 supplierId: dto.supplierId,
                 purchaseId: purchase.id,
                 amount: paidNow,
-                paymentDate: new Date(dto.purchaseDate),
+                paymentDate: purchaseMoment,
                 createdById: userId,
               },
             });
@@ -170,7 +172,7 @@ export class PurchasesService {
                 type: CashMovementType.SUPPLIER_PAYMENT,
                 direction: CashDirection.OUT,
                 amount: paidNow,
-                movementDate: new Date(dto.purchaseDate),
+                movementDate: purchaseMoment,
                 referenceType: ReferenceType.PURCHASE,
                 referenceId: purchase.id,
                 isOverdraft: overdraft,

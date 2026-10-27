@@ -4,8 +4,7 @@ import type { FindLoginPhoneConflictOptions } from './login-phone.helper.types.j
 
 type DbClient = PrismaService | Prisma.TransactionClient;
 
-export type LoginPhoneConflict =
-  'USER' | 'PLATFORM_ADMIN' | 'SUPPLIER' | 'CUSTOMER';
+export type LoginPhoneConflict = 'USER' | 'PLATFORM_ADMIN';
 
 export async function findLoginPhoneConflict(
   client: DbClient,
@@ -31,28 +30,6 @@ export async function findLoginPhoneConflict(
     select: { id: true },
   });
   if (admin) return 'PLATFORM_ADMIN';
-
-  const supplier = await client.supplier.findFirst({
-    where: {
-      phone,
-      ...(options?.excludeSupplierId
-        ? { id: { not: options.excludeSupplierId } }
-        : {}),
-    },
-    select: { id: true },
-  });
-  if (supplier) return 'SUPPLIER';
-
-  const customer = await client.customer.findFirst({
-    where: {
-      phone,
-      ...(options?.excludeCustomerId
-        ? { id: { not: options.excludeCustomerId } }
-        : {}),
-    },
-    select: { id: true },
-  });
-  if (customer) return 'CUSTOMER';
 
   return null;
 }

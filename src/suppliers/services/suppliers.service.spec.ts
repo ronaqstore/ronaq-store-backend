@@ -138,8 +138,8 @@ describe('SuppliersService', () => {
       expect(prismaStub.supplier.create).toHaveBeenCalledTimes(2);
     });
 
-    it('rejects a phone already used by a platform admin', async () => {
-      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+    it('rejects a phone already used by another supplier in the shop', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue({ id: 'other-supplier' });
 
       await expect(
         service.createSupplier(

@@ -19,7 +19,11 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import { businessDayRange, businessToday } from '../../helpers/date.helper.js';
+import {
+  businessDayRange,
+  businessToday,
+  resolveTransactionDate,
+} from '../../helpers/date.helper.js';
 import { openingCashAlreadySet } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { splitSearchTokens } from '../../helpers/tokenized-search.helper.js';
@@ -48,7 +52,7 @@ export class CashService {
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
     const amount = BigInt(dto.amount);
-    const movementDate = new Date(dto.date ?? businessToday());
+    const movementDate = resolveTransactionDate(dto.date);
     const note = dto.notes?.trim() ? dto.notes : null;
 
     await this.prisma.$transaction(async (tx) => {
@@ -89,7 +93,7 @@ export class CashService {
         type: CashMovementType.OWNER_INVESTMENT,
         direction: CashDirection.IN,
         amount: BigInt(dto.amount),
-        movementDate: new Date(dto.date ?? businessToday()),
+        movementDate: resolveTransactionDate(dto.date),
         note: dto.notes?.trim() ? dto.notes : null,
         createdById: userId,
       },
@@ -128,7 +132,7 @@ export class CashService {
           type: CashMovementType.OWNER_WITHDRAWAL,
           direction: CashDirection.OUT,
           amount,
-          movementDate: new Date(dto.date ?? businessToday()),
+          movementDate: resolveTransactionDate(dto.date),
           note: dto.notes?.trim() ? dto.notes : null,
           isOverdraft: overdraft,
           createdById: userId,
@@ -207,12 +211,26 @@ export class CashService {
 
     if (andFilters.length > 0) where.AND = andFilters;
 
+    const orderBy: Prisma.CashMovementOrderByWithRelationInput[] =
+      sortBy === 'movementDate'
+        ? [
+            { movementDate: sortOrder },
+            { createdAt: sortOrder },
+            { id: sortOrder },
+          ]
+        : [
+            { [sortBy]: sortOrder },
+            { movementDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ];
+
     const [rows, total] = await Promise.all([
       this.prisma.cashMovement.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy,
       }),
       this.prisma.cashMovement.count({ where }),
     ]);

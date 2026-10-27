@@ -45,6 +45,7 @@ import {
   resourceNotFound,
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
+import { resolveTransactionDate } from '../../helpers/date.helper.js';
 
 export type CreateSupplierPaymentResult =
   StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
@@ -120,13 +121,15 @@ export class SupplierPaymentsService {
         overdraft = true;
       }
 
+      const paymentMoment = resolveTransactionDate(dto.paymentDate);
+
       const payment = await tx.supplierPayment.create({
         data: {
           shopId,
           supplierId: dto.supplierId,
           purchaseId: dto.purchaseId ?? null,
           amount,
-          paymentDate: new Date(dto.paymentDate),
+          paymentDate: paymentMoment,
           notes: dto.notes?.trim() ? dto.notes : null,
           createdById: userId,
         },
@@ -139,7 +142,7 @@ export class SupplierPaymentsService {
           type: CashMovementType.SUPPLIER_PAYMENT,
           direction: CashDirection.OUT,
           amount,
-          movementDate: new Date(dto.paymentDate),
+          movementDate: paymentMoment,
           referenceType: ReferenceType.SUPPLIER_PAYMENT,
           referenceId: payment.id,
           isOverdraft: overdraft,
@@ -220,8 +223,18 @@ export class SupplierPaymentsService {
 
     const orderBy =
       sortBy === 'supplierName'
-        ? ({ supplier: { name: sortOrder } } as const)
-        : ({ [sortBy]: sortOrder } as const);
+        ? [
+            { supplier: { name: sortOrder } },
+            { paymentDate: sortOrder },
+            { createdAt: sortOrder },
+            { id: sortOrder },
+          ]
+        : [
+            { [sortBy]: sortOrder },
+            { paymentDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ];
 
     const [rows, total] = await Promise.all([
       this.prisma.supplierPayment.findMany({
