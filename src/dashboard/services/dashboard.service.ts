@@ -211,7 +211,7 @@ export class DashboardService {
       period: query.period ?? 'today',
       date,
       todaySales,
-      todayNetProfit: todaySales - cogs - todayExpenses,
+      todayNetProfit,
       customerUdhar,
       supplierPayable,
       todayExpenses,
