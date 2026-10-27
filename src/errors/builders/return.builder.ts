@@ -1,5 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
 import { ErrorResponseDTO } from '../../common-dto/response/error-response.dto.js';
+import { formatPaisaToRupees } from '../../helpers/csv.helper.js';
 
 export const returnQuantityExceedsRemaining = (
   saleNo: string,
@@ -73,8 +74,8 @@ export const refundExceedsAvailable = (
   refundAmount: number,
   available: number,
 ): ErrorResponseDTO => {
-  const refundRs = Math.round(refundAmount / 100).toLocaleString('en-PK');
-  const availableRs = Math.round(available / 100).toLocaleString('en-PK');
+  const refundRs = formatPaisaToRupees(refundAmount);
+  const availableRs = formatPaisaToRupees(available);
   return new ErrorResponseDTO(
     'Refund is more than can be given back',
     [

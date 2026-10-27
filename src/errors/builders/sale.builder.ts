@@ -1,5 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
 import { ErrorResponseDTO } from '../../common-dto/response/error-response.dto.js';
+import { formatPaisaToRupees } from '../../helpers/csv.helper.js';
 
 export const customerRequiredForSale = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
@@ -15,8 +16,8 @@ export const discountExceedsSubtotal = (
   discount: number,
   subtotal: number,
 ): ErrorResponseDTO => {
-  const discountRs = Math.round(discount / 100).toLocaleString('en-PK');
-  const subtotalRs = Math.round(subtotal / 100).toLocaleString('en-PK');
+  const discountRs = formatPaisaToRupees(discount);
+  const subtotalRs = formatPaisaToRupees(subtotal);
   return new ErrorResponseDTO(
     'The discount is bigger than the sale subtotal',
     [
@@ -30,8 +31,8 @@ export const salePaidExceedsTotal = (
   total: number,
   paidNow: number,
 ): ErrorResponseDTO => {
-  const paidRs = Math.round(paidNow / 100).toLocaleString('en-PK');
-  const totalRs = Math.round(total / 100).toLocaleString('en-PK');
+  const paidRs = formatPaisaToRupees(paidNow);
+  const totalRs = formatPaisaToRupees(total);
   return new ErrorResponseDTO(
     'The paid amount is bigger than the sale total',
     [

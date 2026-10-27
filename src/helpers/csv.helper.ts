@@ -26,6 +26,11 @@ export function formatRupees(paisa: bigint | number): string {
   }).format(value);
 }
 
+export function formatPaisaToRupees(paisa: bigint | number): string {
+  const value = Math.round(Number(paisa) / 100);
+  return value.toLocaleString('en-PK');
+}
+
 export function formatBusinessDate(value: Date | null | undefined): string {
   if (!value) return '—';
   return businessToday(value);

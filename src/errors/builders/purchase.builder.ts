@@ -1,13 +1,14 @@
 import { HttpStatus } from '@nestjs/common';
 import { ErrorResponseDTO } from '../../common-dto/response/error-response.dto.js';
+import { formatPaisaToRupees } from '../../helpers/csv.helper.js';
 import { outstandingExceeded } from './entity.builder.js';
 
 export const purchasePaidExceedsTotal = (
   totalAmount: number,
   paidNow: number,
 ): ErrorResponseDTO => {
-  const totalRs = Math.round(totalAmount / 100).toLocaleString('en-PK');
-  const paidRs = Math.round(paidNow / 100).toLocaleString('en-PK');
+  const totalRs = formatPaisaToRupees(totalAmount);
+  const paidRs = formatPaisaToRupees(paidNow);
   return new ErrorResponseDTO(
     'Paid amount is more than the purchase total',
     [
@@ -107,8 +108,8 @@ export const paymentExceedsOutstanding = (
   remaining: number,
 ): ErrorResponseDTO => {
   const exceeded = outstandingExceeded();
-  const amountRs = Math.round(amount / 100).toLocaleString('en-PK');
-  const remainingRs = Math.round(remaining / 100).toLocaleString('en-PK');
+  const amountRs = formatPaisaToRupees(amount);
+  const remainingRs = formatPaisaToRupees(remaining);
   return new ErrorResponseDTO(
     exceeded.error,
     [
