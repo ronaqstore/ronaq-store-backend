@@ -34,6 +34,8 @@
     "seed:admin": "npm run build && node prisma/seed-platform-admin.cjs",
     "seed:owner": "npm run build && node prisma/seed-shop-owner.cjs",
     "seed:catalog": "npm run build && node prisma/seed-catalog.cjs",
+    "seed:demo-analytics": "npm run build && node scripts/seed-demo-analytics.mjs",
+    "verify:dashboard-charts": "node scripts/verify-dashboard-charts.mjs",
     "db:clean": "node prisma/clean-db.cjs",
     "check": "node scripts/run-checks.mjs",
     "knip": "node scripts/run-knip.mjs",
