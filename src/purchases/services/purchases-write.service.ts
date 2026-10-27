@@ -23,6 +23,7 @@ import {
 } from '../../errors/error.builder.js';
 import { isAppleBrandName } from '../../helpers/device-family.helper.js';
 import { loadShopProductsById } from '../../helpers/product-catalog.helper.js';
+import { resolveTransactionDate } from '../../helpers/date.helper.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -124,7 +125,7 @@ export class PurchasesWriteService {
         supplierId: dto.supplierId,
         purchaseNo: `P-${String(rows[0].next).padStart(4, '0')}`,
         supplierInvoiceRef: dto.supplierInvoiceRef ?? null,
-        purchaseDate: new Date(dto.purchaseDate),
+        purchaseDate: resolveTransactionDate(dto.purchaseDate),
         totalAmount,
         isOpeningStock: dto.isOpeningStock ?? false,
         clientRequestId: dto.clientRequestId,

@@ -149,7 +149,7 @@ describe('CashReconciliationsService', () => {
           type: 'RECONCILIATION_ADJUSTMENT',
           direction: 'IN',
           amount: 50000n,
-          movementDate: new Date(businessToday()),
+          movementDate: expect.any(Date),
           referenceType: 'RECONCILIATION',
           referenceId: 'rec-1',
           createdById: USER_ID,

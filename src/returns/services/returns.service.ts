@@ -28,7 +28,10 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import { businessDayRange } from '../../helpers/date.helper.js';
+import {
+  businessDayRange,
+  resolveTransactionDate,
+} from '../../helpers/date.helper.js';
 import {
   buildTokenizedSearchAnd,
   stripDocSearchPrefix,
@@ -129,7 +132,7 @@ export class ReturnsService {
       );
     }
 
-    const returnMoment = new Date(dto.returnDate);
+    const returnMoment = resolveTransactionDate(dto.returnDate);
 
     const outcome = await this.prisma.$transaction(async (tx) => {
       await lockShopForUpdate(tx, shopId);
@@ -293,12 +296,26 @@ export class ReturnsService {
       ];
     }
 
+    const orderBy =
+      sortBy === 'returnDate'
+        ? [
+            { returnDate: sortOrder },
+            { createdAt: sortOrder },
+            { id: sortOrder },
+          ]
+        : [
+            { [sortBy]: sortOrder },
+            { returnDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ];
+
     const [rows, total] = await Promise.all([
       this.prisma.saleReturn.findMany({
         where,
         skip: getSkipNumber(page, pageSize),
         take: pageSize,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy,
         include: RETURN_INCLUDE,
       }),
       this.prisma.saleReturn.count({ where }),

@@ -1,4 +1,8 @@
-import { businessDayRange, businessToday } from './date.helper.js';
+import {
+  businessDayRange,
+  businessToday,
+  resolveTransactionDate,
+} from './date.helper.js';
 
 describe('date.helper', () => {
   describe('businessToday', () => {
@@ -36,6 +40,27 @@ describe('date.helper', () => {
       expect(businessToday(start)).toBe('2026-10-07');
       expect(businessToday(new Date(end.getTime() - 1))).toBe('2026-10-07');
       expect(businessToday(end)).toBe('2026-10-08');
+    });
+  });
+
+  describe('resolveTransactionDate', () => {
+    it('returns now when date is omitted', () => {
+      const now = new Date('2026-10-27T10:30:00.000Z');
+      expect(resolveTransactionDate(undefined, now)).toBe(now);
+    });
+
+    it('returns now when date matches current business day', () => {
+      const now = new Date('2026-10-27T10:30:00.000Z');
+      const today = businessToday(now);
+      expect(resolveTransactionDate(today, now)).toBe(now);
+    });
+
+    it('returns parsed date when date is a past or different day', () => {
+      const now = new Date('2026-10-27T10:30:00.000Z');
+      const past = '2026-10-01';
+      const result = resolveTransactionDate(past, now);
+      expect(result).not.toBe(now);
+      expect(result.toISOString()).toContain('2026-10-01');
     });
   });
 });

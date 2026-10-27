@@ -19,9 +19,25 @@ export function uniqueViolationColumns(error: unknown): string[] {
 
   const target = meta['target'];
   if (Array.isArray(target)) {
-    columns.push(...target.map((c) => String(c).toLowerCase()));
+    for (const c of target) {
+      const s = String(c).toLowerCase();
+      columns.push(s);
+      if (s.endsWith('_key')) {
+        const withoutKey = s.replace(/_key$/, '');
+        columns.push(withoutKey);
+        const last = withoutKey.split('_').pop();
+        if (last) columns.push(last);
+      }
+    }
   } else if (typeof target === 'string') {
-    columns.push(target.toLowerCase());
+    const s = target.toLowerCase();
+    columns.push(s);
+    if (s.endsWith('_key')) {
+      const withoutKey = s.replace(/_key$/, '');
+      columns.push(withoutKey);
+      const last = withoutKey.split('_').pop();
+      if (last) columns.push(last);
+    }
   }
 
   const adapter = meta['driverAdapterError'] as

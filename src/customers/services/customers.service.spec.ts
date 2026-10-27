@@ -108,8 +108,8 @@ describe('CustomersService', () => {
       );
     });
 
-    it('rejects a phone already used by a platform admin', async () => {
-      prismaStub.platformAdmin.findFirst.mockResolvedValue({ id: 'admin-1' });
+    it('rejects a phone already used by another customer in the shop', async () => {
+      prismaStub.customer.findFirst.mockResolvedValue({ id: 'customer-1' });
 
       await expect(
         service.createCustomer(

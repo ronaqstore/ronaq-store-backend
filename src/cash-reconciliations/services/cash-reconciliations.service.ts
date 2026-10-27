@@ -73,13 +73,14 @@ export class CashReconciliationsService {
 
       if (difference !== 0n) {
         const absolute = difference < 0n ? -difference : difference;
+        const now = new Date();
         await tx.cashMovement.create({
           data: {
             shopId,
             type: CashMovementType.RECONCILIATION_ADJUSTMENT,
             direction: difference > 0n ? CashDirection.IN : CashDirection.OUT,
             amount: absolute,
-            movementDate: new Date(businessToday()),
+            movementDate: now,
             referenceType: ReferenceType.RECONCILIATION,
             referenceId: reconciliation.id,
             createdById: userId,

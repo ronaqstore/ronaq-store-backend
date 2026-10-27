@@ -44,6 +44,7 @@ import {
   buildTokenizedSearchAnd,
   stripDocSearchPrefix,
 } from '../../helpers/tokenized-search.helper.js';
+import { resolveTransactionDate } from '../../helpers/date.helper.js';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { name: true } },
@@ -121,7 +122,7 @@ export class PaymentsService {
     }
 
     const amount = BigInt(dto.amount);
-    const paymentMoment = new Date(dto.paymentDate);
+    const paymentMoment = resolveTransactionDate(dto.paymentDate);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -364,8 +365,18 @@ export class PaymentsService {
 
     const orderBy =
       sortBy === 'customerName'
-        ? ({ customer: { name: sortOrder } } as const)
-        : ({ [sortBy]: sortOrder } as const);
+        ? [
+            { customer: { name: sortOrder } },
+            { paymentDate: sortOrder },
+            { createdAt: sortOrder },
+            { id: sortOrder },
+          ]
+        : [
+            { [sortBy]: sortOrder },
+            { paymentDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ];
 
     const [rows, total] = await Promise.all([
       this.prisma.payment.findMany({

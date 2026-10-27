@@ -12,6 +12,29 @@ export function businessToday(now: Date = new Date()): string {
   return businessDayFormatter.format(now);
 }
 
+/**
+ * Resolves a transaction or movement date.
+ * If omitted or if it matches the current business day (Asia/Karachi),
+ * it returns the current timestamp (`now`), preserving the exact time of day.
+ * If an explicit past or future date is provided (e.g. '2026-10-01'),
+ * it returns a Date for that day.
+ */
+export function resolveTransactionDate(
+  inputDate?: string | Date,
+  now: Date = new Date(),
+): Date {
+  if (!inputDate) {
+    return now;
+  }
+  if (inputDate instanceof Date) {
+    return inputDate;
+  }
+  if (inputDate === businessToday(now)) {
+    return now;
+  }
+  return new Date(inputDate);
+}
+
 export function businessDayRange(date: string): { start: Date; end: Date } {
   const [year, month, day] = date.split('-').map(Number);
   const start = new Date(Date.UTC(year, month - 1, day) - KARACHI_OFFSET_MS);

@@ -26,10 +26,8 @@ import {
   normalizePhone,
   normalizePhoneOrRaw,
 } from '../../helpers/phone.helper.js';
-import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import {
   duplicateFieldValue,
-  loginPhoneAlreadyTaken,
   resourceNotFound,
   systemRowProtected,
 } from '../../errors/error.builder.js';
@@ -63,7 +61,7 @@ export class SuppliersService {
     const phone = this.canonicalPhone(dto.phone);
     const cnic = dto.cnic?.trim() || null;
 
-    await this.assertPhoneAvailable(phone);
+    await this.assertPhoneAvailable(shopId, phone);
     await this.assertCnicAvailable(shopId, cnic);
 
     await this.prisma.supplier.create({
@@ -280,7 +278,7 @@ export class SuppliersService {
     if (newName !== undefined) data.name = newName;
     if (dto.phone !== undefined) {
       const phone = this.canonicalPhone(dto.phone);
-      await this.assertPhoneAvailable(phone, id);
+      await this.assertPhoneAvailable(shopId, phone, id);
       data.phone = phone;
     }
     if (dto.cnic !== undefined) {
@@ -355,15 +353,23 @@ export class SuppliersService {
   }
 
   private async assertPhoneAvailable(
+    shopId: string,
     phone: string | null,
     excludeSupplierId?: string,
   ): Promise<void> {
     if (!phone) return;
-    const conflict = await findLoginPhoneConflict(this.prisma, phone, {
-      excludeSupplierId,
+    const existing = await this.prisma.supplier.findFirst({
+      where: {
+        shopId,
+        phone,
+        ...(excludeSupplierId ? { id: { not: excludeSupplierId } } : {}),
+      },
+      select: { id: true },
     });
-    if (conflict) {
-      throw new BadRequestException(loginPhoneAlreadyTaken(phone));
+    if (existing) {
+      throw new BadRequestException(
+        duplicateFieldValue('Supplier', 'Phone', phone),
+      );
     }
   }
 

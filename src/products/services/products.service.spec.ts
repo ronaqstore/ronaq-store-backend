@@ -315,6 +315,115 @@ describe('ProductsService', () => {
         expect(err).toBeInstanceOf(BadRequestException);
         expect(JSON.stringify(err.getResponse())).toContain('barcode');
       });
+
+      it('reports a duplicate variant when products_variant_key violates', async () => {
+        prismaStub.product.findFirst.mockResolvedValue(null);
+        prismaStub.product.create.mockRejectedValue(
+          adapterUniqueViolation('products_variant_key'),
+        );
+
+        const err = await service
+          .createProduct(validCreate, SHOP_ID, 'user-1')
+          .catch((e) => e);
+
+        expect(err).toBeInstanceOf(BadRequestException);
+        expect(JSON.stringify(err.getResponse())).toContain(
+          'with these variant details already exists',
+        );
+      });
+    });
+
+    it('rejects a duplicate variant when case differs', async () => {
+      prismaStub.product.findFirst.mockImplementation((args?: any) => {
+        if (
+          args?.where?.name?.equals === 'galaxy a15' ||
+          args?.where?.model?.equals === 'sm-a155f'
+        ) {
+          return Promise.resolve({ id: 'prod-existing' });
+        }
+        return Promise.resolve(null);
+      });
+
+      await expect(
+        service.createProduct(
+          { ...validCreate, name: 'galaxy a15', model: 'sm-a155f' },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a duplicate variant when whitespace needs trimming', async () => {
+      prismaStub.product.findFirst.mockImplementation((args?: any) => {
+        if (
+          args?.where?.name?.equals === 'Galaxy A15' &&
+          args?.where?.model?.equals === 'SM-A155F'
+        ) {
+          return Promise.resolve({ id: 'prod-existing' });
+        }
+        return Promise.resolve(null);
+      });
+
+      await expect(
+        service.createProduct(
+          { ...validCreate, name: '  Galaxy A15  ', model: '  SM-A155F  ' },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.create).not.toHaveBeenCalled();
+    });
+
+    it('allows creating a product with a different color', async () => {
+      prismaStub.product.findFirst.mockResolvedValue(null);
+      prismaStub.product.create.mockResolvedValue({ id: 'prod-2' });
+
+      await expect(
+        service.createProduct(
+          { ...validCreate, color: 'White' },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).resolves.toMatchObject({ status: true });
+      expect(prismaStub.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ color: 'White' }),
+        }),
+      );
+    });
+
+    it('handles concurrent create (two parallel calls) with one success and one duplicate error', async () => {
+      prismaStub.product.findFirst.mockResolvedValue(null);
+
+      let callCount = 0;
+      prismaStub.product.create.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ id: 'prod-first' });
+        }
+        return Promise.reject(adapterUniqueViolation('products_variant_key'));
+      });
+
+      const [res1, res2] = await Promise.allSettled([
+        service.createProduct(validCreate, SHOP_ID, 'user-1'),
+        service.createProduct(validCreate, SHOP_ID, 'user-1'),
+      ]);
+
+      expect(res1.status === 'fulfilled' || res2.status === 'fulfilled').toBe(
+        true,
+      );
+      expect(res1.status === 'rejected' || res2.status === 'rejected').toBe(
+        true,
+      );
+
+      const rejected = (
+        res1.status === 'rejected' ? res1 : res2
+      ) as PromiseRejectedResult;
+      expect(rejected.reason).toBeInstanceOf(BadRequestException);
+      expect(JSON.stringify(rejected.reason.getResponse())).toContain(
+        'with these variant details already exists',
+      );
     });
   });
 
@@ -648,6 +757,68 @@ describe('ProductsService', () => {
         service.updateProduct('prod-1', { name: 'Dup' }, SHOP_ID, 'user-1'),
       ).rejects.toThrow(BadRequestException);
       expect(prismaStub.product.update).not.toHaveBeenCalled();
+    });
+
+    it('allows price-only update without running variant uniqueness check', async () => {
+      let variantCheckRan = false;
+      prismaStub.product.findFirst.mockImplementation((args?: any) => {
+        const idFilter = args?.where?.id;
+        if (idFilter && typeof idFilter === 'object' && idFilter.not) {
+          variantCheckRan = true;
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(baseProductRow());
+      });
+      prismaStub.product.update.mockResolvedValue({});
+
+      await expect(
+        service.updateProduct(
+          'prod-1',
+          { defaultSellingPrice: 899900n },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).resolves.toMatchObject({ status: true });
+
+      expect(variantCheckRan).toBe(false);
+      expect(prismaStub.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prod-1' },
+          data: { defaultSellingPrice: 899900n },
+        }),
+      );
+    });
+
+    it('allows updating product to a different color when no clash exists', async () => {
+      mockProductFoundForUpdate(baseProductRow({ color: 'Black' }));
+      prismaStub.product.update.mockResolvedValue({});
+
+      await expect(
+        service.updateProduct('prod-1', { color: 'Blue' }, SHOP_ID, 'user-1'),
+      ).resolves.toMatchObject({ status: true });
+
+      expect(prismaStub.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prod-1' },
+          data: expect.objectContaining({ color: 'Blue' }),
+        }),
+      );
+    });
+
+    it('maps database unique-index violation (products_variant_key) on update to 400', async () => {
+      mockProductFoundForUpdate(baseProductRow());
+      prismaStub.product.update.mockRejectedValue(
+        adapterUniqueViolation('products_variant_key'),
+      );
+
+      const err = await service
+        .updateProduct('prod-1', { color: 'Red' }, SHOP_ID, 'user-1')
+        .catch((e) => e);
+
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(JSON.stringify(err.getResponse())).toContain(
+        'with these variant details already exists',
+      );
     });
 
     it('writes the R1.2 publish fields and never touches publishedAt', async () => {

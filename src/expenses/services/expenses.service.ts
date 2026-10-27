@@ -30,6 +30,7 @@ import {
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
+import { resolveTransactionDate } from '../../helpers/date.helper.js';
 
 const EXPENSE_INCLUDE = {
   category: { select: { name: true } },
@@ -89,13 +90,14 @@ export class ExpensesService {
         };
       }
       const overdraft = overdraftProbe.overdraft;
+      const expenseMoment = resolveTransactionDate(dto.expenseDate);
 
       const expense = await tx.expense.create({
         data: {
           shopId,
           categoryId: dto.categoryId,
           amount,
-          expenseDate: new Date(dto.expenseDate),
+          expenseDate: expenseMoment,
           description: dto.description?.trim() ? dto.description : null,
           createdById: userId,
         },
@@ -108,7 +110,7 @@ export class ExpensesService {
           type: CashMovementType.EXPENSE,
           direction: CashDirection.OUT,
           amount,
-          movementDate: new Date(dto.expenseDate),
+          movementDate: expenseMoment,
           referenceType: ReferenceType.EXPENSE,
           referenceId: expense.id,
           isOverdraft: overdraft,

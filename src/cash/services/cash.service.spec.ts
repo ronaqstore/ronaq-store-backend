@@ -128,11 +128,13 @@ describe('CashService', () => {
       expect(tx.cashMovement.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            movementDate: new Date(businessToday()),
+            movementDate: expect.any(Date),
             note: null,
           }),
         }),
       );
+      const call = tx.cashMovement.create.mock.calls[0][0];
+      expect(businessToday(call.data.movementDate)).toBe(businessToday());
     });
 
     it('rejects a second opening-cash entry and writes nothing', async () => {
@@ -191,11 +193,13 @@ describe('CashService', () => {
       expect(prismaStub.cashMovement.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            movementDate: new Date(businessToday()),
+            movementDate: expect.any(Date),
             note: null,
           }),
         }),
       );
+      const call = prismaStub.cashMovement.create.mock.calls[0][0];
+      expect(businessToday(call.data.movementDate)).toBe(businessToday());
     });
   });
 
@@ -309,7 +313,11 @@ describe('CashService', () => {
           where: { shopId: SHOP_ID, type: 'EXPENSE', direction: 'OUT' },
           skip: 20,
           take: 20,
-          orderBy: { movementDate: 'desc' },
+          orderBy: [
+            { movementDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ],
         }),
       );
       expect(res).toEqual({
@@ -377,7 +385,12 @@ describe('CashService', () => {
               },
             ],
           },
-          orderBy: { amount: 'asc' },
+          orderBy: [
+            { amount: 'asc' },
+            { movementDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ],
         }),
       );
     });

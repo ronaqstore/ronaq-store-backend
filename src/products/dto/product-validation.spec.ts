@@ -99,6 +99,42 @@ describe('Product DTO validation', () => {
     await expect(validate(dto)).resolves.toEqual([]);
   });
 
+  it('accepts null to clear optional fields on update', async () => {
+    const dto = plainToInstance(UpdateProductDto, {
+      barcode: null,
+      sku: null,
+      imageUrl: null,
+      model: null,
+      description: null,
+      color: null,
+      ram: null,
+      storage: null,
+      publicDescription: null,
+      ptaStatus: null,
+      authenticity: null,
+    });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
+  it.each([
+    ['barcode'],
+    ['sku'],
+    ['imageUrl'],
+    ['model'],
+    ['description'],
+    ['color'],
+    ['ram'],
+    ['storage'],
+    ['publicDescription'],
+    ['ptaStatus'],
+    ['authenticity'],
+  ])('accepts null for %s individually on update', async (field) => {
+    const dto = plainToInstance(UpdateProductDto, { [field]: null });
+
+    await expect(validate(dto)).resolves.toEqual([]);
+  });
+
   it('allows trackingType in an update payload', async () => {
     const dto = plainToInstance(UpdateProductDto, {
       trackingType: 'SERIALIZED',

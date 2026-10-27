@@ -19,6 +19,7 @@ import {
 import {
   resourceNotFound,
   duplicateFieldValue,
+  duplicateProductVariant,
   trackingTypeLocked,
   stockNotEmptyForTrackingChange,
   productNotPublishable,
@@ -136,7 +137,7 @@ export class ProductsService {
         },
       );
     } catch (error) {
-      throw this.mapDuplicate(error, sku, barcode);
+      throw this.mapDuplicate(error, sku, barcode, name);
     }
 
     this.storefrontRevalidate.invalidateShopById(shopId);
@@ -284,20 +285,39 @@ export class ProductsService {
           : existing.ptaStatus
         : null;
 
-    await assertNoDuplicateVariant(
-      this.prisma,
-      shopId,
-      {
-        name: nextName,
-        model: nextModel,
-        color: nextColor,
-        ram: nextRam,
-        storage: nextStorage,
-        ptaStatus: nextPtaStored,
-        authenticity: nextAuthenticity,
-      },
-      id,
-    );
+    const normStr = (val?: string | null): string =>
+      val?.trim().toLowerCase() ?? '';
+    const existingPtaStored =
+      existing.trackingType === 'SERIALIZED'
+        ? (existing.ptaStatus ?? null)
+        : null;
+
+    const variantChanged =
+      normStr(nextName) !== normStr(existing.name) ||
+      normStr(nextModel) !== normStr(existing.model) ||
+      normStr(nextColor) !== normStr(existing.color) ||
+      normStr(nextRam) !== normStr(existing.ram) ||
+      normStr(nextStorage) !== normStr(existing.storage) ||
+      existingPtaStored !== nextPtaStored ||
+      (existing.authenticity ?? null) !== (nextAuthenticity ?? null) ||
+      trackingTypeChanges;
+
+    if (variantChanged) {
+      await assertNoDuplicateVariant(
+        this.prisma,
+        shopId,
+        {
+          name: nextName,
+          model: nextModel,
+          color: nextColor,
+          ram: nextRam,
+          storage: nextStorage,
+          ptaStatus: nextPtaStored,
+          authenticity: nextAuthenticity,
+        },
+        id,
+      );
+    }
 
     const data: Prisma.ProductUpdateInput = {};
     if (newName !== undefined) data.name = newName;
@@ -371,7 +391,7 @@ export class ProductsService {
         }
       });
     } catch (error) {
-      throw this.mapDuplicate(error, newSku, newBarcode);
+      throw this.mapDuplicate(error, newSku, newBarcode, nextName);
     }
 
     this.storefrontRevalidate.invalidateShopById(shopId);
@@ -506,9 +526,15 @@ export class ProductsService {
     error: unknown,
     sku?: string | null,
     barcode?: string | null,
+    name?: string,
   ): unknown {
     if (!isUniqueConstraintViolation(error)) return error;
 
+    if (violatedColumn(error, 'variant')) {
+      return new BadRequestException(
+        duplicateProductVariant(name ?? 'Product'),
+      );
+    }
     if (sku && violatedColumn(error, 'sku')) {
       return new BadRequestException(
         duplicateFieldValue('Product', 'SKU', sku),
