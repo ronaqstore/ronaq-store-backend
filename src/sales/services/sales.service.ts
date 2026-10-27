@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import {
   CashDirection,
   CashMovementType,
@@ -224,7 +225,7 @@ export class SalesService {
       100,
     );
     const sortBy = query.sortBy ?? 'saleDate';
-    const sortOrder = query.sortOrder ?? 'desc';
+    const sortOrder: Prisma.SortOrder = query.sortOrder ?? 'desc';
 
     let where = buildSaleListWhere(query, shopId);
     const moneySort =
@@ -273,19 +274,26 @@ export class SalesService {
     const prismaSortBy =
       sortBy === 'paid' || sortBy === 'outstanding' ? 'saleDate' : sortBy;
 
-    const orderBy =
-      prismaSortBy === 'saleDate'
+    const orderBy: Prisma.SaleOrderByWithRelationInput[] =
+      prismaSortBy === 'saleNo'
         ? [
-            { saleDate: sortOrder },
-            { createdAt: sortOrder },
-            { id: sortOrder },
-          ]
-        : [
-            { [prismaSortBy]: sortOrder },
+            { saleNo: sortOrder },
             { saleDate: 'desc' },
             { createdAt: 'desc' },
             { id: 'desc' },
-          ];
+          ]
+        : prismaSortBy === 'totalAmount'
+          ? [
+              { totalAmount: sortOrder },
+              { saleDate: 'desc' },
+              { createdAt: 'desc' },
+              { id: 'desc' },
+            ]
+          : [
+              { saleDate: sortOrder },
+              { createdAt: sortOrder },
+              { id: sortOrder },
+            ];
 
     const [rows, total] = await Promise.all([
       this.prisma.sale.findMany({

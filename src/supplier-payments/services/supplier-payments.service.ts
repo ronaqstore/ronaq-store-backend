@@ -186,7 +186,7 @@ export class SupplierPaymentsService {
       100,
     );
     const sortBy = query.sortBy ?? 'paymentDate';
-    const sortOrder = query.sortOrder ?? 'desc';
+    const sortOrder: Prisma.SortOrder = query.sortOrder ?? 'desc';
 
     const where: Prisma.SupplierPaymentWhereInput = { shopId };
     if (query.supplierId) where.supplierId = query.supplierId;
@@ -221,7 +221,7 @@ export class SupplierPaymentsService {
     );
     if (andFilters.length > 0) where.AND = andFilters;
 
-    const orderBy =
+    const orderBy: Prisma.SupplierPaymentOrderByWithRelationInput[] =
       sortBy === 'supplierName'
         ? [
             { supplier: { name: sortOrder } },
@@ -229,12 +229,18 @@ export class SupplierPaymentsService {
             { createdAt: sortOrder },
             { id: sortOrder },
           ]
-        : [
-            { [sortBy]: sortOrder },
-            { paymentDate: 'desc' },
-            { createdAt: 'desc' },
-            { id: 'desc' },
-          ];
+        : sortBy === 'amount'
+          ? [
+              { amount: sortOrder },
+              { paymentDate: 'desc' },
+              { createdAt: 'desc' },
+              { id: 'desc' },
+            ]
+          : [
+              { paymentDate: sortOrder },
+              { createdAt: sortOrder },
+              { id: sortOrder },
+            ];
 
     const [rows, total] = await Promise.all([
       this.prisma.supplierPayment.findMany({

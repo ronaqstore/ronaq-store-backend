@@ -260,7 +260,7 @@ export class ReturnsService {
       100,
     );
     const sortBy = query.sortBy ?? 'returnDate';
-    const sortOrder = query.sortOrder ?? 'desc';
+    const sortOrder: Prisma.SortOrder = query.sortOrder ?? 'desc';
 
     const where: Prisma.SaleReturnWhereInput = { shopId };
     if (query.saleId) where.saleId = query.saleId;
@@ -296,18 +296,18 @@ export class ReturnsService {
       ];
     }
 
-    const orderBy =
-      sortBy === 'returnDate'
+    const orderBy: Prisma.SaleReturnOrderByWithRelationInput[] =
+      sortBy === 'returnAmount'
         ? [
-            { returnDate: sortOrder },
-            { createdAt: sortOrder },
-            { id: sortOrder },
-          ]
-        : [
-            { [sortBy]: sortOrder },
+            { returnAmount: sortOrder },
             { returnDate: 'desc' },
             { createdAt: 'desc' },
             { id: 'desc' },
+          ]
+        : [
+            { returnDate: sortOrder },
+            { createdAt: sortOrder },
+            { id: sortOrder },
           ];
 
     const [rows, total] = await Promise.all([

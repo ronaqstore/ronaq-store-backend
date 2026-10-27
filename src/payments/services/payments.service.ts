@@ -330,7 +330,7 @@ export class PaymentsService {
       100,
     );
     const sortBy = query.sortBy ?? 'paymentDate';
-    const sortOrder = query.sortOrder ?? 'desc';
+    const sortOrder: Prisma.SortOrder = query.sortOrder ?? 'desc';
 
     const where: Prisma.PaymentWhereInput = { shopId };
     if (query.customerId) where.customerId = query.customerId;
@@ -363,7 +363,7 @@ export class PaymentsService {
     );
     if (andFilters.length > 0) where.AND = andFilters;
 
-    const orderBy =
+    const orderBy: Prisma.PaymentOrderByWithRelationInput[] =
       sortBy === 'customerName'
         ? [
             { customer: { name: sortOrder } },
@@ -371,12 +371,18 @@ export class PaymentsService {
             { createdAt: sortOrder },
             { id: sortOrder },
           ]
-        : [
-            { [sortBy]: sortOrder },
-            { paymentDate: 'desc' },
-            { createdAt: 'desc' },
-            { id: 'desc' },
-          ];
+        : sortBy === 'amount'
+          ? [
+              { amount: sortOrder },
+              { paymentDate: 'desc' },
+              { createdAt: 'desc' },
+              { id: 'desc' },
+            ]
+          : [
+              { paymentDate: sortOrder },
+              { createdAt: sortOrder },
+              { id: sortOrder },
+            ];
 
     const [rows, total] = await Promise.all([
       this.prisma.payment.findMany({
