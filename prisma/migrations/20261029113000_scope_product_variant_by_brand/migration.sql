@@ -1,3 +1,13 @@
+-- Ensure helper exists (earlier migrate may have been marked applied without it).
+CREATE OR REPLACE FUNCTION ronaq_enum_label(val anyenum)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT $1::text;
+$$;
+
 DROP INDEX IF EXISTS "products_variant_key";
 
 CREATE UNIQUE INDEX "products_variant_key"
