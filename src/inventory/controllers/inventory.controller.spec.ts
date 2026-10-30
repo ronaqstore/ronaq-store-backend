@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { InventoryController } from './inventory.controller.js';
 import { InventoryService } from '../services/inventory.service.js';
+import { InventoryAdjustmentService } from '../services/inventory-adjustment.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -25,6 +26,7 @@ describe('InventoryController', () => {
       controllers: [InventoryController],
       providers: [
         InventoryService,
+        InventoryAdjustmentService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: StorefrontRevalidateService,

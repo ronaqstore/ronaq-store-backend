@@ -193,7 +193,9 @@ export class ReturnsFlowService {
           unit.imei1,
           unit.imei2,
           (imei) =>
-            new BadRequestException(returnImeiAlreadyInStock(sale.saleNo, imei)),
+            new BadRequestException(
+              returnImeiAlreadyInStock(sale.saleNo, imei),
+            ),
         );
         lines.push({
           saleItemId: c.saleItemId,

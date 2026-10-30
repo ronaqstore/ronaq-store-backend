@@ -12,13 +12,6 @@ export function businessToday(now: Date = new Date()): string {
   return businessDayFormatter.format(now);
 }
 
-/**
- * Resolves a transaction or movement date.
- * If omitted or if it matches the current business day (Asia/Karachi),
- * it returns the current timestamp (`now`), preserving the exact time of day.
- * If an explicit past or future date is provided (e.g. '2026-10-01'),
- * it returns a Date for that day.
- */
 export function resolveTransactionDate(
   inputDate?: string | Date,
   now: Date = new Date(),

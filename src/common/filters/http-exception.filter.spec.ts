@@ -1,4 +1,5 @@
 import { BadRequestException, HttpStatus } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { GlobalHttpExceptionFilter } from './http-exception.filter.js';
 
 describe('GlobalHttpExceptionFilter', () => {
@@ -54,7 +55,6 @@ describe('GlobalHttpExceptionFilter', () => {
   it('maps unhandled IMEI unique violation to 400 Bad Request', () => {
     const statusSpy = jest.fn();
     const jsonSpy = jest.fn();
-    const { Prisma } = require('../../generated/prisma/client.js');
     const p2010 = new Prisma.PrismaClientKnownRequestError(
       'Raw query failed: IMEI already exists in this shop',
       { code: 'P2010', clientVersion: '7.0.0', meta: {} },

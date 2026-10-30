@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { InventoryService } from './inventory.service.js';
+import { InventoryAdjustmentService } from './inventory-adjustment.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
@@ -123,6 +124,7 @@ describe('InventoryService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InventoryService,
+        InventoryAdjustmentService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: StorefrontRevalidateService,

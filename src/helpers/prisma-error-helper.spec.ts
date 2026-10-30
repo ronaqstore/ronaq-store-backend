@@ -106,12 +106,12 @@ describe('prisma-error-helper', () => {
 
   describe('isImeiUniqueViolation', () => {
     it('detects P2002 on imei target', () => {
-      expect(isImeiUniqueViolation(known({ target: ['shop_id', 'imei1'] }))).toBe(
-        true,
-      );
-      expect(isImeiUniqueViolation(known({ target: ['shop_id', 'imei2'] }))).toBe(
-        true,
-      );
+      expect(
+        isImeiUniqueViolation(known({ target: ['shop_id', 'imei1'] })),
+      ).toBe(true);
+      expect(
+        isImeiUniqueViolation(known({ target: ['shop_id', 'imei2'] })),
+      ).toBe(true);
       expect(
         isImeiUniqueViolation(
           adapterViolation('inventory_units_shop_id_imei1_key'),

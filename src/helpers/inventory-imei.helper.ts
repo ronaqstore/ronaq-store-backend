@@ -6,10 +6,6 @@ import { duplicateImei } from '../errors/error.builder.js';
 
 type Db = PrismaService | Prisma.TransactionClient;
 
-/**
- * Searches for an existing IN_STOCK inventory unit in the given shop that matches
- * either imei1 or imei2, excluding the specified unit ID.
- */
 export async function findConflictingInStockUnit(
   db: Db,
   shopId: string,
@@ -37,11 +33,6 @@ export async function findConflictingInStockUnit(
   });
 }
 
-/**
- * Asserts that neither imei1 nor imei2 belongs to any active IN_STOCK inventory unit
- * in the same shop (other than the unit being restored).
- * If a conflict is found, throws a BadRequestException.
- */
 export async function assertImeiNotInStock(
   db: Db,
   shopId: string,
@@ -59,13 +50,10 @@ export async function assertImeiNotInStock(
   );
   if (hit) {
     const matchedImei =
-      hit.imei1 === imei1 || hit.imei2 === imei1
-        ? imei1
-        : (imei2 ?? imei1);
+      hit.imei1 === imei1 || hit.imei2 === imei1 ? imei1 : (imei2 ?? imei1);
     if (errorFactory) {
       throw errorFactory(matchedImei);
     }
     throw new BadRequestException(duplicateImei(matchedImei));
   }
 }
-

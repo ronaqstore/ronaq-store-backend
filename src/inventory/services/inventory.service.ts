@@ -8,7 +8,6 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   InventoryMovementType,
-  ReferenceType,
   UnitStatus,
 } from '../../generated/prisma/enums.js';
 import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
@@ -24,73 +23,21 @@ import {
 } from '../../helpers/paginate-helper.js';
 import {
   batteryHealthNotAllowed,
-  countedQuantityRequired,
-  duplicateImei,
-  insufficientStock,
-  quantityRequired,
   resourceNotFound,
-  unitNotDamagedOrLost,
   unitNotEditable,
-  unitNotInStock,
 } from '../../errors/error.builder.js';
 import { isAppleBrandName } from '../../helpers/device-family.helper.js';
-import type { InventoryProductRef } from './inventory.service.types.js';
-import { assertInventoryAdjustmentShape } from '../helpers/inventory-adjustment-shape.helper.js';
+import type { InventoryAdjustmentOutcome } from './inventory.service.types.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
-import { assertImeiNotInStock } from '../../helpers/inventory-imei.helper.js';
-import { isImeiUniqueViolation } from '../../helpers/prisma-error-helper.js';
+import { InventoryAdjustmentService } from './inventory-adjustment.service.js';
+import {
+  mapMovementToResponse,
+  mapUnitToResponse,
+  MOVEMENT_INCLUDE,
+  UNIT_INCLUDE,
+} from '../helpers/inventory.mapper.js';
 
-const CREATED = 'Stock change recorded successfully';
-const NO_CHANGE = 'Counted matches the system — no change recorded';
-
-export type InventoryAdjustmentOutcome =
-  { kind: 'created'; message: string } | { kind: 'nochange'; message: string };
-
-const MOVEMENT_INCLUDE = {
-  product: { select: { name: true } },
-  inventoryUnit: { select: { imei1: true } },
-} satisfies Prisma.InventoryMovementInclude;
-
-type MovementWithRefs = Prisma.InventoryMovementGetPayload<{
-  include: typeof MOVEMENT_INCLUDE;
-}>;
-
-const UNIT_INCLUDE = {
-  product: {
-    select: {
-      defaultSellingPrice: true,
-      brand: { select: { name: true } },
-    },
-  },
-  purchaseItem: {
-    include: {
-      purchase: {
-        include: {
-          supplier: {
-            select: { name: true, phone: true },
-          },
-        },
-      },
-    },
-  },
-  saleItems: {
-    include: {
-      sale: {
-        include: {
-          customer: {
-            select: { name: true, phone: true },
-          },
-        },
-      },
-    },
-    take: 1,
-    orderBy: { id: 'desc' as const },
-  },
-} satisfies Prisma.InventoryUnitInclude;
-
-type UnitWithRefs = Prisma.InventoryUnitGetPayload<{
-  include: typeof UNIT_INCLUDE;
-}>;
+export type { InventoryAdjustmentOutcome } from './inventory.service.types.js';
 
 const MANUAL_TYPES: InventoryMovementType[] = [
   InventoryMovementType.ADJUSTMENT,
@@ -103,6 +50,7 @@ export class InventoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storefrontRevalidate: StorefrontRevalidateService,
+    private readonly adjustments: InventoryAdjustmentService,
   ) {}
 
   async listUnits(
@@ -168,7 +116,7 @@ export class InventoryService {
       this.prisma.inventoryUnit.count({ where }),
     ]);
 
-    const items = rows.map((row) => this.toUnitResponse(row));
+    const items = rows.map((row) => mapUnitToResponse(row));
 
     return new PaginatedResponseDTO(items, total, page, pageSize);
   }
@@ -188,293 +136,7 @@ export class InventoryService {
     dto: CreateInventoryAdjustmentDto,
     shopId: string,
   ): Promise<InventoryAdjustmentOutcome> {
-    const product = await this.prisma.product.findFirst({
-      where: { id: dto.productId, shopId, isActive: true },
-      select: { id: true, name: true, trackingType: true },
-    });
-    if (!product) {
-      throw new NotFoundException(resourceNotFound('Product', dto.productId));
-    }
-
-    assertInventoryAdjustmentShape(product, dto);
-
-    let outcome: InventoryAdjustmentOutcome;
-    if (dto.type === 'ADJUSTMENT') {
-      const countedQuantity = dto.countedQuantity;
-      if (countedQuantity === undefined) {
-        throw new BadRequestException(countedQuantityRequired(product.name));
-      }
-      outcome = await this.adjustStock(
-        product,
-        countedQuantity,
-        dto.reason,
-        shopId,
-      );
-    } else if (dto.type === 'RESTORE') {
-      outcome = await this.restorePhone(product, dto, shopId);
-    } else if (product.trackingType === 'SERIALIZED') {
-      outcome = await this.damagePhone(product, dto, shopId);
-    } else {
-      const quantity = dto.quantity;
-      if (quantity === undefined) {
-        throw new BadRequestException(quantityRequired(product.name));
-      }
-      outcome = await this.damageQuantity(
-        product,
-        quantity,
-        dto.type,
-        dto.reason,
-        shopId,
-      );
-    }
-    if (outcome.kind === 'created') {
-      this.storefrontRevalidate.invalidateShopById(shopId);
-    }
-    return outcome;
-  }
-
-  private async adjustStock(
-    product: InventoryProductRef,
-    countedQuantity: number,
-    reason: string,
-    shopId: string,
-  ): Promise<InventoryAdjustmentOutcome> {
-    const outcome = await this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<Array<{ quantity_on_hand: number }>>`
-        SELECT quantity_on_hand FROM stock_levels
-        WHERE product_id = ${product.id} AND shop_id = ${shopId}
-        FOR UPDATE
-      `;
-      const currentQty = rows[0]?.quantity_on_hand ?? 0;
-      const delta = countedQuantity - currentQty;
-      if (delta === 0) return { kind: 'nochange' as const };
-
-      if (rows.length > 0) {
-        const updatedStock = await tx.$queryRaw<Array<{ product_id: string }>>`
-          UPDATE stock_levels
-          SET quantity_on_hand = ${countedQuantity}, updated_at = now()
-          WHERE product_id = ${product.id}::uuid
-            AND shop_id = ${shopId}::uuid
-            AND quantity_on_hand = ${currentQty}
-          RETURNING product_id
-        `;
-        if (!updatedStock?.length) {
-          throw new BadRequestException(
-            'Stock level changed concurrently during adjustment',
-          );
-        }
-      } else {
-        await tx.stockLevel.create({
-          data: {
-            productId: product.id,
-            shopId,
-            quantityOnHand: countedQuantity,
-            avgUnitCost: 0n,
-          },
-        });
-      }
-
-      await tx.inventoryMovement.create({
-        data: {
-          shopId,
-          productId: product.id,
-          type: InventoryMovementType.ADJUSTMENT,
-          quantityChange: delta,
-          reason,
-        },
-      });
-      return { kind: 'created' as const };
-    });
-
-    return outcome.kind === 'created'
-      ? { kind: 'created', message: CREATED }
-      : { kind: 'nochange', message: NO_CHANGE };
-  }
-
-  private async damageQuantity(
-    product: InventoryProductRef,
-    quantity: number,
-    type: 'DAMAGED' | 'LOST',
-    reason: string,
-    shopId: string,
-  ): Promise<InventoryAdjustmentOutcome> {
-    await this.prisma.$transaction(async (tx) => {
-      const removed = await tx.$executeRaw`
-        UPDATE stock_levels
-        SET quantity_on_hand = quantity_on_hand - ${quantity}, updated_at = now()
-        WHERE product_id = ${product.id} AND shop_id = ${shopId}
-          AND quantity_on_hand >= ${quantity}
-      `;
-      if (removed === 0) {
-        const current = await tx.stockLevel.findUnique({
-          where: { productId: product.id },
-          select: { quantityOnHand: true },
-        });
-        throw new BadRequestException(
-          insufficientStock(
-            product.name,
-            current?.quantityOnHand ?? 0,
-            quantity,
-          ),
-        );
-      }
-
-      await tx.inventoryMovement.create({
-        data: {
-          shopId,
-          productId: product.id,
-          type,
-          quantityChange: -quantity,
-          reason,
-        },
-      });
-      return { kind: 'created' as const };
-    });
-
-    return { kind: 'created', message: CREATED };
-  }
-
-  private async damagePhone(
-    product: InventoryProductRef,
-    dto: CreateInventoryAdjustmentDto,
-    shopId: string,
-  ): Promise<InventoryAdjustmentOutcome> {
-    await this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<
-        Array<{ id: string; status: string; imei1: string }>
-      >`
-        SELECT id, status, imei1 FROM inventory_units
-        WHERE id = ${dto.inventoryUnitId} AND shop_id = ${shopId}
-          AND product_id = ${product.id}
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(
-          resourceNotFound('Inventory unit', dto.inventoryUnitId),
-        );
-      }
-      const unit = locked[0];
-      if (unit.status !== UnitStatus.IN_STOCK) {
-        throw new BadRequestException(
-          unitNotInStock(product.name, unit.imei1, unit.status),
-        );
-      }
-
-      const status =
-        dto.type === 'DAMAGED' ? UnitStatus.DAMAGED : UnitStatus.LOST;
-      const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`
-        UPDATE inventory_units
-        SET status = ${status}::"UnitStatus", updated_at = now()
-        WHERE id = ${unit.id}::uuid
-          AND shop_id = ${shopId}::uuid
-          AND status = ${UnitStatus.IN_STOCK}::"UnitStatus"
-        RETURNING id
-      `;
-      if (!updatedUnits?.length) {
-        throw new BadRequestException(
-          unitNotInStock(product.name, unit.imei1, unit.status),
-        );
-      }
-      await tx.inventoryMovement.create({
-        data: {
-          shopId,
-          productId: product.id,
-          inventoryUnitId: unit.id,
-          type:
-            dto.type === 'LOST'
-              ? InventoryMovementType.LOST
-              : InventoryMovementType.DAMAGED,
-          quantityChange: -1,
-          reason: dto.reason,
-        },
-      });
-      return { kind: 'created' as const };
-    });
-
-    return { kind: 'created', message: CREATED };
-  }
-
-  private async restorePhone(
-    product: InventoryProductRef,
-    dto: CreateInventoryAdjustmentDto,
-    shopId: string,
-  ): Promise<InventoryAdjustmentOutcome> {
-    await this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<
-        Array<{
-          id: string;
-          status: string;
-          imei1: string;
-          imei2: string | null;
-        }>
-      >`
-        SELECT id, status, imei1, imei2 FROM inventory_units
-        WHERE id = ${dto.inventoryUnitId}::uuid AND shop_id = ${shopId}::uuid
-          AND product_id = ${product.id}::uuid
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(
-          resourceNotFound('Inventory unit', dto.inventoryUnitId),
-        );
-      }
-      const unit = locked[0];
-      if (
-        unit.status !== UnitStatus.DAMAGED &&
-        unit.status !== UnitStatus.LOST
-      ) {
-        throw new BadRequestException(
-          unitNotDamagedOrLost(product.name, unit.imei1, unit.status),
-        );
-      }
-
-      await assertImeiNotInStock(
-        tx,
-        shopId,
-        unit.id,
-        unit.imei1,
-        unit.imei2,
-      );
-
-      try {
-        const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`
-          UPDATE inventory_units
-          SET status = 'IN_STOCK'::"UnitStatus", updated_at = now()
-          WHERE id = ${unit.id}::uuid
-            AND shop_id = ${shopId}::uuid
-            AND status IN ('DAMAGED'::"UnitStatus", 'LOST'::"UnitStatus")
-          RETURNING id
-        `;
-        if (!updatedUnits?.length) {
-          throw new BadRequestException(
-            unitNotDamagedOrLost(product.name, unit.imei1, unit.status),
-          );
-        }
-      } catch (error) {
-        if (isImeiUniqueViolation(error)) {
-          throw new BadRequestException(duplicateImei(unit.imei1));
-        }
-        throw error;
-      }
-
-      await tx.inventoryMovement.create({
-        data: {
-          shopId,
-          productId: product.id,
-          inventoryUnitId: unit.id,
-          type: InventoryMovementType.ADJUSTMENT,
-          quantityChange: 1,
-          reason: dto.reason,
-          referenceType: ReferenceType.MANUAL,
-          referenceId: unit.id,
-        },
-      });
-      return { kind: 'created' as const };
-    });
-
-    this.storefrontRevalidate.invalidateShopById(shopId);
-
-    return { kind: 'created', message: CREATED };
+    return this.adjustments.createAdjustment(dto, shopId);
   }
 
   async updateUnit(
@@ -534,7 +196,7 @@ export class InventoryService {
 
     this.storefrontRevalidate.invalidateShopById(shopId);
 
-    return this.toUnitResponse(updated);
+    return mapUnitToResponse(updated);
   }
 
   async getInventoryMovements(
@@ -610,66 +272,10 @@ export class InventoryService {
     ]);
 
     return new PaginatedResponseDTO<ResponseInventoryMovementDto>(
-      rows.map((row) => this.toResponse(row)),
+      rows.map((row) => mapMovementToResponse(row)),
       total,
       page,
       pageSize,
     );
-  }
-
-  private toResponse(row: MovementWithRefs): ResponseInventoryMovementDto {
-    return {
-      id: row.id,
-      shopId: row.shopId,
-      productId: row.productId,
-      productName: row.product.name,
-      inventoryUnitId: row.inventoryUnitId,
-      imei: row.inventoryUnit?.imei1 ?? null,
-      type: row.type,
-      quantityChange: row.quantityChange,
-      reason: row.reason,
-      referenceType: row.referenceType,
-      referenceId: row.referenceId,
-      createdAt: row.createdAt,
-    };
-  }
-
-  private toUnitResponse(row: UnitWithRefs): ResponseInventoryUnitDto {
-    const purchase = row.purchaseItem?.purchase;
-    const supplier = purchase?.supplier;
-    const latestSaleItem = row.saleItems?.[0];
-    const sale = latestSaleItem?.sale;
-    const customer = sale?.customer;
-    const defaultSell = Number(row.product.defaultSellingPrice);
-    const asking = row.askingPrice != null ? Number(row.askingPrice) : null;
-
-    return {
-      id: row.id,
-      productId: row.productId,
-      imei1: row.imei1,
-      imei2: row.imei2,
-      condition: row.condition,
-      status: row.status,
-      unitCost: Number(row.unitCost),
-      batteryHealth: row.batteryHealth,
-      askingPrice: asking,
-      defectNotes: row.defectNotes,
-      effectivePrice: asking ?? defaultSell,
-      createdAt: row.createdAt,
-      purchaseNo: purchase?.purchaseNo ?? null,
-      purchaseDate: purchase?.purchaseDate
-        ? purchase.purchaseDate.toISOString().slice(0, 10)
-        : null,
-      supplierInvoiceRef: purchase?.supplierInvoiceRef ?? null,
-      supplierName: supplier?.name ?? null,
-      supplierPhone: supplier?.phone ?? null,
-      saleNo: sale?.saleNo ?? null,
-      saleDate: sale?.saleDate
-        ? sale.saleDate.toISOString().slice(0, 10)
-        : null,
-      customerName: customer?.name ?? null,
-      customerPhone: customer?.phone ?? null,
-      salePrice: latestSaleItem ? Number(latestSaleItem.unitPrice) : null,
-    };
   }
 }

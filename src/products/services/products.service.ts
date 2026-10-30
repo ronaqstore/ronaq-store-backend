@@ -18,24 +18,21 @@ import {
 } from '../../helpers/paginate-helper.js';
 import {
   resourceNotFound,
-  duplicateFieldValue,
-  duplicateProductVariant,
-  trackingTypeLocked,
-  stockNotEmptyForTrackingChange,
   productNotPublishable,
-  ptaStatusNotAllowedForBrand,
 } from '../../errors/error.builder.js';
-import {
-  isUniqueConstraintViolation,
-  violatedColumn,
-} from '../../helpers/prisma-error-helper.js';
-import { isPtaAllowedForBrand } from '../../helpers/device-family.helper.js';
 import { BulkPublishProductsDto } from '../dto/bulk-publish-products.dto.js';
 import {
   PRODUCT_INCLUDE,
   mapProductToResponse,
 } from '../helpers/product.mapper.js';
 import { assertNoDuplicateVariant } from '../helpers/product-variant-uniqueness.helper.js';
+import {
+  assertBrandOwned,
+  assertCategoryOwned,
+  assertPtaForBrand,
+  assertTrackingTypeChangeAllowed,
+  mapProductDuplicate,
+} from '../helpers/product-write-guards.helper.js';
 import {
   buildProductListWhere,
   buildProductStockFilterSql,
@@ -61,9 +58,9 @@ export class ProductsService {
     const sku = dto.sku?.trim() || null;
     const barcode = dto.barcode?.trim() || null;
 
-    await this.assertCategoryOwned(dto.categoryId, shopId);
-    const brandName = await this.assertBrandOwned(dto.brandId, shopId);
-    this.assertPtaForBrand(brandName, dto.ptaStatus, dto.trackingType);
+    await assertCategoryOwned(this.prisma, dto.categoryId, shopId);
+    const brandName = await assertBrandOwned(this.prisma, dto.brandId, shopId);
+    assertPtaForBrand(brandName, dto.ptaStatus, dto.trackingType);
 
     const willBeActive = dto.isActive ?? true;
     if (dto.isPublished === true && !willBeActive) {
@@ -139,7 +136,7 @@ export class ProductsService {
         },
       );
     } catch (error) {
-      throw this.mapDuplicate(error, sku, barcode, name);
+      throw mapProductDuplicate(error, sku, barcode, name);
     }
 
     this.storefrontRevalidate.invalidateShopById(shopId);
@@ -222,11 +219,11 @@ export class ProductsService {
     const newName = dto.name?.trim();
 
     if (dto.categoryId !== undefined) {
-      await this.assertCategoryOwned(dto.categoryId, shopId);
+      await assertCategoryOwned(this.prisma, dto.categoryId, shopId);
     }
     let brandName: string | undefined;
     if (dto.brandId !== undefined) {
-      brandName = await this.assertBrandOwned(dto.brandId, shopId);
+      brandName = await assertBrandOwned(this.prisma, dto.brandId, shopId);
     } else {
       const brand = await this.prisma.brand.findFirst({
         where: { id: existing.brandId, shopId },
@@ -244,7 +241,8 @@ export class ProductsService {
       if (nextTrackingType === undefined) {
         throw new BadRequestException('trackingType is required');
       }
-      await this.assertTrackingTypeChangeAllowed(
+      await assertTrackingTypeChangeAllowed(
+        this.prisma,
         id,
         existing.name,
         nextTrackingType,
@@ -259,7 +257,7 @@ export class ProductsService {
     const nextTrackingForPta = dto.trackingType ?? existing.trackingType;
     const nextPta =
       dto.ptaStatus !== undefined ? dto.ptaStatus : existing.ptaStatus;
-    this.assertPtaForBrand(brandName, nextPta, nextTrackingForPta);
+    assertPtaForBrand(brandName, nextPta, nextTrackingForPta);
 
     const nextBrandId = dto.brandId ?? existing.brandId;
     const nextName = newName ?? existing.name;
@@ -430,7 +428,7 @@ export class ProductsService {
         }
       });
     } catch (error) {
-      throw this.mapDuplicate(
+      throw mapProductDuplicate(
         error,
         data.sku !== undefined ? (data.sku as string | null) : undefined,
         data.barcode !== undefined
@@ -500,97 +498,5 @@ export class ProductsService {
       true,
       `${word} ${dto.isPublished ? 'published' : 'unpublished'} successfully`,
     );
-  }
-
-  private async assertCategoryOwned(
-    categoryId: string,
-    shopId: string,
-  ): Promise<void> {
-    const found = await this.prisma.category.findFirst({
-      where: { id: categoryId, shopId },
-      select: { id: true },
-    });
-    if (!found) {
-      throw new NotFoundException(resourceNotFound('Category', categoryId));
-    }
-  }
-
-  private async assertBrandOwned(
-    brandId: string,
-    shopId: string,
-  ): Promise<string> {
-    const found = await this.prisma.brand.findFirst({
-      where: { id: brandId, shopId },
-      select: { id: true, name: true },
-    });
-    if (!found) {
-      throw new NotFoundException(resourceNotFound('Brand', brandId));
-    }
-    return found.name;
-  }
-
-  private assertPtaForBrand(
-    brandName: string | null | undefined,
-    ptaStatus: string | null | undefined,
-    trackingType: string,
-  ): void {
-    if (trackingType !== 'SERIALIZED' || ptaStatus == null) return;
-    if (!isPtaAllowedForBrand(brandName, ptaStatus)) {
-      throw new BadRequestException(
-        ptaStatusNotAllowedForBrand(brandName ?? 'this brand', ptaStatus),
-      );
-    }
-  }
-
-  private async assertTrackingTypeChangeAllowed(
-    productId: string,
-    productName: string,
-    nextType: 'QUANTITY' | 'SERIALIZED',
-  ): Promise<void> {
-    const [purchaseRefs, saleRefs] = await Promise.all([
-      this.prisma.purchaseItem.count({ where: { productId } }),
-      this.prisma.saleItem.count({ where: { productId } }),
-    ]);
-    if (purchaseRefs + saleRefs > 0) {
-      throw new BadRequestException(trackingTypeLocked(productName));
-    }
-
-    if (nextType === 'SERIALIZED') {
-      const level = await this.prisma.stockLevel.findUnique({
-        where: { productId },
-        select: { quantityOnHand: true },
-      });
-      if (level && level.quantityOnHand > 0) {
-        throw new BadRequestException(
-          stockNotEmptyForTrackingChange(productName, level.quantityOnHand),
-        );
-      }
-    }
-  }
-
-  private mapDuplicate(
-    error: unknown,
-    sku?: string | null,
-    barcode?: string | null,
-    name?: string,
-  ): unknown {
-    if (!isUniqueConstraintViolation(error)) return error;
-
-    if (violatedColumn(error, 'variant')) {
-      return new BadRequestException(
-        duplicateProductVariant(name ?? 'Product'),
-      );
-    }
-    if (sku && violatedColumn(error, 'sku')) {
-      return new BadRequestException(
-        duplicateFieldValue('Product', 'SKU', sku),
-      );
-    }
-    if (barcode && violatedColumn(error, 'barcode')) {
-      return new BadRequestException(
-        duplicateFieldValue('Product', 'barcode', barcode),
-      );
-    }
-    return error;
   }
 }

@@ -4,10 +4,15 @@ import { StoreModule } from '../store/store.module.js';
 import { AppConfigurationService } from '../app-configuration/app-configuration.service.js';
 import { InventoryController } from './controllers/inventory.controller.js';
 import { InventoryService } from './services/inventory.service.js';
+import { InventoryAdjustmentService } from './services/inventory-adjustment.service.js';
 
 @Module({
   imports: [PrismaModule, StoreModule],
   controllers: [InventoryController],
-  providers: [InventoryService, AppConfigurationService],
+  providers: [
+    InventoryService,
+    InventoryAdjustmentService,
+    AppConfigurationService,
+  ],
 })
 export class InventoryModule {}
