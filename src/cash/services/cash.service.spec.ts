@@ -161,12 +161,38 @@ describe('CashService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
+
+    it('returns "recorded successfully" under transaction lock when clientRequestId already exists', async () => {
+      tx.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
+
+      const res = await service.createOpeningCash(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 50000000,
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Opening cash recorded successfully',
+      });
+      expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('createOwnerInvestment', () => {
-    it('writes one OWNER_INVESTMENT IN row and needs no transaction', async () => {
+    it('locks the shop row and writes one OWNER_INVESTMENT IN row in a transaction', async () => {
       const res = await service.createOwnerInvestment(
-        { amount: 20000000, date: '2026-10-08', notes: 'Restock money' },
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 20000000,
+          date: '2026-10-08',
+          notes: 'Restock money',
+        },
         SHOP_ID,
         USER_ID,
       );
@@ -175,8 +201,9 @@ describe('CashService', () => {
         status: true,
         message: 'Owner investment recorded successfully',
       });
-      expect(prismaStub.$transaction).not.toHaveBeenCalled();
-      expect(prismaStub.cashMovement.create).toHaveBeenCalledWith({
+      expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(tx.cashMovement.create).toHaveBeenCalledWith({
         data: {
           shopId: SHOP_ID,
           type: 'OWNER_INVESTMENT',
@@ -184,16 +211,20 @@ describe('CashService', () => {
           amount: 20000000n,
           movementDate: new Date('2026-10-08'),
           note: 'Restock money',
-          clientRequestId: null,
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
           createdById: USER_ID,
         },
       });
     });
 
     it('defaults the date to the current business day and blanks the note', async () => {
-      await service.createOwnerInvestment({ amount: 100 }, SHOP_ID, USER_ID);
+      await service.createOwnerInvestment(
+        { clientRequestId: '01924f0a-0000-7000-8000-00000000beef', amount: 100 },
+        SHOP_ID,
+        USER_ID,
+      );
 
-      expect(prismaStub.cashMovement.create).toHaveBeenCalledWith(
+      expect(tx.cashMovement.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             movementDate: expect.any(Date),
@@ -201,12 +232,12 @@ describe('CashService', () => {
           }),
         }),
       );
-      const call = prismaStub.cashMovement.create.mock.calls[0][0];
+      const call = tx.cashMovement.create.mock.calls[0][0];
       expect(businessToday(call.data.movementDate)).toBe(businessToday());
     });
 
     it('returns "recorded successfully" without inserting when clientRequestId already exists', async () => {
-      prismaStub.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
+      tx.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
 
       const res = await service.createOwnerInvestment(
         {
@@ -221,11 +252,11 @@ describe('CashService', () => {
         status: true,
         message: 'Owner investment recorded successfully',
       });
-      expect(prismaStub.cashMovement.create).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 
     it('maps racing P2002 on clientRequestId to success', async () => {
-      prismaStub.cashMovement.create.mockRejectedValueOnce(
+      prismaStub.$transaction.mockRejectedValueOnce(
         new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
           code: 'P2002',
           clientVersion: '7.0.0',
@@ -356,8 +387,8 @@ describe('CashService', () => {
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 
-    it('returns "recorded successfully" without opening transaction when clientRequestId already exists', async () => {
-      prismaStub.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
+    it('returns "recorded successfully" under transaction lock when clientRequestId already exists', async () => {
+      tx.cashMovement.findFirst.mockResolvedValueOnce({ id: 'cm-1' });
 
       const res = await service.createOwnerWithdrawal(
         {
@@ -372,7 +403,8 @@ describe('CashService', () => {
         status: true,
         message: 'Owner withdrawal recorded successfully',
       });
-      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 

@@ -412,9 +412,7 @@ export class DashboardInventoryService {
     if (shop?.subscriptionEndsAt) {
       const endsDateStr = shop.subscriptionEndsAt.toISOString().slice(0, 10);
       const days = daysBetween(today, endsDateStr) - 1;
-      if (days <= 7) {
-        subscriptionDaysLeft = Math.max(0, days);
-      }
+      subscriptionDaysLeft = Math.max(0, days);
     }
 
     const result: AttentionResponseDto = {

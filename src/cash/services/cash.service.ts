@@ -54,23 +54,23 @@ export class CashService {
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    if (dto.clientRequestId) {
-      const existing = await this.prisma.cashMovement.findFirst({
-        where: { shopId, clientRequestId: dto.clientRequestId },
-        select: { id: true },
-      });
-      if (existing) {
-        return new StatusBaseResponseDTO(true, CREATED);
-      }
-    }
-
     const amount = BigInt(dto.amount);
     const movementDate = resolveTransactionDate(dto.date);
     const note = dto.notes?.trim() ? dto.notes : null;
 
     try {
-      await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async (tx) => {
         await lockShopForUpdate(tx, shopId);
+
+        if (dto.clientRequestId) {
+          const existing = await tx.cashMovement.findFirst({
+            where: { shopId, clientRequestId: dto.clientRequestId },
+            select: { id: true },
+          });
+          if (existing) {
+            return new StatusBaseResponseDTO(true, CREATED);
+          }
+        }
 
         const existing = await tx.cashMovement.findFirst({
           where: { shopId, type: CashMovementType.OPENING_CASH },
@@ -92,9 +92,9 @@ export class CashService {
             createdById: userId,
           },
         });
-      });
 
-      return new StatusBaseResponseDTO(true, CREATED);
+        return new StatusBaseResponseDTO(true, CREATED);
+      });
     } catch (error) {
       if (
         isUniqueConstraintViolation(error) &&
@@ -111,31 +111,39 @@ export class CashService {
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    if (dto.clientRequestId) {
-      const existing = await this.prisma.cashMovement.findFirst({
-        where: { shopId, clientRequestId: dto.clientRequestId },
-        select: { id: true },
-      });
-      if (existing) {
-        return new StatusBaseResponseDTO(true, INVESTED);
-      }
-    }
+    const amount = BigInt(dto.amount);
+    const movementDate = resolveTransactionDate(dto.date);
+    const note = dto.notes?.trim() ? dto.notes : null;
 
     try {
-      await this.prisma.cashMovement.create({
-        data: {
-          shopId,
-          type: CashMovementType.OWNER_INVESTMENT,
-          direction: CashDirection.IN,
-          amount: BigInt(dto.amount),
-          movementDate: resolveTransactionDate(dto.date),
-          note: dto.notes?.trim() ? dto.notes : null,
-          clientRequestId: dto.clientRequestId ?? null,
-          createdById: userId,
-        },
-      });
+      return await this.prisma.$transaction(async (tx) => {
+        await lockShopForUpdate(tx, shopId);
 
-      return new StatusBaseResponseDTO(true, INVESTED);
+        if (dto.clientRequestId) {
+          const existing = await tx.cashMovement.findFirst({
+            where: { shopId, clientRequestId: dto.clientRequestId },
+            select: { id: true },
+          });
+          if (existing) {
+            return new StatusBaseResponseDTO(true, INVESTED);
+          }
+        }
+
+        await tx.cashMovement.create({
+          data: {
+            shopId,
+            type: CashMovementType.OWNER_INVESTMENT,
+            direction: CashDirection.IN,
+            amount,
+            movementDate,
+            note,
+            clientRequestId: dto.clientRequestId,
+            createdById: userId,
+          },
+        });
+
+        return new StatusBaseResponseDTO(true, INVESTED);
+      });
     } catch (error) {
       if (
         isUniqueConstraintViolation(error) &&
@@ -152,21 +160,21 @@ export class CashService {
     shopId: string,
     userId: string,
   ): Promise<OwnerWithdrawalResult> {
-    if (dto.clientRequestId) {
-      const existing = await this.prisma.cashMovement.findFirst({
-        where: { shopId, clientRequestId: dto.clientRequestId },
-        select: { id: true },
-      });
-      if (existing) {
-        return new StatusBaseResponseDTO(true, WITHDRAWN);
-      }
-    }
-
     const amount = BigInt(dto.amount);
 
     try {
       const outcome = await this.prisma.$transaction(async (tx) => {
         await lockShopForUpdate(tx, shopId);
+
+        if (dto.clientRequestId) {
+          const existing = await tx.cashMovement.findFirst({
+            where: { shopId, clientRequestId: dto.clientRequestId },
+            select: { id: true },
+          });
+          if (existing) {
+            return { kind: 'idempotent' as const };
+          }
+        }
 
         const overdraftProbe = await probeCashOverdraft(
           tx,
