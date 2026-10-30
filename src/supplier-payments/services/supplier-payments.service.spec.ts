@@ -499,8 +499,14 @@ describe('SupplierPaymentsService', () => {
       );
 
       const where = prismaStub.supplierPayment.findMany.mock.calls[0][0].where;
-      expect(where.AND).toHaveLength(3);
-      expect(where.AND[2].OR).toEqual([
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[0]).toEqual({
+        paymentDate: {
+          gte: new Date('2026-10-01T00:00:00.000Z'),
+          lt: new Date('2026-11-01T00:00:00.000Z'),
+        },
+      });
+      expect(where.AND[1].OR).toEqual([
         { supplier: { name: { contains: 'ABC', mode: 'insensitive' } } },
         { notes: { contains: 'ABC', mode: 'insensitive' } },
         {

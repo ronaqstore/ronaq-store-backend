@@ -20,7 +20,7 @@ import { findLoginPhoneConflict } from '../../helpers/login-phone.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
 import { logInfo } from '../../helpers/logger-helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
-import { dateColumnRange } from '../../helpers/date.helper.js';
+import { businessDayRange } from '../../helpers/date.helper.js';
 import {
   getSkipNumber,
   normalizePagination,
@@ -166,13 +166,23 @@ export class PlatformAdminService {
     if (query.subscriptionFrom || query.subscriptionTo) {
       const from = query.subscriptionFrom ?? '1970-01-01';
       const to = query.subscriptionTo ?? '9999-12-31';
-      andParts.push({ subscriptionEndsAt: dateColumnRange(from, to) });
+      andParts.push({
+        subscriptionEndsAt: {
+          gte: businessDayRange(from).start,
+          lt: businessDayRange(to).end,
+        },
+      });
     }
 
     if (query.createdFrom || query.createdTo) {
       const from = query.createdFrom ?? '1970-01-01';
       const to = query.createdTo ?? '9999-12-31';
-      andParts.push({ createdAt: dateColumnRange(from, to) });
+      andParts.push({
+        createdAt: {
+          gte: businessDayRange(from).start,
+          lt: businessDayRange(to).end,
+        },
+      });
     }
 
     const where: Prisma.ShopWhereInput =

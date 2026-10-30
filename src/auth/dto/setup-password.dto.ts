@@ -1,5 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 
 export class SetupPasswordDto {
   @ApiProperty({
@@ -32,11 +38,12 @@ export class SetupPasswordDto {
   @Matches(/\d/, { message: 'password must contain at least one digit' })
   password: string;
 
-  @ApiProperty({
-    description: 'Cloudflare Turnstile token from the setup-password widget.',
+  @ApiPropertyOptional({
+    description:
+      'Cloudflare Turnstile token from the setup-password widget. Required when Turnstile is enabled; omit when disabled.',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Length(1, 2048)
-  turnstileToken: string;
+  turnstileToken?: string;
 }

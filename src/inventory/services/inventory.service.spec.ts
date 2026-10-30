@@ -747,8 +747,8 @@ describe('InventoryService', () => {
       const call = prismaStub.inventoryMovement.findMany.mock.calls[0][0];
       expect(call.where.type).toBe('DAMAGED');
       expect(call.where.AND).toEqual([
-        { createdAt: { gte: new Date('2026-10-01') } },
-        { createdAt: { lte: new Date('2026-10-31') } },
+        { createdAt: { gte: new Date('2026-09-30T19:00:00.000Z') } },
+        { createdAt: { lt: new Date('2026-10-31T19:00:00.000Z') } },
         {
           OR: [
             { product: { name: { contains: 'cable', mode: 'insensitive' } } },

@@ -36,6 +36,7 @@ import {
   isUniqueConstraintViolation,
   uniqueViolationColumns,
 } from '../../helpers/prisma-error-helper.js';
+import { businessDayRange } from '../../helpers/date.helper.js';
 import { PaymentsAllocationService } from './payments-allocation.service.js';
 import { PaymentsCancelService } from './payments-cancel.service.js';
 import { getCustomerReceivable } from '../helpers/customer-receivable.helper.js';
@@ -340,9 +341,16 @@ export class PaymentsService {
     if (query.method) where.method = query.method;
 
     const andFilters: Prisma.PaymentWhereInput[] = [];
-    if (query.from)
-      andFilters.push({ paymentDate: { gte: new Date(query.from) } });
-    if (query.to) andFilters.push({ paymentDate: { lte: new Date(query.to) } });
+    if (query.from) {
+      andFilters.push({
+        paymentDate: { gte: businessDayRange(query.from).start },
+      });
+    }
+    if (query.to) {
+      andFilters.push({
+        paymentDate: { lt: businessDayRange(query.to).end },
+      });
+    }
     const amountFilter = buildAmountRangeFilter(
       query.minAmount,
       query.maxAmount,

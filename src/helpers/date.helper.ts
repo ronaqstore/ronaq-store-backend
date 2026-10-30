@@ -81,7 +81,7 @@ export function periodRange(
     const monday = shiftDays(today, -((dow + 6) % 7));
     return {
       start: businessDayRange(monday).start,
-      end: businessDayRange(shiftDays(monday, 7)).end,
+      end: businessDayRange(shiftDays(monday, 7)).start,
       from: monday,
       to: shiftDays(monday, 6),
     };
@@ -93,7 +93,7 @@ export function periodRange(
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
     return {
       start: businessDayRange(first).start,
-      end: businessDayRange(shiftDays(first, daysInMonth)).end,
+      end: businessDayRange(shiftDays(first, daysInMonth)).start,
       from: first,
       to: shiftDays(first, daysInMonth - 1),
     };

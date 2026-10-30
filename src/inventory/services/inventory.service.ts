@@ -26,6 +26,7 @@ import {
   resourceNotFound,
   unitNotEditable,
 } from '../../errors/error.builder.js';
+import { businessDayRange } from '../../helpers/date.helper.js';
 import { isAppleBrandName } from '../../helpers/device-family.helper.js';
 import type { InventoryAdjustmentOutcome } from './inventory.service.types.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
@@ -224,9 +225,14 @@ export class InventoryService {
     }
 
     const andFilters: Prisma.InventoryMovementWhereInput[] = [];
-    if (query.from)
-      andFilters.push({ createdAt: { gte: new Date(query.from) } });
-    if (query.to) andFilters.push({ createdAt: { lte: new Date(query.to) } });
+    if (query.from) {
+      andFilters.push({
+        createdAt: { gte: businessDayRange(query.from).start },
+      });
+    }
+    if (query.to) {
+      andFilters.push({ createdAt: { lt: businessDayRange(query.to).end } });
+    }
 
     if (query.reason?.trim()) {
       const words = query.reason.trim().split(/\s+/).filter(Boolean);

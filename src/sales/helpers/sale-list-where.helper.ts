@@ -1,4 +1,5 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import { businessDayRange } from '../../helpers/date.helper.js';
 import {
   buildTokenizedSearchAnd,
   splitSearchTokens,
@@ -32,10 +33,10 @@ export function buildSaleListWhere(
 
   const andFilters: Prisma.SaleWhereInput[] = [];
   if (query.from) {
-    andFilters.push({ saleDate: { gte: new Date(query.from) } });
+    andFilters.push({ saleDate: { gte: businessDayRange(query.from).start } });
   }
   if (query.to) {
-    andFilters.push({ saleDate: { lte: new Date(query.to) } });
+    andFilters.push({ saleDate: { lt: businessDayRange(query.to).end } });
   }
   andFilters.push(
     ...buildTokenizedSearchAnd<Prisma.SaleWhereInput>(query.search, (token) => {
@@ -79,10 +80,14 @@ function buildSaleMoneyConditions(
     conditions.push(Prisma.sql`s.status = ${query.status}`);
   }
   if (query.from) {
-    conditions.push(Prisma.sql`s.sale_date >= ${query.from}::date`);
+    conditions.push(
+      Prisma.sql`s.sale_date >= ${businessDayRange(query.from).start}`,
+    );
   }
   if (query.to) {
-    conditions.push(Prisma.sql`s.sale_date <= ${query.to}::date`);
+    conditions.push(
+      Prisma.sql`s.sale_date < ${businessDayRange(query.to).end}`,
+    );
   }
   if (query.minTotalAmount !== undefined) {
     conditions.push(Prisma.sql`s.total_amount >= ${query.minTotalAmount}`);

@@ -1206,7 +1206,7 @@ describe('ProductsService', () => {
 
       expect(prismaStub.product.updateMany).toHaveBeenCalledWith({
         where: { id: 'prod-1', shopId: SHOP_ID },
-        data: { isActive: false },
+        data: { isActive: false, isPublished: false },
       });
     });
 

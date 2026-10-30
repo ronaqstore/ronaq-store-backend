@@ -1,4 +1,5 @@
 import { Prisma } from '../../generated/prisma/client.js';
+import { dateColumnRange } from '../../helpers/date.helper.js';
 import {
   buildTokenizedSearchAnd,
   splitSearchTokens,
@@ -34,11 +35,14 @@ export function buildPurchaseListWhere(
   }
 
   const andFilters: Prisma.PurchaseWhereInput[] = [];
-  if (query.from) {
-    andFilters.push({ purchaseDate: { gte: new Date(query.from) } });
-  }
-  if (query.to) {
-    andFilters.push({ purchaseDate: { lte: new Date(query.to) } });
+  if (query.from || query.to) {
+    const from = query.from ?? query.to;
+    const to = query.to ?? query.from;
+    if (from && to) {
+      const range = dateColumnRange(from, to);
+      andFilters.push({ purchaseDate: { gte: range.gte } });
+      andFilters.push({ purchaseDate: { lt: range.lt } });
+    }
   }
   andFilters.push(
     ...buildTokenizedSearchAnd<Prisma.PurchaseWhereInput>(
@@ -92,11 +96,14 @@ function buildPurchaseMoneyConditions(
   } else if (query.isOpeningStock === false) {
     conditions.push(Prisma.sql`p.is_opening_stock = false`);
   }
-  if (query.from) {
-    conditions.push(Prisma.sql`p.purchase_date >= ${query.from}::date`);
-  }
-  if (query.to) {
-    conditions.push(Prisma.sql`p.purchase_date <= ${query.to}::date`);
+  if (query.from || query.to) {
+    const from = query.from ?? query.to;
+    const to = query.to ?? query.from;
+    if (from && to) {
+      const range = dateColumnRange(from, to);
+      conditions.push(Prisma.sql`p.purchase_date >= ${range.gte}`);
+      conditions.push(Prisma.sql`p.purchase_date < ${range.lt}`);
+    }
   }
   if (query.minTotalAmount !== undefined) {
     conditions.push(Prisma.sql`p.total_amount >= ${query.minTotalAmount}`);

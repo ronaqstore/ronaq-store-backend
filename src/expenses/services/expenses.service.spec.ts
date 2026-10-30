@@ -518,7 +518,13 @@ describe('ExpensesService', () => {
       );
 
       const where = prismaStub.expense.findMany.mock.calls[0][0].where;
-      expect(where.AND).toHaveLength(2);
+      expect(where.AND).toHaveLength(1);
+      expect(where.AND[0]).toEqual({
+        expenseDate: {
+          gte: new Date('2026-10-01T00:00:00.000Z'),
+          lt: new Date('2026-11-01T00:00:00.000Z'),
+        },
+      });
       expect(where.shopId).toBe(SHOP_ID);
     });
   });

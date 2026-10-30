@@ -23,6 +23,7 @@ import {
 } from '../../helpers/paginate-helper.js';
 import { normalizePhoneOrRaw } from '../../helpers/phone.helper.js';
 import {
+  customerOpeningBalanceLocked,
   duplicateFieldValue,
   requiredFieldCannotBeNull,
   resourceNotFound,
@@ -290,6 +291,14 @@ export class CustomersService {
 
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    const existing = await this.prisma.customer.findFirst({
+      where: { id, shopId },
+      select: { id: true, openingBalance: true },
+    });
+    if (!existing) {
+      throw new NotFoundException(resourceNotFound('Customer', id));
+    }
+
     const data: Prisma.CustomerUpdateManyMutationInput = {};
     if (dto.name !== undefined) {
       if (dto.name === null) {
@@ -312,7 +321,24 @@ export class CustomersService {
     }
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.openingBalance !== undefined) {
-      data.openingBalance = BigInt(dto.openingBalance);
+      const nextOpening = BigInt(dto.openingBalance);
+      if (nextOpening !== existing.openingBalance) {
+        const [saleCount, paymentCount, returnCount] = await Promise.all([
+          this.prisma.sale.count({
+            where: { shopId, customerId: id, status: RecordStatus.ACTIVE },
+          }),
+          this.prisma.payment.count({
+            where: { shopId, customerId: id, status: RecordStatus.ACTIVE },
+          }),
+          this.prisma.saleReturn.count({
+            where: { shopId, customerId: id, status: RecordStatus.ACTIVE },
+          }),
+        ]);
+        if (saleCount > 0 || paymentCount > 0 || returnCount > 0) {
+          throw new BadRequestException(customerOpeningBalanceLocked());
+        }
+      }
+      data.openingBalance = nextOpening;
     }
 
     const result = await this.prisma.customer.updateMany({

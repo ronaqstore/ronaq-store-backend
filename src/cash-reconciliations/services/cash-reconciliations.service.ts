@@ -56,6 +56,7 @@ export class CashReconciliationsService {
 
     const reason = dto.reason?.trim() ? dto.reason : null;
 
+    let alreadySaved = false;
     try {
       await this.prisma.$transaction(async (tx) => {
         const shop = await tx.$queryRaw<Array<{ id: string }>>`
@@ -70,6 +71,7 @@ export class CashReconciliationsService {
           select: { id: true },
         });
         if (already) {
+          alreadySaved = true;
           return;
         }
 
@@ -121,6 +123,9 @@ export class CashReconciliationsService {
       throw error;
     }
 
+    if (alreadySaved) {
+      return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+    }
     return new StatusBaseResponseDTO(true, CREATED);
   }
 

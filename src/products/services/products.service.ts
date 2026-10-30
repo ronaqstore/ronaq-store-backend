@@ -382,9 +382,16 @@ export class ProductsService {
     if (dto.lowStockThreshold !== undefined) {
       data.lowStockThreshold = dto.lowStockThreshold;
     }
-    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.isActive !== undefined) {
+      data.isActive = dto.isActive;
+      if (dto.isActive === false) {
+        data.isPublished = false;
+      }
+    }
 
-    if (dto.isPublished !== undefined) data.isPublished = dto.isPublished;
+    if (dto.isPublished !== undefined && dto.isActive !== false) {
+      data.isPublished = dto.isPublished;
+    }
     if (dto.publicDescription !== undefined) {
       data.publicDescription =
         dto.publicDescription === null
@@ -451,7 +458,7 @@ export class ProductsService {
   ): Promise<StatusBaseResponseDTO> {
     const result = await this.prisma.product.updateMany({
       where: { id, shopId },
-      data: { isActive: false },
+      data: { isActive: false, isPublished: false },
     });
     if (result.count === 0) {
       throw new NotFoundException(resourceNotFound('Product', id));

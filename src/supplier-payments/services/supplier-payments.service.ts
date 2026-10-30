@@ -40,6 +40,7 @@ import {
   stripDocSearchPrefix,
 } from '../../helpers/tokenized-search.helper.js';
 import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
+import { dateColumnRange } from '../../helpers/date.helper.js';
 import {
   paymentExceedsOutstanding,
   resourceNotFound,
@@ -218,9 +219,14 @@ export class SupplierPaymentsService {
     if (query.status) where.status = query.status;
 
     const andFilters: Prisma.SupplierPaymentWhereInput[] = [];
-    if (query.from)
-      andFilters.push({ paymentDate: { gte: new Date(query.from) } });
-    if (query.to) andFilters.push({ paymentDate: { lte: new Date(query.to) } });
+    if (query.from || query.to) {
+      const from = query.from ?? query.to;
+      const to = query.to ?? query.from;
+      if (from && to) {
+        const range = dateColumnRange(from, to);
+        andFilters.push({ paymentDate: { gte: range.gte, lt: range.lt } });
+      }
+    }
     const amountFilter = buildAmountRangeFilter(
       query.minAmount,
       query.maxAmount,

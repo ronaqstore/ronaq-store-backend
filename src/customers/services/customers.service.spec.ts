@@ -18,9 +18,9 @@ const prismaStub = {
   user: { findFirst: jest.fn() },
   platformAdmin: { findFirst: jest.fn() },
   supplier: { findFirst: jest.fn() },
-  sale: { findMany: jest.fn(), groupBy: jest.fn() },
-  payment: { findMany: jest.fn(), groupBy: jest.fn() },
-  saleReturn: { findMany: jest.fn(), groupBy: jest.fn() },
+  sale: { findMany: jest.fn(), groupBy: jest.fn(), count: jest.fn() },
+  payment: { findMany: jest.fn(), groupBy: jest.fn(), count: jest.fn() },
+  saleReturn: { findMany: jest.fn(), groupBy: jest.fn(), count: jest.fn() },
   refund: { findMany: jest.fn() },
   $transaction: jest.fn(),
   $queryRaw: jest.fn(),
@@ -52,6 +52,9 @@ describe('CustomersService', () => {
     prismaStub.sale.groupBy.mockResolvedValue([]);
     prismaStub.payment.groupBy.mockResolvedValue([]);
     prismaStub.saleReturn.groupBy.mockResolvedValue([]);
+    prismaStub.sale.count.mockResolvedValue(0);
+    prismaStub.payment.count.mockResolvedValue(0);
+    prismaStub.saleReturn.count.mockResolvedValue(0);
     prismaStub.refund.findMany.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -284,7 +287,7 @@ describe('CustomersService', () => {
 
   describe('updateCustomer', () => {
     it('throws 404 when the row is missing or owned by another shop', async () => {
-      prismaStub.customer.updateMany.mockResolvedValue({ count: 0 });
+      prismaStub.customer.findFirst.mockResolvedValue(null);
 
       await expect(
         service.updateCustomer(
@@ -297,6 +300,7 @@ describe('CustomersService', () => {
     });
 
     it('only sends the fields that were provided', async () => {
+      prismaStub.customer.findFirst.mockResolvedValue(customerRow());
       prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 
       await service.updateCustomer(
@@ -313,6 +317,7 @@ describe('CustomersService', () => {
     });
 
     it('updates the opening balance when it is sent (WF1 day-0 correction)', async () => {
+      prismaStub.customer.findFirst.mockResolvedValue(customerRow());
       prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 
       await service.updateCustomer(
@@ -328,7 +333,23 @@ describe('CustomersService', () => {
       });
     });
 
+    it('rejects opening balance edits after ledger activity', async () => {
+      prismaStub.customer.findFirst.mockResolvedValue(customerRow());
+      prismaStub.sale.count.mockResolvedValue(1);
+
+      await expect(
+        service.updateCustomer(
+          'cust-1',
+          { openingBalance: 0 },
+          'shop-1',
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.customer.updateMany).not.toHaveBeenCalled();
+    });
+
     it('leaves the opening balance alone when it is omitted', async () => {
+      prismaStub.customer.findFirst.mockResolvedValue(customerRow());
       prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 
       await service.updateCustomer(
@@ -348,6 +369,8 @@ describe('CustomersService', () => {
     });
 
     it('rejects a null name with 400 instead of crashing', async () => {
+      prismaStub.customer.findFirst.mockResolvedValue(customerRow());
+
       await expect(
         service.updateCustomer(
           'cust-1',
@@ -363,6 +386,7 @@ describe('CustomersService', () => {
     it.each([['phone'], ['address'], ['notes']])(
       'clears %s when it is sent as null',
       async (field) => {
+        prismaStub.customer.findFirst.mockResolvedValue(customerRow());
         prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 
         await service.updateCustomer(
@@ -382,6 +406,7 @@ describe('CustomersService', () => {
     it.each([['address'], ['notes']])(
       'clears %s to null when it is sent as empty or whitespace string',
       async (field) => {
+        prismaStub.customer.findFirst.mockResolvedValue(customerRow());
         prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 
         await service.updateCustomer(
@@ -399,6 +424,9 @@ describe('CustomersService', () => {
     );
 
     it('normalises an updated phone to E.164', async () => {
+      prismaStub.customer.findFirst
+        .mockResolvedValueOnce(customerRow())
+        .mockResolvedValueOnce(null);
       prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 
       await service.updateCustomer(

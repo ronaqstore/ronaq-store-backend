@@ -21,6 +21,16 @@ export const supplierOpeningBalanceLocked = (): ErrorResponseDTO => {
   );
 };
 
+export const customerOpeningBalanceLocked = (): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'Cannot change opening balance',
+    [
+      'This customer already has sales, payments, or returns on the ledger, so the opening balance can no longer be edited. Correct the balance with a sale, payment, or return instead of changing the opening figure.',
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const invalidReportRange = (
   from: string,
   to: string,

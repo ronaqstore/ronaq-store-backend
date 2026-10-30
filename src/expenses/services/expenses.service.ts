@@ -30,7 +30,10 @@ import {
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
-import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  dateColumnRange,
+  resolveTransactionDate,
+} from '../../helpers/date.helper.js';
 import {
   isUniqueConstraintViolation,
   violatedColumn,
@@ -267,9 +270,14 @@ export class ExpensesService {
     if (query.status) where.status = query.status;
 
     const andFilters: Prisma.ExpenseWhereInput[] = [];
-    if (query.from)
-      andFilters.push({ expenseDate: { gte: new Date(query.from) } });
-    if (query.to) andFilters.push({ expenseDate: { lte: new Date(query.to) } });
+    if (query.from || query.to) {
+      const from = query.from ?? query.to;
+      const to = query.to ?? query.from;
+      if (from && to) {
+        const range = dateColumnRange(from, to);
+        andFilters.push({ expenseDate: { gte: range.gte, lt: range.lt } });
+      }
+    }
     const amountFilter = buildAmountRangeFilter(
       query.minAmount,
       query.maxAmount,

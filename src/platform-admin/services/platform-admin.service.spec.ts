@@ -632,14 +632,14 @@ describe('PlatformAdminService', () => {
             AND: expect.arrayContaining([
               {
                 subscriptionEndsAt: {
-                  gte: new Date('2026-10-01T00:00:00.000Z'),
-                  lt: new Date('2026-11-01T00:00:00.000Z'),
+                  gte: new Date('2026-09-30T19:00:00.000Z'),
+                  lt: new Date('2026-10-31T19:00:00.000Z'),
                 },
               },
               {
                 createdAt: {
-                  gte: new Date('2026-01-01T00:00:00.000Z'),
-                  lt: new Date('2026-02-01T00:00:00.000Z'),
+                  gte: new Date('2025-12-31T19:00:00.000Z'),
+                  lt: new Date('2026-01-31T19:00:00.000Z'),
                 },
               },
             ]),
