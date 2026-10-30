@@ -130,4 +130,35 @@ describe('InventoryController', () => {
       ),
     ).rejects.toThrow('Failed to record inventory adjustment');
   });
+
+  it('updates unit metadata via updateUnit', async () => {
+    const mockUnit = {
+      id: '01924f0a-0000-7000-8000-000000000001',
+      productId: '01924f0a-0000-7000-8000-000000000101',
+      imei1: '123456789012345',
+      imei2: null,
+      condition: 'NEW' as const,
+      status: 'IN_STOCK' as const,
+      unitCost: 5000000,
+      batteryHealth: 99,
+      askingPrice: 5500000,
+      defectNotes: null,
+      effectivePrice: 5500000,
+      createdAt: new Date(),
+    };
+    jest
+      .spyOn(inventoryService, 'updateUnit')
+      .mockResolvedValue(mockUnit as any);
+
+    const body = await controller.updateUnit(
+      '01924f0a-0000-7000-8000-000000000001',
+      { askingPrice: 5500000 },
+      { user: { shopId: 'shop-1' } } as any,
+    );
+
+    expect(body).toEqual({
+      message: 'Inventory unit updated successfully',
+      data: mockUnit,
+    });
+  });
 });

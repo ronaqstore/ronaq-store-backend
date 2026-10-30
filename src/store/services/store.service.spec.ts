@@ -311,6 +311,32 @@ describe('StoreService (owner surface)', () => {
         data: { phoneNumber: '03001234567' },
       });
     });
+
+    it('clears optional fields to null when sent as null or whitespace', async () => {
+      prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
+      prisma.shopStoreSettings.update.mockResolvedValue(settingsRow);
+
+      await service.updateSettings(
+        {
+          about: null,
+          bannerUrl: null,
+          address: '   ',
+          facebookUrl: null,
+        },
+        'shop-1',
+        'user-1',
+      );
+
+      expect(prisma.shopStoreSettings.update).toHaveBeenCalledWith({
+        where: { shopId: 'shop-1' },
+        data: expect.objectContaining({
+          about: null,
+          bannerUrl: null,
+          address: null,
+          facebookUrl: null,
+        }),
+      });
+    });
   });
 
   describe('changeStoreSlug (platform admin only)', () => {

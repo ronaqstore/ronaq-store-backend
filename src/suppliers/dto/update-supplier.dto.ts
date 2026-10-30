@@ -22,16 +22,16 @@ export class UpdateSupplierDto {
   name?: string;
 
   @OptionalSupplierPhoneProperty()
-  phone?: string;
+  phone?: string | null;
 
   @OptionalSupplierCnicProperty()
-  cnic?: string;
+  cnic?: string | null;
 
   @OptionalSupplierAddressProperty()
-  address?: string;
+  address?: string | null;
 
   @OptionalSupplierNotesProperty()
-  notes?: string;
+  notes?: string | null;
 
   @OptionalSupplierOpeningBalanceProperty(
     'Correction to the Day-0 owed amount, in PAISA. Cannot be negative.',

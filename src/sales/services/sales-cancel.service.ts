@@ -25,9 +25,15 @@ import { lockShopForUpdate } from '../../helpers/shop-lock.helper.js';
 import {
   cancelledRowMutationForbidden,
   resourceNotFound,
+  saleCancelImeiAlreadyInStock,
   saleCancelUnitNotSold,
   saleHasReturns,
 } from '../../errors/error.builder.js';
+import {
+  assertImeiNotInStock,
+  findConflictingInStockUnit,
+} from '../../helpers/inventory-imei.helper.js';
+import { isImeiUniqueViolation } from '../../helpers/prisma-error-helper.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -242,7 +248,9 @@ export class SalesCancelService {
             inventoryUnitId: true,
             quantity: true,
             product: { select: { name: true } },
-            inventoryUnit: { select: { imei1: true, status: true } },
+            inventoryUnit: {
+              select: { imei1: true, imei2: true, status: true },
+            },
           },
         },
       },
@@ -290,13 +298,30 @@ export class SalesCancelService {
           imei: unit.imei1,
           quantityChange: 1,
         });
-        if (!blocked && unit.status !== UnitStatus.SOLD) {
-          blocked = true;
-          blockedReason = saleCancelUnitNotSold(
-            sale.saleNo,
-            unit.imei1,
-            unit.status,
-          ).message.join(' ');
+        if (!blocked) {
+          if (unit.status !== UnitStatus.SOLD) {
+            blocked = true;
+            blockedReason = saleCancelUnitNotSold(
+              sale.saleNo,
+              unit.imei1,
+              unit.status,
+            ).message.join(' ');
+          } else {
+            const conflict = await findConflictingInStockUnit(
+              this.prisma,
+              shopId,
+              item.inventoryUnitId,
+              unit.imei1,
+              unit.imei2,
+            );
+            if (conflict) {
+              blocked = true;
+              blockedReason = saleCancelImeiAlreadyInStock(
+                sale.saleNo,
+                unit.imei1,
+              ).message.join(' ');
+            }
+          }
         }
       } else {
         stockItems.push({
@@ -390,9 +415,14 @@ export class SalesCancelService {
     reason: string,
   ): Promise<void> {
     const locked = await tx.$queryRaw<
-      Array<{ id: string; status: string; imei1: string }>
+      Array<{
+        id: string;
+        status: string;
+        imei1: string;
+        imei2: string | null;
+      }>
     >`
-      SELECT id, status, imei1 FROM inventory_units
+      SELECT id, status, imei1, imei2 FROM inventory_units
       WHERE id = ${unitId} AND shop_id = ${shopId}
       FOR UPDATE
     `;
@@ -406,18 +436,37 @@ export class SalesCancelService {
       );
     }
 
-    const updated = await tx.$queryRaw<Array<{ id: string }>>`
-      UPDATE inventory_units
-      SET status = ${UnitStatus.IN_STOCK}::"UnitStatus", updated_at = now()
-      WHERE id = ${unitId}::uuid
-        AND shop_id = ${shopId}::uuid
-        AND status = ${UnitStatus.SOLD}::"UnitStatus"
-      RETURNING id
-    `;
-    if (!updated?.length) {
-      throw new BadRequestException(
-        saleCancelUnitNotSold(saleNo, unit.imei1, unit.status),
-      );
+    await assertImeiNotInStock(
+      tx,
+      shopId,
+      unit.id,
+      unit.imei1,
+      unit.imei2,
+      (imei) =>
+        new BadRequestException(saleCancelImeiAlreadyInStock(saleNo, imei)),
+    );
+
+    try {
+      const updated = await tx.$queryRaw<Array<{ id: string }>>`
+        UPDATE inventory_units
+        SET status = ${UnitStatus.IN_STOCK}::"UnitStatus", updated_at = now()
+        WHERE id = ${unitId}::uuid
+          AND shop_id = ${shopId}::uuid
+          AND status = ${UnitStatus.SOLD}::"UnitStatus"
+        RETURNING id
+      `;
+      if (!updated?.length) {
+        throw new BadRequestException(
+          saleCancelUnitNotSold(saleNo, unit.imei1, unit.status),
+        );
+      }
+    } catch (error) {
+      if (isImeiUniqueViolation(error)) {
+        throw new BadRequestException(
+          saleCancelImeiAlreadyInStock(saleNo, unit.imei1),
+        );
+      }
+      throw error;
     }
     await tx.inventoryMovement.create({
       data: {

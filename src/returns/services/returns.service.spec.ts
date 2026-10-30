@@ -28,6 +28,7 @@ const prismaStub = {
   refund: { aggregate: jest.fn() },
   returnItem: { findMany: jest.fn() },
   cashMovement: { aggregate: jest.fn() },
+  inventoryUnit: { findFirst: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -83,7 +84,7 @@ interface TxStub {
   payment: { aggregate: jest.Mock };
   refund: { create: jest.Mock; aggregate: jest.Mock; findMany: jest.Mock };
   cashMovement: { create: jest.Mock; aggregate: jest.Mock };
-  inventoryUnit: { update: jest.Mock };
+  inventoryUnit: { update: jest.Mock; findFirst: jest.Mock };
   inventoryMovement: { create: jest.Mock };
   stockLevel: { update: jest.Mock; create: jest.Mock };
 }
@@ -137,7 +138,10 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         }),
       ),
     },
-    inventoryUnit: { update: jest.fn().mockResolvedValue({}) },
+    inventoryUnit: {
+      update: jest.fn().mockResolvedValue({}),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     inventoryMovement: { create: jest.fn().mockResolvedValue({ id: 'm-1' }) },
     stockLevel: {
       update: jest.fn().mockResolvedValue({}),
@@ -216,6 +220,7 @@ describe('ReturnsService', () => {
     prismaStub.sale.findFirst.mockResolvedValue(saleRow());
     prismaStub.saleReturn.findFirst.mockResolvedValue(null);
     prismaStub.returnItem.findMany.mockResolvedValue([]);
+    prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
     primeSettlement(tx, { paid: 9000000n });
     prismaStub.cashMovement.aggregate.mockImplementation((args: any) =>
       Promise.resolve({
@@ -404,6 +409,25 @@ describe('ReturnsService', () => {
         status: 'DAMAGED',
       };
       prismaStub.sale.findFirst.mockResolvedValue(broken);
+
+      await expect(
+        service.previewReturn(
+          SALE_ID,
+          previewRequest({
+            items: [{ saleItemId: PHONE_ITEM_ID, condition: 'GOOD' }],
+          }),
+          SHOP_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a phone when another active unit with the same IMEI is already IN_STOCK', async () => {
+      prismaStub.sale.findFirst.mockResolvedValue(saleRow());
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue({
+        id: 'unit-other',
+        imei1: IMEI,
+        imei2: null,
+      });
 
       await expect(
         service.previewReturn(

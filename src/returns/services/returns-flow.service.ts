@@ -20,10 +20,13 @@ import {
   resourceNotFound,
   returnQuantityExceedsRemaining,
   returnQuantityRequired,
+  returnImeiAlreadyInStock,
   unitAlreadyReturned,
   unitNotSoldForReturn,
   unwantedReturnItemField,
 } from '../../errors/error.builder.js';
+import { assertImeiNotInStock } from '../../helpers/inventory-imei.helper.js';
+import { isImeiUniqueViolation } from '../../helpers/prisma-error-helper.js';
 import {
   SALE_RETURN_SELECT,
   type SaleForReturn,
@@ -158,7 +161,8 @@ export class ReturnsFlowService {
       }
     }
 
-    return chosen.map((c) => {
+    const lines: PreparedReturnLine[] = [];
+    for (const c of chosen) {
       const saleItem = byId.get(c.saleItemId);
       if (!saleItem) {
         throw new NotFoundException(
@@ -182,7 +186,16 @@ export class ReturnsFlowService {
             unitNotSoldForReturn(sale.saleNo, unit.imei1, unit.status),
           );
         }
-        return {
+        await assertImeiNotInStock(
+          db,
+          shopId,
+          saleItem.inventoryUnitId,
+          unit.imei1,
+          unit.imei2,
+          (imei) =>
+            new BadRequestException(returnImeiAlreadyInStock(sale.saleNo, imei)),
+        );
+        lines.push({
           saleItemId: c.saleItemId,
           productId: saleItem.productId,
           productName: saleItem.product.name,
@@ -191,19 +204,21 @@ export class ReturnsFlowService {
           unitPrice: saleItem.unitPrice,
           quantity: c.quantity,
           condition: c.condition,
-        };
+        });
+      } else {
+        lines.push({
+          saleItemId: c.saleItemId,
+          productId: saleItem.productId,
+          productName: saleItem.product.name,
+          inventoryUnitId: null,
+          imei: null,
+          unitPrice: saleItem.unitPrice,
+          quantity: c.quantity,
+          condition: c.condition,
+        });
       }
-      return {
-        saleItemId: c.saleItemId,
-        productId: saleItem.productId,
-        productName: saleItem.product.name,
-        inventoryUnitId: null,
-        imei: null,
-        unitPrice: saleItem.unitPrice,
-        quantity: c.quantity,
-        condition: c.condition,
-      };
-    });
+    }
+    return lines;
   }
 
   async settle(
@@ -267,9 +282,14 @@ export class ReturnsFlowService {
   ): Promise<void> {
     if (line.inventoryUnitId) {
       const locked = await tx.$queryRaw<
-        Array<{ id: string; status: string; imei1: string }>
+        Array<{
+          id: string;
+          status: string;
+          imei1: string;
+          imei2: string | null;
+        }>
       >`
-        SELECT id, status, imei1 FROM inventory_units
+        SELECT id, status, imei1, imei2 FROM inventory_units
         WHERE id = ${line.inventoryUnitId} AND shop_id = ${shopId}
         FOR UPDATE
       `;
@@ -285,18 +305,37 @@ export class ReturnsFlowService {
         );
       }
 
-      const updated = await tx.$queryRaw<Array<{ id: string }>>`
-        UPDATE inventory_units
-        SET status = ${UnitStatus.IN_STOCK}::"UnitStatus", updated_at = now()
-        WHERE id = ${unit.id}::uuid
-          AND shop_id = ${shopId}::uuid
-          AND status = ${UnitStatus.SOLD}::"UnitStatus"
-        RETURNING id
-      `;
-      if (!updated?.length) {
-        throw new BadRequestException(
-          unitNotSoldForReturn(sale.saleNo, unit.imei1, unit.status),
-        );
+      await assertImeiNotInStock(
+        tx,
+        shopId,
+        unit.id,
+        unit.imei1,
+        unit.imei2,
+        (imei) =>
+          new BadRequestException(returnImeiAlreadyInStock(sale.saleNo, imei)),
+      );
+
+      try {
+        const updated = await tx.$queryRaw<Array<{ id: string }>>`
+          UPDATE inventory_units
+          SET status = ${UnitStatus.IN_STOCK}::"UnitStatus", updated_at = now()
+          WHERE id = ${unit.id}::uuid
+            AND shop_id = ${shopId}::uuid
+            AND status = ${UnitStatus.SOLD}::"UnitStatus"
+          RETURNING id
+        `;
+        if (!updated?.length) {
+          throw new BadRequestException(
+            unitNotSoldForReturn(sale.saleNo, unit.imei1, unit.status),
+          );
+        }
+      } catch (error) {
+        if (isImeiUniqueViolation(error)) {
+          throw new BadRequestException(
+            returnImeiAlreadyInStock(sale.saleNo, unit.imei1),
+          );
+        }
+        throw error;
       }
       await tx.inventoryMovement.create({
         data: {

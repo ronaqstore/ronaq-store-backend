@@ -87,7 +87,7 @@ export class PurchasesWriteService {
       const inUse = await this.prisma.inventoryUnit.findFirst({
         where: {
           shopId,
-          status: { not: UnitStatus.VOIDED },
+          status: UnitStatus.IN_STOCK,
           OR: [{ imei1: { in: values } }, { imei2: { in: values } }],
         },
         select: { imei1: true, imei2: true },

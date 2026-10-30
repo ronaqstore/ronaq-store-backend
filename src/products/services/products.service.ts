@@ -78,15 +78,18 @@ export class ProductsService {
       dto.trackingType === 'SERIALIZED' ? (dto.ptaStatus ?? null) : null;
     const authenticity = dto.authenticity ?? null;
 
-    await assertNoDuplicateVariant(this.prisma, shopId, {
-      name,
-      model,
-      color,
-      ram,
-      storage,
-      ptaStatus,
-      authenticity,
-    });
+    if (willBeActive) {
+      await assertNoDuplicateVariant(this.prisma, shopId, {
+        brandId: dto.brandId,
+        name,
+        model,
+        color,
+        ram,
+        storage,
+        ptaStatus,
+        authenticity,
+      });
+    }
 
     let createdProductId = '';
     try {
@@ -217,8 +220,6 @@ export class ProductsService {
     }
 
     const newName = dto.name?.trim();
-    const newSku = dto.sku?.trim();
-    const newBarcode = dto.barcode?.trim();
 
     if (dto.categoryId !== undefined) {
       await this.assertCategoryOwned(dto.categoryId, shopId);
@@ -260,16 +261,31 @@ export class ProductsService {
       dto.ptaStatus !== undefined ? dto.ptaStatus : existing.ptaStatus;
     this.assertPtaForBrand(brandName, nextPta, nextTrackingForPta);
 
+    const nextBrandId = dto.brandId ?? existing.brandId;
     const nextName = newName ?? existing.name;
     const nextModel =
-      dto.model !== undefined ? dto.model?.trim() || null : existing.model;
+      dto.model !== undefined
+        ? dto.model === null
+          ? null
+          : dto.model.trim() || null
+        : existing.model;
     const nextColor =
-      dto.color !== undefined ? dto.color?.trim() || null : existing.color;
+      dto.color !== undefined
+        ? dto.color === null
+          ? null
+          : dto.color.trim() || null
+        : existing.color;
     const nextRam =
-      dto.ram !== undefined ? dto.ram?.trim() || null : existing.ram;
+      dto.ram !== undefined
+        ? dto.ram === null
+          ? null
+          : dto.ram.trim() || null
+        : existing.ram;
     const nextStorage =
       dto.storage !== undefined
-        ? dto.storage?.trim() || null
+        ? dto.storage === null
+          ? null
+          : dto.storage.trim() || null
         : existing.storage;
     const nextAuthenticity =
       dto.authenticity !== undefined
@@ -290,7 +306,12 @@ export class ProductsService {
         ? (existing.ptaStatus ?? null)
         : null;
 
+    const brandChanged = existing.brandId !== nextBrandId;
+    const reactivating = !existing.isActive && willBeActive;
+
     const variantChanged =
+      brandChanged ||
+      reactivating ||
       normStr(nextName) !== normStr(existing.name) ||
       normStr(nextModel) !== normStr(existing.model) ||
       normStr(nextColor) !== normStr(existing.color) ||
@@ -300,11 +321,12 @@ export class ProductsService {
       (existing.authenticity ?? null) !== (nextAuthenticity ?? null) ||
       trackingTypeChanges;
 
-    if (variantChanged) {
+    if (variantChanged && willBeActive) {
       await assertNoDuplicateVariant(
         this.prisma,
         shopId,
         {
+          brandId: nextBrandId,
           name: nextName,
           model: nextModel,
           color: nextColor,
@@ -326,16 +348,32 @@ export class ProductsService {
       data.brand = { connect: { id: dto.brandId } };
     }
     if (dto.trackingType !== undefined) data.trackingType = dto.trackingType;
-    if (dto.model !== undefined) data.model = dto.model?.trim() || null;
-    if (dto.color !== undefined) data.color = dto.color?.trim() || null;
-    if (dto.ram !== undefined) data.ram = dto.ram?.trim() || null;
-    if (dto.storage !== undefined) data.storage = dto.storage?.trim() || null;
-    if (newSku !== undefined) data.sku = newSku || null;
-    if (newBarcode !== undefined) data.barcode = newBarcode || null;
-    if (dto.description !== undefined)
-      data.description = dto.description?.trim() || null;
-    if (dto.imageUrl !== undefined)
-      data.imageUrl = dto.imageUrl?.trim() || null;
+    if (dto.model !== undefined) {
+      data.model = dto.model === null ? null : dto.model.trim() || null;
+    }
+    if (dto.color !== undefined) {
+      data.color = dto.color === null ? null : dto.color.trim() || null;
+    }
+    if (dto.ram !== undefined) {
+      data.ram = dto.ram === null ? null : dto.ram.trim() || null;
+    }
+    if (dto.storage !== undefined) {
+      data.storage = dto.storage === null ? null : dto.storage.trim() || null;
+    }
+    if (dto.sku !== undefined) {
+      data.sku = dto.sku === null ? null : dto.sku.trim() || null;
+    }
+    if (dto.barcode !== undefined) {
+      data.barcode = dto.barcode === null ? null : dto.barcode.trim() || null;
+    }
+    if (dto.description !== undefined) {
+      data.description =
+        dto.description === null ? null : dto.description.trim() || null;
+    }
+    if (dto.imageUrl !== undefined) {
+      data.imageUrl =
+        dto.imageUrl === null ? null : dto.imageUrl.trim() || null;
+    }
     if (dto.defaultPurchasePrice !== undefined) {
       data.defaultPurchasePrice = dto.defaultPurchasePrice;
     }
@@ -349,7 +387,10 @@ export class ProductsService {
 
     if (dto.isPublished !== undefined) data.isPublished = dto.isPublished;
     if (dto.publicDescription !== undefined) {
-      data.publicDescription = dto.publicDescription?.trim() || null;
+      data.publicDescription =
+        dto.publicDescription === null
+          ? null
+          : dto.publicDescription.trim() || null;
     }
     if (dto.ptaStatus !== undefined) {
       data.ptaStatus = nextTracking === 'SERIALIZED' ? dto.ptaStatus : null;
@@ -389,7 +430,14 @@ export class ProductsService {
         }
       });
     } catch (error) {
-      throw this.mapDuplicate(error, newSku, newBarcode, nextName);
+      throw this.mapDuplicate(
+        error,
+        data.sku !== undefined ? (data.sku as string | null) : undefined,
+        data.barcode !== undefined
+          ? (data.barcode as string | null)
+          : undefined,
+        nextName,
+      );
     }
 
     this.storefrontRevalidate.invalidateShopById(shopId);

@@ -1,5 +1,6 @@
 import { Prisma } from '../generated/prisma/client.js';
 import {
+  isImeiUniqueViolation,
   isUniqueConstraintViolation,
   uniqueViolationColumns,
   violatedColumn,
@@ -100,6 +101,61 @@ describe('prisma-error-helper', () => {
 
     it('is false for errors that are not unique violations', () => {
       expect(violatedColumn(new Error('boom'), 'sku')).toBe(false);
+    });
+  });
+
+  describe('isImeiUniqueViolation', () => {
+    it('detects P2002 on imei target', () => {
+      expect(isImeiUniqueViolation(known({ target: ['shop_id', 'imei1'] }))).toBe(
+        true,
+      );
+      expect(isImeiUniqueViolation(known({ target: ['shop_id', 'imei2'] }))).toBe(
+        true,
+      );
+      expect(
+        isImeiUniqueViolation(
+          adapterViolation('inventory_units_shop_id_imei1_key'),
+        ),
+      ).toBe(true);
+      expect(
+        isImeiUniqueViolation(adapterViolation('products_shop_id_sku_key')),
+      ).toBe(false);
+    });
+
+    it('detects P2010 raw query failure with 23505 or imei error message', () => {
+      const p2010Meta = new Prisma.PrismaClientKnownRequestError(
+        'Raw query failed',
+        {
+          code: 'P2010',
+          clientVersion: '7.0.0',
+          meta: { code: '23505', message: 'duplicate key' },
+        },
+      );
+      expect(isImeiUniqueViolation(p2010Meta)).toBe(true);
+
+      const p2010Trigger = new Prisma.PrismaClientKnownRequestError(
+        'Raw query failed: IMEI already exists in this shop',
+        {
+          code: 'P2010',
+          clientVersion: '7.0.0',
+          meta: {},
+        },
+      );
+      expect(isImeiUniqueViolation(p2010Trigger)).toBe(true);
+
+      const p2010Other = new Prisma.PrismaClientKnownRequestError(
+        'Raw query failed: syntax error',
+        {
+          code: 'P2010',
+          clientVersion: '7.0.0',
+          meta: { code: '42601' },
+        },
+      );
+      expect(isImeiUniqueViolation(p2010Other)).toBe(false);
+    });
+
+    it('returns false for non-Prisma errors', () => {
+      expect(isImeiUniqueViolation(new Error('something else'))).toBe(false);
     });
   });
 });

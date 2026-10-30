@@ -6,6 +6,8 @@ export {
   Get,
   HttpException,
   InternalServerErrorException,
+  Param,
+  Patch,
   Post,
   Query,
   Req,

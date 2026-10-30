@@ -49,7 +49,7 @@ class IsPkMobileConstraint implements ValidatorConstraintInterface {
 
 export function OptionalSupplierPhoneProperty(example: string = '03001234567') {
   return applyDecorators(
-    ApiPropertyOptional({ example }),
+    ApiPropertyOptional({ example, nullable: true }),
     Transform(({ value }) => {
       if (typeof value !== 'string') return value;
       const trimmed = value.trim();
@@ -57,6 +57,7 @@ export function OptionalSupplierPhoneProperty(example: string = '03001234567') {
       return normalizePhone(trimmed) ?? normalizePhoneOrRaw(trimmed);
     }),
     IsOptional(),
+    ValidateIf((_, val) => val !== null && val !== undefined),
     IsString(),
     Length(1, 30),
     Validate(IsPkMobileConstraint),
@@ -87,11 +88,13 @@ export function OptionalSupplierAddressProperty() {
     ApiPropertyOptional({
       example: 'Suite 4, Hall Road, Lahore',
       maxLength: 300,
+      nullable: true,
     }),
     Transform(({ value }) =>
       typeof value === 'string' ? value.trim() : value,
     ),
     IsOptional(),
+    ValidateIf((_, val) => val !== null && val !== undefined),
     IsString(),
     Length(0, 300),
   );
@@ -102,11 +105,13 @@ export function OptionalSupplierNotesProperty() {
     ApiPropertyOptional({
       example: 'Only sells original chargers',
       maxLength: 1000,
+      nullable: true,
     }),
     Transform(({ value }) =>
       typeof value === 'string' ? value.trim() : value,
     ),
     IsOptional(),
+    ValidateIf((_, val) => val !== null && val !== undefined),
     IsString(),
     Length(0, 1000),
   );

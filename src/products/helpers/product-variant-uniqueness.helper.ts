@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { duplicateProductVariant } from '../../errors/error.builder.js';
 
 export type ProductVariantFingerprint = {
+  brandId: string;
   name: string;
   model?: string | null;
   color?: string | null;
@@ -32,6 +33,8 @@ export async function assertNoDuplicateVariant(
   const trimmedName = variant.name.trim();
   const where: Prisma.ProductWhereInput = {
     shopId,
+    brandId: variant.brandId,
+    isActive: true,
     name: { equals: trimmedName, mode: 'insensitive' },
     model: buildInsensitiveNullableEquals(variant.model),
     color: buildInsensitiveNullableEquals(variant.color),

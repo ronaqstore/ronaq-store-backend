@@ -106,7 +106,15 @@ export function buildMarketplaceProductSearchSql(
       p.authenticity,
       p.public_description,
       p.image_url,
-      COALESCE(sl.quantity_on_hand, 0) AS qty,
+      CASE 
+        WHEN p.tracking_type = 'QUANTITY' THEN COALESCE(sl.quantity_on_hand, 0)
+        ELSE (
+          SELECT COUNT(*)::int 
+          FROM inventory_units u 
+          WHERE u.product_id = p.id 
+            AND u.status = 'IN_STOCK'
+        )
+      END AS qty,
       ss.slug,
       ss.display_name,
       ss.city,

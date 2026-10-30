@@ -8,66 +8,71 @@ import {
   IsUrl,
   Length,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class ProductOptionalSpecFieldsDto {
-  @ApiPropertyOptional({ example: 'SM-A155F' })
+  @ApiPropertyOptional({ example: 'SM-A155F', nullable: true })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  model?: string;
+  model?: string | null;
 
-  @ApiPropertyOptional({ example: 'Blue' })
+  @ApiPropertyOptional({ example: 'Blue', nullable: true })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  color?: string;
+  color?: string | null;
 
-  @ApiPropertyOptional({ example: '8GB' })
+  @ApiPropertyOptional({ example: '8GB', nullable: true })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  ram?: string;
+  ram?: string | null;
 
-  @ApiPropertyOptional({ example: '128GB' })
+  @ApiPropertyOptional({ example: '128GB', nullable: true })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  storage?: string;
+  storage?: string | null;
 
-  @ApiPropertyOptional({ example: 'A15-BLU-128' })
+  @ApiPropertyOptional({ example: 'A15-BLU-128', nullable: true })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
   @IsString()
   @Length(1, 100)
-  sku?: string;
+  sku?: string | null;
 
-  @ApiPropertyOptional({ example: '356938035643809' })
+  @ApiPropertyOptional({ example: '356938035643809', nullable: true })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
   @IsString()
   @Length(1, 100)
-  barcode?: string;
+  barcode?: string | null;
 
-  @ApiPropertyOptional({ maxLength: 1000 })
+  @ApiPropertyOptional({ maxLength: 1000, nullable: true })
   @IsOptional()
   @IsString()
   @MaxLength(1000)
-  description?: string;
+  description?: string | null;
 
   @ApiPropertyOptional({
     example: 'https://cdn.example.com/a15.jpg',
     maxLength: 500,
+    nullable: true,
   })
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined)
   @IsString()
   @IsUrl({ require_tld: false }, { message: 'imageUrl must be a valid URL' })
   @MaxLength(500)
-  imageUrl?: string;
+  imageUrl?: string | null;
 
   @ApiPropertyOptional({
     description:

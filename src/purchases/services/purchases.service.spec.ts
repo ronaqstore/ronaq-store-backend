@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
+import { UnitStatus } from '../../generated/prisma/enums.js';
 import { PurchasesService } from './purchases.service.js';
 import { PurchasesWriteService } from './purchases-write.service.js';
 import { PurchasesCancelService } from './purchases-cancel.service.js';
@@ -577,7 +578,44 @@ describe('PurchasesService', () => {
           USER_ID,
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
-      expect(prismaStub.inventoryUnit.findFirst).toHaveBeenCalled();
+      expect(prismaStub.inventoryUnit.findFirst).toHaveBeenCalledWith({
+        where: {
+          shopId: SHOP_ID,
+          status: UnitStatus.IN_STOCK,
+          OR: [
+            { imei1: { in: expect.any(Array) } },
+            { imei2: { in: expect.any(Array) } },
+          ],
+        },
+        select: { imei1: true, imei2: true },
+      });
+    });
+
+    it('allows buying back an IMEI previously SOLD', async () => {
+      // findFirst returns null because any previous unit with this IMEI is SOLD, not IN_STOCK
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
+
+      const res = await service.createPurchase(
+        serialisePurchaseRequest({ items: [phoneLine] }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Purchase created successfully',
+      });
+      expect(prismaStub.inventoryUnit.findFirst).toHaveBeenCalledWith({
+        where: {
+          shopId: SHOP_ID,
+          status: UnitStatus.IN_STOCK,
+          OR: [
+            { imei1: { in: expect.any(Array) } },
+            { imei2: { in: expect.any(Array) } },
+          ],
+        },
+        select: { imei1: true, imei2: true },
+      });
     });
 
     it('rejects phoneUnits on a quantity-tracked accessory', async () => {

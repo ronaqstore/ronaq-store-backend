@@ -15,7 +15,11 @@ import {
   getSkipNumber,
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
-import { resourceNotFound, duplicateName } from '../../errors/error.builder.js';
+import {
+  resourceNotFound,
+  duplicateName,
+  requiredFieldCannotBeNull,
+} from '../../errors/error.builder.js';
 import { buildShopNamedEntityWhere } from '../../helpers/catalog-list.helper.js';
 import { isUniqueConstraintViolation } from '../../helpers/prisma-error-helper.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -101,7 +105,15 @@ export class BrandsService {
     shopId: string,
     _userId: string,
   ): Promise<StatusBaseResponseDTO> {
-    const newName = dto.name?.trim();
+    let newName: string | undefined;
+    if (dto.name !== undefined) {
+      if (dto.name === null) {
+        throw new BadRequestException(
+          requiredFieldCannotBeNull('Brand', 'Name'),
+        );
+      }
+      newName = dto.name.trim();
+    }
     const data: Prisma.BrandUpdateManyMutationInput = {};
     if (newName !== undefined) data.name = newName;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;

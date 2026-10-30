@@ -444,6 +444,39 @@ describe('SuppliersService', () => {
       expect(prismaStub.supplier.update).toHaveBeenCalled();
     });
 
+    it('rejects a null name with 400', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue(baseSupplierRow());
+
+      await expect(
+        service.updateSupplier(
+          SUPPLIER_ID,
+          { name: null } as any,
+          SHOP_ID,
+          'u1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.supplier.update).not.toHaveBeenCalled();
+    });
+
+    it('clears address and notes to null when null or whitespace is provided', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue(
+        baseSupplierRow({ address: 'Hall Road', notes: 'Old notes' }),
+      );
+      prismaStub.supplier.update.mockResolvedValue({});
+
+      await service.updateSupplier(
+        SUPPLIER_ID,
+        { address: null, notes: '   ' },
+        SHOP_ID,
+        'u1',
+      );
+
+      expect(prismaStub.supplier.update).toHaveBeenCalledWith({
+        where: { id: SUPPLIER_ID },
+        data: { address: null, notes: null },
+      });
+    });
+
     it('short-circuits when no field actually changed', async () => {
       prismaStub.supplier.findFirst.mockResolvedValue(baseSupplierRow());
 

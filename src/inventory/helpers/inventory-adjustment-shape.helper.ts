@@ -4,6 +4,7 @@ import {
   adjustmentNotAllowedForSerialized,
   countedQuantityRequired,
   quantityRequired,
+  restoreNotAllowedForQuantity,
   unitIdRequired,
   unwantedAdjustmentField,
 } from '../../errors/error.builder.js';
@@ -13,6 +14,26 @@ export function assertInventoryAdjustmentShape(
   product: InventoryAdjustmentProductShape,
   dto: CreateInventoryAdjustmentDto,
 ): void {
+  if (dto.type === 'RESTORE') {
+    if (product.trackingType !== 'SERIALIZED') {
+      throw new BadRequestException(restoreNotAllowedForQuantity(product.name));
+    }
+    if (dto.inventoryUnitId === undefined) {
+      throw new BadRequestException(unitIdRequired(product.name));
+    }
+    if (dto.quantity !== undefined) {
+      throw new BadRequestException(
+        unwantedAdjustmentField(product.name, 'RESTORE', 'quantity'),
+      );
+    }
+    if (dto.countedQuantity !== undefined) {
+      throw new BadRequestException(
+        unwantedAdjustmentField(product.name, 'RESTORE', 'countedQuantity'),
+      );
+    }
+    return;
+  }
+
   if (dto.type === 'ADJUSTMENT') {
     if (product.trackingType === 'SERIALIZED') {
       throw new BadRequestException(

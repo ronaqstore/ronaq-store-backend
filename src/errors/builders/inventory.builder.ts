@@ -100,3 +100,39 @@ export const unitNotAvailableForSale = (
     HttpStatus.BAD_REQUEST,
   );
 };
+
+export const unitNotDamagedOrLost = (
+  productName: string,
+  imei: string,
+  status: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'This phone cannot be restored to stock',
+    [
+      `The phone with IMEI ${imei} of "${productName}" is currently ${status}. Only DAMAGED or LOST units can be restored back to stock.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
+export const restoreNotAllowedForQuantity = (
+  productName: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    `RESTORE is not allowed on "${productName}"`,
+    [
+      `"${productName}" is counted by quantity. Restoration is only supported for individual serialized phones (DAMAGED or LOST units).`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
+export const unitNotEditable = (status: string): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'This unit cannot be edited',
+    [
+      `Units with status ${status} cannot be edited. Only IN_STOCK, DAMAGED, or LOST units can have their metadata updated.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};

@@ -21,7 +21,7 @@ export const SALE_RETURN_SELECT = {
       quantity: true,
       unitPrice: true,
       product: { select: { name: true } },
-      inventoryUnit: { select: { imei1: true, status: true } },
+      inventoryUnit: { select: { imei1: true, imei2: true, status: true } },
     },
   },
 } satisfies Prisma.SaleSelect;

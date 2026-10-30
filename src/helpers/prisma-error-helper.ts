@@ -60,3 +60,29 @@ export function violatedColumn(error: unknown, column: string): boolean {
     (c) => c === needle || c.endsWith(`_${needle}`),
   );
 }
+
+export function isImeiUniqueViolation(error: unknown): boolean {
+  if (isUniqueConstraintViolation(error)) {
+    return (
+      violatedColumn(error, 'imei1') ||
+      violatedColumn(error, 'imei2') ||
+      uniqueViolationColumns(error).some((c) => c.includes('imei'))
+    );
+  }
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2010'
+  ) {
+    const meta = error.meta as { code?: string; message?: string } | undefined;
+    if (meta?.code === '23505') return true;
+    const msg = error.message || '';
+    if (
+      msg.includes('23505') ||
+      msg.includes('inventory_units_shop_id_imei') ||
+      msg.includes('IMEI already exists')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}

@@ -8,6 +8,7 @@ import {
 import type { Response } from 'express';
 import { ClsService } from 'nestjs-cls';
 import { TraceLoggerService } from '../logger/trace-logger.service.js';
+import { isImeiUniqueViolation } from '../../helpers/prisma-error-helper.js';
 
 @Catch()
 export class GlobalHttpExceptionFilter implements ExceptionFilter {
@@ -33,6 +34,18 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
               traceId,
             };
       response.status(status).json(body);
+      return;
+    }
+
+    if (isImeiUniqueViolation(exception)) {
+      response.status(HttpStatus.BAD_REQUEST).json({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'IMEI already exists in inventory',
+        errors: [
+          'A phone with this IMEI is already IN_STOCK in this shop. IMEIs must be unique inside a shop.',
+        ],
+        traceId,
+      });
       return;
     }
 

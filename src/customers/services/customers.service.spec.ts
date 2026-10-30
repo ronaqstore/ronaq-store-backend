@@ -379,6 +379,25 @@ describe('CustomersService', () => {
       },
     );
 
+    it.each([['address'], ['notes']])(
+      'clears %s to null when it is sent as empty or whitespace string',
+      async (field) => {
+        prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
+
+        await service.updateCustomer(
+          'cust-1',
+          { [field]: '   ' },
+          'shop-1',
+          'user-1',
+        );
+
+        expect(prismaStub.customer.updateMany).toHaveBeenCalledWith({
+          where: { id: 'cust-1', shopId: 'shop-1' },
+          data: { [field]: null },
+        });
+      },
+    );
+
     it('normalises an updated phone to E.164', async () => {
       prismaStub.customer.updateMany.mockResolvedValue({ count: 1 });
 

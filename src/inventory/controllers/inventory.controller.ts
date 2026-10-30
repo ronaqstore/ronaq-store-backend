@@ -4,6 +4,8 @@ import {
   Get,
   HttpException,
   InternalServerErrorException,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -25,6 +27,7 @@ import {
   PaginatedResponseDTO,
   logError,
 } from '../../helpers/document-controller.imports.js';
+import { ParseUUIDPipe } from '@nestjs/common';
 import type { Response } from 'express';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import {
@@ -32,6 +35,7 @@ import {
   InventoryAdjustmentOutcome,
 } from '../services/inventory.service.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
+import { UpdateInventoryUnitDto } from '../dto/update-inventory-unit.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
 import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
 import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
@@ -84,6 +88,48 @@ export class InventoryController {
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to fetch inventory units');
+    }
+  }
+
+  @Patch('/units/:id')
+  @ApiOperation({
+    summary: 'Update inventory unit metadata',
+    description:
+      'Update asking price, defect notes, condition, or battery health (Apple only) for a phone unit belonging to this shop.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseInventoryUnitDto,
+      'Inventory unit updated successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async updateUnit(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateInventoryUnitDto,
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<ResponseInventoryUnitDto>> {
+    try {
+      const unit = await this.inventoryService.updateUnit(
+        id,
+        dto,
+        req.user.shopId,
+      );
+      return new ApiSuccessResponseDTO(
+        'Inventory unit updated successfully',
+        unit,
+      );
+    } catch (error) {
+      logError('inventory.controller.ts', 'updateUnit', error, {
+        shopId: req.user?.shopId,
+        unitId: id,
+        dto,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to update inventory unit');
     }
   }
 

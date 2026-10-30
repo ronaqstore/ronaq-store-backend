@@ -28,6 +28,7 @@ import {
 } from '../../helpers/phone.helper.js';
 import {
   duplicateFieldValue,
+  requiredFieldCannotBeNull,
   resourceNotFound,
   systemRowProtected,
 } from '../../errors/error.builder.js';
@@ -263,7 +264,15 @@ export class SuppliersService {
       throw new NotFoundException(resourceNotFound('Supplier', id));
     }
 
-    const newName = dto.name?.trim();
+    let newName: string | undefined;
+    if (dto.name !== undefined) {
+      if (dto.name === null) {
+        throw new BadRequestException(
+          requiredFieldCannotBeNull('Supplier', 'Name'),
+        );
+      }
+      newName = dto.name.trim();
+    }
 
     if (existing.isSystem) {
       if (newName !== undefined && newName !== existing.name) {
@@ -286,8 +295,12 @@ export class SuppliersService {
       await this.assertCnicAvailable(shopId, cnic, id);
       data.cnic = cnic;
     }
-    if (dto.address !== undefined) data.address = dto.address?.trim() || null;
-    if (dto.notes !== undefined) data.notes = dto.notes?.trim() || null;
+    if (dto.address !== undefined) {
+      data.address = dto.address === null ? null : dto.address.trim() || null;
+    }
+    if (dto.notes !== undefined) {
+      data.notes = dto.notes === null ? null : dto.notes.trim() || null;
+    }
     if (dto.openingBalance !== undefined) {
       data.openingBalance = BigInt(dto.openingBalance);
     }

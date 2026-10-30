@@ -8,6 +8,7 @@ import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalid
 
 const CATEGORY_ID = '01924f0a-0000-7000-8000-0000000000c1';
 const BRAND_ID = '01924f0a-0000-7000-8000-0000000000b1';
+const OTHER_BRAND_ID = '01924f0a-0000-7000-8000-0000000000b2';
 const SHOP_ID = 'shop-1';
 
 const prismaStub = {
@@ -244,6 +245,61 @@ describe('ProductsService', () => {
       await expect(
         service.createProduct(validCreate, SHOP_ID, 'user-1'),
       ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.create).not.toHaveBeenCalled();
+    });
+
+    it('allows creating identical names and attributes under DIFFERENT brand IDs', async () => {
+      prismaStub.brand.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve({ id: where.id, name: 'Anker' }),
+      );
+      prismaStub.product.findFirst.mockImplementation(({ where }: any) => {
+        if (where.brandId === BRAND_ID) {
+          return Promise.resolve({ id: 'prod-brand-1' });
+        }
+        return Promise.resolve(null);
+      });
+      prismaStub.product.create.mockResolvedValue({ id: 'prod-new' });
+
+      await expect(
+        service.createProduct(
+          {
+            ...validCreate,
+            brandId: OTHER_BRAND_ID,
+            name: 'Fast Charger 20W White',
+            color: 'White',
+          },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).resolves.toMatchObject({ status: true });
+
+      expect(prismaStub.product.findFirst).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          shopId: SHOP_ID,
+          brandId: OTHER_BRAND_ID,
+          isActive: true,
+          name: { equals: 'Fast Charger 20W White', mode: 'insensitive' },
+        }),
+        select: { id: true },
+      });
+    });
+
+    it('rejects creating identical names and attributes under the SAME brand ID', async () => {
+      prismaStub.product.findFirst.mockResolvedValue({ id: 'prod-existing' });
+
+      await expect(
+        service.createProduct(
+          {
+            ...validCreate,
+            brandId: BRAND_ID,
+            name: 'Fast Charger 20W White',
+            color: 'White',
+          },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+
       expect(prismaStub.product.create).not.toHaveBeenCalled();
     });
 
@@ -805,6 +861,54 @@ describe('ProductsService', () => {
       );
     });
 
+    it('runs variant uniqueness check when brandId changes on update', async () => {
+      let queriedBrandId: string | undefined;
+      prismaStub.brand.findFirst.mockResolvedValue({
+        id: OTHER_BRAND_ID,
+        name: 'Anker',
+      });
+      prismaStub.product.findFirst.mockImplementation((args?: any) => {
+        const idFilter = args?.where?.id;
+        if (idFilter && typeof idFilter === 'object' && idFilter.not) {
+          queriedBrandId = args.where.brandId;
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(baseProductRow({ brandId: BRAND_ID }));
+      });
+      prismaStub.product.update.mockResolvedValue({});
+
+      await service.updateProduct(
+        'prod-1',
+        { brandId: OTHER_BRAND_ID },
+        SHOP_ID,
+        'user-1',
+      );
+
+      expect(queriedBrandId).toBe(OTHER_BRAND_ID);
+    });
+
+    it('runs variant uniqueness check when reactivating an inactive product', async () => {
+      let variantCheckRan = false;
+      prismaStub.product.findFirst.mockImplementation((args?: any) => {
+        const idFilter = args?.where?.id;
+        if (idFilter && typeof idFilter === 'object' && idFilter.not) {
+          variantCheckRan = true;
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(baseProductRow({ isActive: false }));
+      });
+      prismaStub.product.update.mockResolvedValue({});
+
+      await service.updateProduct(
+        'prod-1',
+        { isActive: true },
+        SHOP_ID,
+        'user-1',
+      );
+
+      expect(variantCheckRan).toBe(true);
+    });
+
     it('maps database unique-index violation (products_variant_key) on update to 400', async () => {
       mockProductFoundForUpdate(baseProductRow());
       prismaStub.product.update.mockRejectedValue(
@@ -879,6 +983,115 @@ describe('ProductsService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
       expect(prismaStub.product.update).not.toHaveBeenCalled();
+    });
+
+    it('clears optional fields (sku, barcode, model, color, ram, storage, description, imageUrl, publicDescription) to null when null is provided', async () => {
+      mockProductFoundForUpdate(
+        baseProductRow({
+          sku: 'OLD-SKU',
+          barcode: 'OLD-BARCODE',
+          model: 'SM-OLD',
+          color: 'Red',
+          ram: '4GB',
+          storage: '64GB',
+          description: 'Old desc',
+          imageUrl: 'https://cdn.example.com/old.png',
+          publicDescription: 'Old public desc',
+        }),
+      );
+      prismaStub.product.update.mockResolvedValue({});
+
+      await service.updateProduct(
+        'prod-1',
+        {
+          sku: null,
+          barcode: null,
+          model: null,
+          color: null,
+          ram: null,
+          storage: null,
+          description: null,
+          imageUrl: null,
+          publicDescription: null,
+        },
+        SHOP_ID,
+        'user-1',
+      );
+
+      expect(prismaStub.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prod-1' },
+          data: expect.objectContaining({
+            sku: null,
+            barcode: null,
+            model: null,
+            color: null,
+            ram: null,
+            storage: null,
+            description: null,
+            imageUrl: null,
+            publicDescription: null,
+          }),
+        }),
+      );
+    });
+
+    it('clears optional fields to null when whitespace-only strings are provided', async () => {
+      mockProductFoundForUpdate(
+        baseProductRow({
+          sku: 'OLD-SKU',
+          barcode: 'OLD-BARCODE',
+          description: 'Old desc',
+        }),
+      );
+      prismaStub.product.update.mockResolvedValue({});
+
+      await service.updateProduct(
+        'prod-1',
+        {
+          sku: '   ',
+          barcode: '   ',
+          description: '   ',
+        },
+        SHOP_ID,
+        'user-1',
+      );
+
+      expect(prismaStub.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prod-1' },
+          data: expect.objectContaining({
+            sku: null,
+            barcode: null,
+            description: null,
+          }),
+        }),
+      );
+    });
+
+    it('updates sku and barcode to trimmed string values when valid strings are provided', async () => {
+      mockProductFoundForUpdate(baseProductRow());
+      prismaStub.product.update.mockResolvedValue({});
+
+      await service.updateProduct(
+        'prod-1',
+        {
+          sku: '  A15-NEW-SKU  ',
+          barcode: '  9876543210  ',
+        },
+        SHOP_ID,
+        'user-1',
+      );
+
+      expect(prismaStub.product.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'prod-1' },
+          data: expect.objectContaining({
+            sku: 'A15-NEW-SKU',
+            barcode: '9876543210',
+          }),
+        }),
+      );
     });
   });
 

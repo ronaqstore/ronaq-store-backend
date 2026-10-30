@@ -8,10 +8,12 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   InventoryMovementType,
+  ReferenceType,
   UnitStatus,
 } from '../../generated/prisma/enums.js';
 import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
+import { UpdateInventoryUnitDto } from '../dto/update-inventory-unit.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
 import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
 import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
@@ -21,15 +23,22 @@ import {
   normalizePagination,
 } from '../../helpers/paginate-helper.js';
 import {
+  batteryHealthNotAllowed,
   countedQuantityRequired,
+  duplicateImei,
   insufficientStock,
   quantityRequired,
   resourceNotFound,
+  unitNotDamagedOrLost,
+  unitNotEditable,
   unitNotInStock,
 } from '../../errors/error.builder.js';
+import { isAppleBrandName } from '../../helpers/device-family.helper.js';
 import type { InventoryProductRef } from './inventory.service.types.js';
 import { assertInventoryAdjustmentShape } from '../helpers/inventory-adjustment-shape.helper.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
+import { assertImeiNotInStock } from '../../helpers/inventory-imei.helper.js';
+import { isImeiUniqueViolation } from '../../helpers/prisma-error-helper.js';
 
 const CREATED = 'Stock change recorded successfully';
 const NO_CHANGE = 'Counted matches the system — no change recorded';
@@ -44,6 +53,43 @@ const MOVEMENT_INCLUDE = {
 
 type MovementWithRefs = Prisma.InventoryMovementGetPayload<{
   include: typeof MOVEMENT_INCLUDE;
+}>;
+
+const UNIT_INCLUDE = {
+  product: {
+    select: {
+      defaultSellingPrice: true,
+      brand: { select: { name: true } },
+    },
+  },
+  purchaseItem: {
+    include: {
+      purchase: {
+        include: {
+          supplier: {
+            select: { name: true, phone: true },
+          },
+        },
+      },
+    },
+  },
+  saleItems: {
+    include: {
+      sale: {
+        include: {
+          customer: {
+            select: { name: true, phone: true },
+          },
+        },
+      },
+    },
+    take: 1,
+    orderBy: { id: 'desc' as const },
+  },
+} satisfies Prisma.InventoryUnitInclude;
+
+type UnitWithRefs = Prisma.InventoryUnitGetPayload<{
+  include: typeof UNIT_INCLUDE;
 }>;
 
 const MANUAL_TYPES: InventoryMovementType[] = [
@@ -111,88 +157,18 @@ export class InventoryService {
     );
     const skip = getSkipNumber(page, pageSize);
 
-    const include = {
-      product: {
-        select: {
-          defaultSellingPrice: true,
-          brand: { select: { name: true } },
-        },
-      },
-      purchaseItem: {
-        include: {
-          purchase: {
-            include: {
-              supplier: {
-                select: { name: true, phone: true },
-              },
-            },
-          },
-        },
-      },
-      saleItems: {
-        include: {
-          sale: {
-            include: {
-              customer: {
-                select: { name: true, phone: true },
-              },
-            },
-          },
-        },
-        take: 1,
-        orderBy: { id: 'desc' as const },
-      },
-    };
-
     const [rows, total] = await Promise.all([
       this.prisma.inventoryUnit.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
-        include,
+        include: UNIT_INCLUDE,
       }),
       this.prisma.inventoryUnit.count({ where }),
     ]);
 
-    const items = rows.map((row) => {
-      const purchase = row.purchaseItem?.purchase;
-      const supplier = purchase?.supplier;
-      const latestSaleItem = row.saleItems?.[0];
-      const sale = latestSaleItem?.sale;
-      const customer = sale?.customer;
-      const defaultSell = Number(row.product.defaultSellingPrice);
-      const asking = row.askingPrice != null ? Number(row.askingPrice) : null;
-
-      return {
-        id: row.id,
-        productId: row.productId,
-        imei1: row.imei1,
-        imei2: row.imei2,
-        condition: row.condition,
-        status: row.status,
-        unitCost: Number(row.unitCost),
-        batteryHealth: row.batteryHealth,
-        askingPrice: asking,
-        defectNotes: row.defectNotes,
-        effectivePrice: asking ?? defaultSell,
-        createdAt: row.createdAt,
-        purchaseNo: purchase?.purchaseNo ?? null,
-        purchaseDate: purchase?.purchaseDate
-          ? purchase.purchaseDate.toISOString().slice(0, 10)
-          : null,
-        supplierInvoiceRef: purchase?.supplierInvoiceRef ?? null,
-        supplierName: supplier?.name ?? null,
-        supplierPhone: supplier?.phone ?? null,
-        saleNo: sale?.saleNo ?? null,
-        saleDate: sale?.saleDate
-          ? sale.saleDate.toISOString().slice(0, 10)
-          : null,
-        customerName: customer?.name ?? null,
-        customerPhone: customer?.phone ?? null,
-        salePrice: latestSaleItem ? Number(latestSaleItem.unitPrice) : null,
-      };
-    });
+    const items = rows.map((row) => this.toUnitResponse(row));
 
     return new PaginatedResponseDTO(items, total, page, pageSize);
   }
@@ -234,6 +210,8 @@ export class InventoryService {
         dto.reason,
         shopId,
       );
+    } else if (dto.type === 'RESTORE') {
+      outcome = await this.restorePhone(product, dto, shopId);
     } else if (product.trackingType === 'SERIALIZED') {
       outcome = await this.damagePhone(product, dto, shopId);
     } else {
@@ -402,7 +380,10 @@ export class InventoryService {
           shopId,
           productId: product.id,
           inventoryUnitId: unit.id,
-          type: dto.type,
+          type:
+            dto.type === 'LOST'
+              ? InventoryMovementType.LOST
+              : InventoryMovementType.DAMAGED,
           quantityChange: -1,
           reason: dto.reason,
         },
@@ -411,6 +392,149 @@ export class InventoryService {
     });
 
     return { kind: 'created', message: CREATED };
+  }
+
+  private async restorePhone(
+    product: InventoryProductRef,
+    dto: CreateInventoryAdjustmentDto,
+    shopId: string,
+  ): Promise<InventoryAdjustmentOutcome> {
+    await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<
+        Array<{
+          id: string;
+          status: string;
+          imei1: string;
+          imei2: string | null;
+        }>
+      >`
+        SELECT id, status, imei1, imei2 FROM inventory_units
+        WHERE id = ${dto.inventoryUnitId}::uuid AND shop_id = ${shopId}::uuid
+          AND product_id = ${product.id}::uuid
+        FOR UPDATE
+      `;
+      if (!locked?.length) {
+        throw new NotFoundException(
+          resourceNotFound('Inventory unit', dto.inventoryUnitId),
+        );
+      }
+      const unit = locked[0];
+      if (
+        unit.status !== UnitStatus.DAMAGED &&
+        unit.status !== UnitStatus.LOST
+      ) {
+        throw new BadRequestException(
+          unitNotDamagedOrLost(product.name, unit.imei1, unit.status),
+        );
+      }
+
+      await assertImeiNotInStock(
+        tx,
+        shopId,
+        unit.id,
+        unit.imei1,
+        unit.imei2,
+      );
+
+      try {
+        const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`
+          UPDATE inventory_units
+          SET status = 'IN_STOCK'::"UnitStatus", updated_at = now()
+          WHERE id = ${unit.id}::uuid
+            AND shop_id = ${shopId}::uuid
+            AND status IN ('DAMAGED'::"UnitStatus", 'LOST'::"UnitStatus")
+          RETURNING id
+        `;
+        if (!updatedUnits?.length) {
+          throw new BadRequestException(
+            unitNotDamagedOrLost(product.name, unit.imei1, unit.status),
+          );
+        }
+      } catch (error) {
+        if (isImeiUniqueViolation(error)) {
+          throw new BadRequestException(duplicateImei(unit.imei1));
+        }
+        throw error;
+      }
+
+      await tx.inventoryMovement.create({
+        data: {
+          shopId,
+          productId: product.id,
+          inventoryUnitId: unit.id,
+          type: InventoryMovementType.ADJUSTMENT,
+          quantityChange: 1,
+          reason: dto.reason,
+          referenceType: ReferenceType.MANUAL,
+          referenceId: unit.id,
+        },
+      });
+      return { kind: 'created' as const };
+    });
+
+    this.storefrontRevalidate.invalidateShopById(shopId);
+
+    return { kind: 'created', message: CREATED };
+  }
+
+  async updateUnit(
+    id: string,
+    dto: UpdateInventoryUnitDto,
+    shopId: string,
+  ): Promise<ResponseInventoryUnitDto> {
+    const unit = await this.prisma.inventoryUnit.findFirst({
+      where: { id, shopId },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            brand: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!unit) {
+      throw new NotFoundException(resourceNotFound('Inventory unit', id));
+    }
+
+    if (unit.status === UnitStatus.VOIDED || unit.status === UnitStatus.SOLD) {
+      throw new BadRequestException(unitNotEditable(unit.status));
+    }
+
+    if (dto.batteryHealth != null) {
+      if (!isAppleBrandName(unit.product.brand?.name)) {
+        throw new BadRequestException(
+          batteryHealthNotAllowed(unit.product.name),
+        );
+      }
+    }
+
+    const data: Prisma.InventoryUnitUpdateInput = {};
+    if (dto.askingPrice !== undefined) {
+      data.askingPrice =
+        dto.askingPrice != null ? BigInt(dto.askingPrice) : null;
+    }
+    if (dto.defectNotes !== undefined) {
+      data.defectNotes = dto.defectNotes?.trim() || null;
+    }
+    if (dto.batteryHealth !== undefined) {
+      data.batteryHealth = dto.batteryHealth;
+    }
+    if (dto.condition !== undefined) {
+      data.condition = dto.condition;
+    }
+
+    const updated = await this.prisma.inventoryUnit.update({
+      where: { id: unit.id },
+      data,
+      include: UNIT_INCLUDE,
+    });
+
+    this.storefrontRevalidate.invalidateShopById(shopId);
+
+    return this.toUnitResponse(updated);
   }
 
   async getInventoryMovements(
@@ -507,6 +631,45 @@ export class InventoryService {
       referenceType: row.referenceType,
       referenceId: row.referenceId,
       createdAt: row.createdAt,
+    };
+  }
+
+  private toUnitResponse(row: UnitWithRefs): ResponseInventoryUnitDto {
+    const purchase = row.purchaseItem?.purchase;
+    const supplier = purchase?.supplier;
+    const latestSaleItem = row.saleItems?.[0];
+    const sale = latestSaleItem?.sale;
+    const customer = sale?.customer;
+    const defaultSell = Number(row.product.defaultSellingPrice);
+    const asking = row.askingPrice != null ? Number(row.askingPrice) : null;
+
+    return {
+      id: row.id,
+      productId: row.productId,
+      imei1: row.imei1,
+      imei2: row.imei2,
+      condition: row.condition,
+      status: row.status,
+      unitCost: Number(row.unitCost),
+      batteryHealth: row.batteryHealth,
+      askingPrice: asking,
+      defectNotes: row.defectNotes,
+      effectivePrice: asking ?? defaultSell,
+      createdAt: row.createdAt,
+      purchaseNo: purchase?.purchaseNo ?? null,
+      purchaseDate: purchase?.purchaseDate
+        ? purchase.purchaseDate.toISOString().slice(0, 10)
+        : null,
+      supplierInvoiceRef: purchase?.supplierInvoiceRef ?? null,
+      supplierName: supplier?.name ?? null,
+      supplierPhone: supplier?.phone ?? null,
+      saleNo: sale?.saleNo ?? null,
+      saleDate: sale?.saleDate
+        ? sale.saleDate.toISOString().slice(0, 10)
+        : null,
+      customerName: customer?.name ?? null,
+      customerPhone: customer?.phone ?? null,
+      salePrice: latestSaleItem ? Number(latestSaleItem.unitPrice) : null,
     };
   }
 }

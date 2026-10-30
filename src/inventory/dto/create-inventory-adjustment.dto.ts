@@ -21,15 +21,15 @@ export class CreateInventoryAdjustmentDto {
 
   @ApiProperty({
     description:
-      'ADJUSTMENT = the shelf count was wrong (accessories only). DAMAGED / LOST = goods written off because they broke or went missing (accessories by quantity, phones by unit).',
+      'ADJUSTMENT = the shelf count was wrong (accessories only). DAMAGED / LOST = goods written off because they broke or went missing (accessories by quantity, phones by unit). RESTORE = return a DAMAGED or LOST phone back to IN_STOCK.',
     example: 'ADJUSTMENT',
   })
-  @IsIn(['ADJUSTMENT', 'DAMAGED', 'LOST'] as const)
-  type: 'ADJUSTMENT' | 'DAMAGED' | 'LOST';
+  @IsIn(['ADJUSTMENT', 'DAMAGED', 'LOST', 'RESTORE'] as const)
+  type: 'ADJUSTMENT' | 'DAMAGED' | 'LOST' | 'RESTORE';
 
   @ApiProperty({
     description:
-      'Mandatory for all three types — a stock change with no "why" is a lie in the ledger.',
+      'Mandatory for all types — a stock change with no "why" is a lie in the ledger.',
     example: 'Counting difference at the end of the day',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -63,7 +63,7 @@ export class CreateInventoryAdjustmentDto {
 
   @ApiPropertyOptional({
     description:
-      'DAMAGED / LOST only, SERIALIZED products only. One phone unit to mark damaged or lost. Must be IN_STOCK, belong to this shop and to the product.',
+      'DAMAGED / LOST / RESTORE only, SERIALIZED products only. One phone unit to adjust. Must belong to this shop and to the product.',
     example: '01924f0a-0000-7000-8000-0000000000d1',
   })
   @IsOptional()

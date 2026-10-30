@@ -67,9 +67,7 @@ export function toMarketplaceProduct(
 export function toLeanMarketplaceProduct(
   row: MarketplaceProductSearchRow,
 ): ResponseMarketplaceProductDto {
-  const qty = Number(row.qty) || 0;
-  const quantityOnHand =
-    row.tracking_type === 'QUANTITY' ? qty : Math.max(qty, 1);
+  const quantityOnHand = Number(row.qty) || 0;
   const modelLabel = (row.model?.trim() || row.name).trim();
   return {
     id: row.id,

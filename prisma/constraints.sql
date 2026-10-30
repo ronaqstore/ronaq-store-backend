@@ -140,6 +140,12 @@ CREATE INDEX expenses_active_date_idx   ON expenses (shop_id, expense_date)     
 CREATE INDEX purchases_active_date_idx  ON purchases (shop_id, purchase_date)   WHERE status = 'ACTIVE';
 CREATE INDEX units_in_stock_idx         ON inventory_units (shop_id, product_id) WHERE status = 'IN_STOCK';
 
+-- Only active IN_STOCK units must have unique IMEIs per shop (allows trade-in / buyback of sold units)
+DROP INDEX IF EXISTS "inventory_units_shop_id_imei1_key";
+DROP INDEX IF EXISTS "inventory_units_shop_id_imei2_key";
+CREATE UNIQUE INDEX "inventory_units_shop_id_imei1_key" ON "inventory_units" ("shop_id", "imei1") WHERE "status" = 'IN_STOCK';
+CREATE UNIQUE INDEX "inventory_units_shop_id_imei2_key" ON "inventory_units" ("shop_id", "imei2") WHERE "status" = 'IN_STOCK';
+
 -- Helper for expression indexes on enums (PostgreSQL enum cast is STABLE, index requires IMMUTABLE)
 CREATE OR REPLACE FUNCTION ronaq_enum_label(val anyenum)
 RETURNS text
@@ -150,10 +156,12 @@ AS $$
   SELECT $1::text;
 $$;
 
--- Unique product variant per shop (case-insensitive & trimmed)
-CREATE UNIQUE INDEX IF NOT EXISTS products_variant_key
+-- Unique product variant per shop and brand (case-insensitive & trimmed, active only)
+DROP INDEX IF EXISTS products_variant_key;
+CREATE UNIQUE INDEX products_variant_key
   ON products (
     shop_id,
+    brand_id,
     lower(btrim(name)),
     lower(btrim(coalesce(model, ''))),
     lower(btrim(coalesce(color, ''))),
@@ -161,24 +169,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS products_variant_key
     lower(btrim(coalesce(storage, ''))),
     coalesce(ronaq_enum_label(pta_status), ''),
     coalesce(ronaq_enum_label(authenticity), '')
-  );
+  )
+  WHERE is_active = true;
 
 -- -----------------------------------------------------------------------------
 -- 3. Triggers
 -- -----------------------------------------------------------------------------
 
 -- 3a. An IMEI can appear only once per shop, across BOTH imei1 and imei2
---     (the Prisma unique constraints only cover imei1-vs-imei1 and imei2-vs-imei2).
---     Cancelled purchases VOID the unit; live uniqueness ignores VOIDED units.
+--     (the partial unique indexes only cover imei1-vs-imei1 and imei2-vs-imei2).
+--     Guarded ONLY for active IN_STOCK units so previously sold/voided phones can be repurchased.
 CREATE OR REPLACE FUNCTION inventory_units_imei_guard() RETURNS trigger AS $$
 BEGIN
-  IF NEW.status = 'VOIDED' THEN
+  IF NEW.status <> 'IN_STOCK' THEN
     RETURN NEW;
   END IF;
   IF EXISTS (
     SELECT 1 FROM inventory_units u
     WHERE u.shop_id = NEW.shop_id AND u.id <> NEW.id
-      AND u.status <> 'VOIDED'
+      AND u.status = 'IN_STOCK'
       AND (u.imei1 IN (NEW.imei1, NEW.imei2) OR (u.imei2 IS NOT NULL AND u.imei2 IN (NEW.imei1, NEW.imei2)))
   ) THEN
     RAISE EXCEPTION 'IMEI already exists in this shop' USING ERRCODE = '23505';
@@ -186,8 +195,9 @@ BEGIN
   RETURN NEW;
 END; $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS inventory_units_imei_guard_trg ON inventory_units;
 CREATE TRIGGER inventory_units_imei_guard_trg
-  BEFORE INSERT OR UPDATE OF imei1, imei2 ON inventory_units
+  BEFORE INSERT OR UPDATE OF status, imei1, imei2 ON inventory_units
   FOR EACH ROW EXECUTE FUNCTION inventory_units_imei_guard();
 
 -- 3b. Append-only ledgers: stock history and cash history can never be changed or deleted.

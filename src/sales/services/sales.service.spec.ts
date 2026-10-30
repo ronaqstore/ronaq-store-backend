@@ -29,6 +29,7 @@ const prismaStub = {
   saleReturn: { count: jest.fn(), aggregate: jest.fn() },
   refund: { aggregate: jest.fn() },
   cashMovement: { aggregate: jest.fn() },
+  inventoryUnit: { findFirst: jest.fn() },
   $transaction: jest.fn(),
 };
 
@@ -36,7 +37,7 @@ interface TxStub {
   $queryRaw: jest.Mock;
   sale: { create: jest.Mock; update: jest.Mock };
   saleItem: { create: jest.Mock; findMany: jest.Mock };
-  inventoryUnit: { update: jest.Mock };
+  inventoryUnit: { update: jest.Mock; findFirst: jest.Mock };
   inventoryMovement: { create: jest.Mock };
   stockLevel: { update: jest.Mock; create: jest.Mock };
   payment: { create: jest.Mock; findMany: jest.Mock; update: jest.Mock };
@@ -68,7 +69,10 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         ),
       findMany: jest.fn().mockResolvedValue([]),
     },
-    inventoryUnit: { update: jest.fn().mockResolvedValue({}) },
+    inventoryUnit: {
+      update: jest.fn().mockResolvedValue({}),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     inventoryMovement: { create: jest.fn().mockResolvedValue({ id: 'm-1' }) },
     stockLevel: {
       update: jest.fn().mockResolvedValue({}),
@@ -146,6 +150,7 @@ describe('SalesService', () => {
     );
     prismaStub.sale.findFirst.mockResolvedValue(null);
     prismaStub.customer.findFirst.mockResolvedValue({ id: CUSTOMER_ID });
+    prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
     prismaStub.saleReturn.count.mockResolvedValue(0);
     prismaStub.saleReturn.aggregate.mockResolvedValue({
       _sum: { returnAmount: null },
@@ -1155,6 +1160,35 @@ describe('SalesService', () => {
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 
+    it('400s when an active unit with the same IMEI is already IN_STOCK', async () => {
+      tx.saleItem.findMany.mockResolvedValue(phoneLine);
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM sales')) return [{ status: 'ACTIVE' }];
+        if (sql.includes('FROM inventory_units'))
+          return [
+            {
+              id: UNIT_ID,
+              status: 'SOLD',
+              imei1: '111223344556677',
+              imei2: null,
+            },
+          ];
+        return [];
+      });
+      tx.inventoryUnit.findFirst.mockResolvedValue({
+        id: 'unit-other',
+        imei1: '111223344556677',
+        imei2: null,
+      });
+
+      await expect(
+        service.cancelSale('sale-1', cancelDto as any, SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tx.sale.update).not.toHaveBeenCalled();
+    });
+
     it('adds sold accessories back to the shelf with a +qty SALE_CANCEL movement', async () => {
       tx.saleItem.findMany.mockResolvedValue(accessoryLine);
 
@@ -1414,6 +1448,22 @@ describe('SalesService', () => {
 
       expect(res.blocked).toBe(true);
       expect(res.blockedReason).toContain('111111111111111');
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('marks the preview blocked when an active unit with the same IMEI is already IN_STOCK', async () => {
+      prismaStub.sale.findFirst.mockResolvedValue(impactSale);
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue({
+        id: 'unit-other',
+        imei1: '111111111111111',
+        imei2: null,
+      });
+
+      const res = await service.getCancelImpact('sale-1', SHOP_ID);
+
+      expect(res.blocked).toBe(true);
+      expect(res.blockedReason).toContain('111111111111111');
+      expect(res.blockedReason).toContain('already IN_STOCK');
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
 

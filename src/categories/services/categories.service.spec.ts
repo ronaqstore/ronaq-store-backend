@@ -132,6 +132,18 @@ describe('CategoriesService', () => {
         data: { isActive: false },
       });
     });
+
+    it('rejects a null name with 400', async () => {
+      await expect(
+        service.updateCategory(
+          'cat-1',
+          { name: null } as any,
+          'shop-1',
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.category.updateMany).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteCategory', () => {

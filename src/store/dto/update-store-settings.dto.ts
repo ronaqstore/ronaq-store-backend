@@ -35,9 +35,11 @@ export class UpdateStoreSettingsDto {
   @ApiPropertyOptional({
     description: 'Short intro story customers read on the storefront.',
     example: 'Genuine phones with warranty since 2015.',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @Length(1, 2000)
   about?: string | null;
@@ -50,15 +52,18 @@ export class UpdateStoreSettingsDto {
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @Matches(HTTP_URL_PATTERN, { message: 'logoUrl must be an http(s) URL' })
   logoUrl?: string | null;
 
   @ApiPropertyOptional({
     description: 'Cover banner image URL. http(s) only.',
     example: 'https://cdn.example.com/banner.png',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @Matches(HTTP_URL_PATTERN)
   bannerUrl?: string | null;
 
@@ -66,9 +71,11 @@ export class UpdateStoreSettingsDto {
     description:
       'WhatsApp mobile in local Pakistani form: 03XXXXXXXXX (also accepts 923…).',
     example: '03001234567',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @Matches(/^[0-9]{10,15}$/i)
   whatsappNumber?: string | null;
 
@@ -76,9 +83,11 @@ export class UpdateStoreSettingsDto {
     description:
       'Public contact mobile in local Pakistani form: 03XXXXXXXXX. Rejected if the number is already in use.',
     example: '03001234567',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @Length(1, 30)
   phoneNumber?: string | null;
@@ -87,16 +96,23 @@ export class UpdateStoreSettingsDto {
     description:
       'Full street address from Google Places (Pakistan). Shown on the storefront.',
     example: 'Zab Plaza, Timergara, Lower Dir, Khyber Pakhtunkhwa, Pakistan',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @Length(1, 500)
   address?: string | null;
 
-  @ApiPropertyOptional({ description: 'City.', example: 'Karachi' })
+  @ApiPropertyOptional({
+    description: 'City.',
+    example: 'Karachi',
+    nullable: true,
+  })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @Length(1, 100)
   city?: string | null;
@@ -137,6 +153,7 @@ export class UpdateStoreSettingsDto {
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @Length(1, 500)
   mapPlaceName?: string | null;
@@ -156,9 +173,11 @@ export class UpdateStoreSettingsDto {
   @ApiPropertyOptional({
     description: 'Opening hours, free text.',
     example: 'Mon–Sat 11:00–21:00',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsString()
   @Length(1, 200)
   openingHours?: string | null;
@@ -166,18 +185,22 @@ export class UpdateStoreSettingsDto {
   @ApiPropertyOptional({
     description: 'Facebook page URL. http(s) only.',
     example: 'https://example.com/facebook/khalid.mobile',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @Matches(HTTP_URL_PATTERN)
   facebookUrl?: string | null;
 
   @ApiPropertyOptional({
     description: 'Instagram profile URL. http(s) only.',
     example: 'https://example.com/instagram/khalid.mobile',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
   @Matches(HTTP_URL_PATTERN)
   instagramUrl?: string | null;
 

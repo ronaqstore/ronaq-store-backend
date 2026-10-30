@@ -305,10 +305,10 @@ export class CustomersService {
       data.phone = phone;
     }
     if (dto.address !== undefined) {
-      data.address = dto.address === null ? null : dto.address.trim();
+      data.address = dto.address === null ? null : dto.address.trim() || null;
     }
     if (dto.notes !== undefined) {
-      data.notes = dto.notes === null ? null : dto.notes.trim();
+      data.notes = dto.notes === null ? null : dto.notes.trim() || null;
     }
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.openingBalance !== undefined) {

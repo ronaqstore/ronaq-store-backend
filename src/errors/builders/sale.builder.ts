@@ -84,6 +84,19 @@ export const saleCancelUnitNotSold = (
   );
 };
 
+export const saleCancelImeiAlreadyInStock = (
+  saleNo: string,
+  imei: string,
+): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    `Sale ${saleNo} cannot be cancelled`,
+    [
+      `The phone with IMEI ${imei} cannot be returned to stock because another active unit with this IMEI is already IN_STOCK in this shop. Sell or remove that unit first.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const inventoryUnitIdRequiredForSale = (
   productName: string,
 ): ErrorResponseDTO => {

@@ -50,4 +50,23 @@ describe('GlobalHttpExceptionFilter', () => {
     });
     expect(logger.error).toHaveBeenCalled();
   });
+
+  it('maps unhandled IMEI unique violation to 400 Bad Request', () => {
+    const statusSpy = jest.fn();
+    const jsonSpy = jest.fn();
+    const { Prisma } = require('../../generated/prisma/client.js');
+    const p2010 = new Prisma.PrismaClientKnownRequestError(
+      'Raw query failed: IMEI already exists in this shop',
+      { code: 'P2010', clientVersion: '7.0.0', meta: {} },
+    );
+    filter.catch(p2010, mockHost(statusSpy, jsonSpy) as never);
+    expect(statusSpy).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'IMEI already exists in inventory',
+        traceId: 'trace-test',
+      }),
+    );
+  });
 });

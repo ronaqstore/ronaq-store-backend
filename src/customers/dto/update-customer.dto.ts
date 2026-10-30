@@ -29,22 +29,24 @@ export class UpdateCustomerDto {
   @ApiPropertyOptional({
     description: 'New customer address.',
     example: 'University Town, Peshawar',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  address?: string;
+  address?: string | null;
 
   @ApiPropertyOptional({
     description: 'New notes about the customer.',
     example: 'Prefers WhatsApp reminders',
+    nullable: true,
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(1000)
-  notes?: string;
+  notes?: string | null;
 
   @ApiPropertyOptional({
     description:

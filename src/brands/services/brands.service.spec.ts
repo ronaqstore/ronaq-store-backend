@@ -83,6 +83,13 @@ describe('BrandsService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 
+  it('rejects a null name with 400', async () => {
+    await expect(
+      service.updateBrand('brand-1', { name: null } as any, 'shop-1', 'user-1'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prismaStub.brand.updateMany).not.toHaveBeenCalled();
+  });
+
   it('deactivates only a brand owned by the supplied shop', async () => {
     prismaStub.brand.updateMany.mockResolvedValue({ count: 1 });
 
