@@ -1,6 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { ShopStatus } from '../../generated/prisma/enums.js';
+import {
+  ShopStatus,
+  SubscriptionStatus,
+} from '../../generated/prisma/enums.js';
 import { AuthService } from '../../auth/services/auth.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PlatformAdminService } from './platform-admin.service.js';
@@ -404,6 +407,8 @@ describe('PlatformAdminService', () => {
           data: {
             subscriptionEndsAt: expect.any(Date),
             status: ShopStatus.ACTIVE,
+            subscriptionStatus: SubscriptionStatus.ACTIVE,
+            trialEndsAt: null,
           },
         }),
       );

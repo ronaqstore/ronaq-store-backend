@@ -224,7 +224,7 @@ export class ReportsLedgerService {
       return {
         id: purchase.id,
         purchaseNo: purchase.purchaseNo,
-        purchaseDate: purchase.purchaseDate.toISOString().slice(0, 10),
+        purchaseDate: formatBusinessDate(purchase.purchaseDate),
         supplierName: purchase.supplier.name,
         supplierInvoiceRef: purchase.supplierInvoiceRef,
         isOpeningStock: purchase.isOpeningStock,
@@ -319,7 +319,7 @@ export class ReportsLedgerService {
 
     const items: ExpenseReportRowDTO[] = rows.map((expense) => ({
       id: expense.id,
-      expenseDate: expense.expenseDate.toISOString().slice(0, 10),
+      expenseDate: formatBusinessDate(expense.expenseDate),
       categoryName: expense.category.name,
       description: expense.description,
       amount: Number(expense.amount),
@@ -439,7 +439,7 @@ export class ReportsLedgerService {
       );
     }
     for (const expense of expenses) {
-      const day = expense.expenseDate.toISOString().slice(0, 10);
+      const day = formatBusinessDate(expense.expenseDate);
       expenseByDay.set(
         day,
         (expenseByDay.get(day) ?? 0) + Number(expense.amount),

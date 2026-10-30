@@ -271,6 +271,7 @@ export class AuthService {
 
     if (
       user.shop.status !== ShopStatus.ACTIVE ||
+      user.shop.subscriptionStatus === SubscriptionStatus.EXPIRED ||
       user.shop.subscriptionEndsAt.getTime() <= Date.now()
     ) {
       throw new ForbiddenException(shopSuspended());
@@ -364,6 +365,8 @@ export class AuthService {
   }
 
   async setupPassword(dto: SetupPasswordDto): Promise<StatusBaseResponseDTO> {
+    await this.turnstileService.assertValidToken(dto.turnstileToken);
+
     if (!isWellFormedToken(dto.token)) {
       throw new BadRequestException(invalidSetupToken());
     }

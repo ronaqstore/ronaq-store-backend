@@ -260,8 +260,8 @@ export class PlatformAdminService {
             phone: dto.shopPhone ? normalizePhoneOrRaw(dto.shopPhone) : null,
             address: dto.shopAddress?.trim() ?? null,
             status: ShopStatus.ACTIVE,
-            subscriptionStatus: SubscriptionStatus.TRIALING,
-            trialEndsAt: subscriptionEndsAt,
+            subscriptionStatus: SubscriptionStatus.ACTIVE,
+            trialEndsAt: null,
             subscriptionEndsAt,
           },
         });
@@ -352,6 +352,7 @@ export class PlatformAdminService {
       subscriptionEndsAt?: Date;
       status?: ShopStatus;
       subscriptionStatus?: SubscriptionStatus;
+      trialEndsAt?: Date | null;
     } = {};
 
     if (dto.subscriptionStatus !== undefined) {
@@ -375,6 +376,11 @@ export class PlatformAdminService {
 
       data.status =
         dto.isActive === false ? ShopStatus.SUSPENDED : ShopStatus.ACTIVE;
+
+      if (dto.subscriptionStatus === undefined) {
+        data.subscriptionStatus = SubscriptionStatus.ACTIVE;
+        data.trialEndsAt = null;
+      }
     }
 
     if (dto.isActive !== undefined && dto.subscriptionEndsAt === undefined) {

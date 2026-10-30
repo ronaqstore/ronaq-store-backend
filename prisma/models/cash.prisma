@@ -32,18 +32,21 @@ model CashMovement {
 }
 
 model CashReconciliation {
-  id           String   @id @default(uuid(7)) @db.Uuid
-  shopId       String   @map("shop_id") @db.Uuid
-  systemCash   BigInt   @map("system_cash")
-  countedCash  BigInt   @map("counted_cash")
-  difference   BigInt // counted - system
-  reason       String? // required when difference != 0 (CHECK)
-  reconciledAt DateTime @default(now()) @map("reconciled_at") @db.Timestamptz(3)
-  createdById  String   @map("created_by_id") @db.Uuid
+  id              String   @id @default(uuid(7)) @db.Uuid
+  shopId          String   @map("shop_id") @db.Uuid
+  systemCash      BigInt   @map("system_cash")
+  countedCash     BigInt   @map("counted_cash")
+  difference      BigInt // counted - system
+  reason          String? // required when difference != 0 (CHECK)
+  // Double-tap protection: same shopId+clientRequestId returns success without another adjustment.
+  clientRequestId String   @map("client_request_id") @db.Uuid
+  reconciledAt    DateTime @default(now()) @map("reconciled_at") @db.Timestamptz(3)
+  createdById     String   @map("created_by_id") @db.Uuid
 
   shop      Shop @relation(fields: [shopId], references: [id], onDelete: Restrict)
   createdBy User @relation("ReconciliationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
+  @@unique([shopId, clientRequestId])
   @@index([shopId, reconciledAt])
   @@map("cash_reconciliations")
 }

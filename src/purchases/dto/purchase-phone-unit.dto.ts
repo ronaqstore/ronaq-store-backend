@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-const IMEI_PATTERN = /^[0-9A-Za-z]{4,20}$/;
+const IMEI_PATTERN = /^\d{15}$/;
 
 export class PurchasePhoneUnitDto {
   @ApiProperty({

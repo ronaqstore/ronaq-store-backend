@@ -1,8 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Length, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class CreateCashReconciliationDto {
+  @ApiProperty({
+    description:
+      'Double-tap protection. Generate ONE uuid per opened Save screen and reuse it if the request is retried. If this id was already saved the system returns success instead of writing another adjustment.',
+    example: '01924f0a-0000-7000-8000-00000000beef',
+  })
+  @IsUUID()
+  clientRequestId: string;
+
   @ApiProperty({
     description:
       'Real cash physically counted in the drawer, in PAISA. Rs 478,500 = 47850000. Zero is legal (an empty drawer).',

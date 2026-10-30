@@ -81,6 +81,7 @@ export class PurchasesCancelService {
         select: {
           productId: true,
           quantity: true,
+          unitCost: true,
           product: { select: { name: true, trackingType: true } },
           inventoryUnits: { select: { id: true, imei1: true, imei2: true } },
         },
@@ -155,9 +156,9 @@ export class PurchasesCancelService {
         }
 
         const lockedStock = await tx.$queryRaw<
-          Array<{ quantity_on_hand: number }>
+          Array<{ quantity_on_hand: number; avg_unit_cost: bigint | number }>
         >`
-          SELECT quantity_on_hand FROM stock_levels
+          SELECT quantity_on_hand, avg_unit_cost FROM stock_levels
           WHERE product_id = ${item.productId} AND shop_id = ${shopId}
           FOR UPDATE
         `;
@@ -170,12 +171,35 @@ export class PurchasesCancelService {
           );
         }
 
+        const oldQty = available;
+        const oldAvg = Number(lockedStock[0].avg_unit_cost ?? 0);
+        const cancelQty = item.quantity;
+        const unitCost = Number(item.unitCost);
+        const newQty = oldQty - cancelQty;
+        let newAvg = 0;
+        if (
+          newQty > 0 &&
+          Number.isFinite(oldAvg) &&
+          Number.isFinite(unitCost)
+        ) {
+          newAvg = Math.max(
+            0,
+            Math.round((oldQty * oldAvg - cancelQty * unitCost) / newQty),
+          );
+        }
+        if (!Number.isFinite(newAvg) || newAvg < 0) {
+          newAvg = 0;
+        }
+
         const updatedStock = await tx.$queryRaw<Array<{ product_id: string }>>`
           UPDATE stock_levels
-          SET quantity_on_hand = quantity_on_hand - ${item.quantity}, updated_at = now()
+          SET quantity_on_hand = ${newQty},
+              avg_unit_cost = ${BigInt(Math.trunc(newAvg))},
+              updated_at = now()
           WHERE product_id = ${item.productId}::uuid
             AND shop_id = ${shopId}::uuid
-            AND quantity_on_hand >= ${item.quantity}
+            AND quantity_on_hand = ${oldQty}
+            AND quantity_on_hand >= ${cancelQty}
           RETURNING product_id
         `;
         if (!updatedStock?.length) {

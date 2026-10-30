@@ -1098,8 +1098,18 @@ describe('ProductsService', () => {
   describe('publishProducts (bulk, WF20)', () => {
     it('flips the whole selection in one transaction', async () => {
       prismaStub.product.findMany.mockResolvedValue([
-        { id: 'p1', name: 'Galaxy A15', isActive: true },
-        { id: 'p2', name: 'iPhone 14', isActive: true },
+        {
+          id: 'p1',
+          name: 'Galaxy A15',
+          isActive: true,
+          _count: { images: 1 },
+        },
+        {
+          id: 'p2',
+          name: 'iPhone 14',
+          isActive: true,
+          _count: { images: 2 },
+        },
       ]);
 
       const res = await service.publishProducts(
@@ -1116,7 +1126,12 @@ describe('ProductsService', () => {
 
     it('404s a foreign id instead of silently skipping it', async () => {
       prismaStub.product.findMany.mockResolvedValue([
-        { id: 'p1', name: 'Galaxy A15', isActive: true },
+        {
+          id: 'p1',
+          name: 'Galaxy A15',
+          isActive: true,
+          _count: { images: 1 },
+        },
       ]);
 
       await expect(
@@ -1130,7 +1145,28 @@ describe('ProductsService', () => {
 
     it('refuses to bulk-publish an inactive product', async () => {
       prismaStub.product.findMany.mockResolvedValue([
-        { id: 'p1', name: 'Galaxy A15', isActive: false },
+        {
+          id: 'p1',
+          name: 'Galaxy A15',
+          isActive: false,
+          _count: { images: 1 },
+        },
+      ]);
+
+      await expect(
+        service.publishProducts({ ids: ['p1'], isPublished: true }, SHOP_ID),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses to bulk-publish products with zero images', async () => {
+      prismaStub.product.findMany.mockResolvedValue([
+        {
+          id: 'p1',
+          name: 'Galaxy A15',
+          isActive: true,
+          _count: { images: 0 },
+        },
       ]);
 
       await expect(
@@ -1141,7 +1177,12 @@ describe('ProductsService', () => {
 
     it('bulk-unpublish does not care about isActive', async () => {
       prismaStub.product.findMany.mockResolvedValue([
-        { id: 'p1', name: 'Galaxy A15', isActive: false },
+        {
+          id: 'p1',
+          name: 'Galaxy A15',
+          isActive: false,
+          _count: { images: 0 },
+        },
       ]);
 
       const res = await service.publishProducts(

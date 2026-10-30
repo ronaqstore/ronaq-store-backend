@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 
 const SHOP_ID = 'shop-1';
 const USER_ID = 'user-1';
+const CLIENT_REQUEST_ID = '01924f0a-0000-7000-8000-00000000beef';
 
 const prismaStub = {
   cashMovement: {
@@ -100,7 +101,7 @@ describe('CashReconciliationsService', () => {
   describe('createReconciliation', () => {
     it('locks the shop, stores a matching count and writes NO movement', async () => {
       const res = await service.createReconciliation(
-        { countedCash: 100000000 },
+        { clientRequestId: CLIENT_REQUEST_ID, countedCash: 100000000 },
         SHOP_ID,
         USER_ID,
       );
@@ -118,6 +119,7 @@ describe('CashReconciliationsService', () => {
             countedCash: 100000000n,
             difference: 0n,
             reason: null,
+            clientRequestId: CLIENT_REQUEST_ID,
             createdById: USER_ID,
           },
         }),
@@ -125,9 +127,33 @@ describe('CashReconciliationsService', () => {
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 
+    it('returns already-saved without writing when clientRequestId exists', async () => {
+      prismaStub.cashReconciliation.findFirst.mockResolvedValue({
+        id: 'rec-1',
+      });
+
+      const res = await service.createReconciliation(
+        { clientRequestId: CLIENT_REQUEST_ID, countedCash: 100050000 },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Cash reconciliation already saved',
+      });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      expect(tx.cashReconciliation.create).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
     it('writes an IN adjustment when the drawer has more than the system says', async () => {
       await service.createReconciliation(
-        { countedCash: 100050000, reason: 'Found hidden cash' },
+        {
+          clientRequestId: CLIENT_REQUEST_ID,
+          countedCash: 100050000,
+          reason: 'Found hidden cash',
+        },
         SHOP_ID,
         USER_ID,
       );
@@ -139,6 +165,7 @@ describe('CashReconciliationsService', () => {
             countedCash: 100050000n,
             difference: 50000n,
             reason: 'Found hidden cash',
+            clientRequestId: CLIENT_REQUEST_ID,
           }),
         }),
       );
@@ -158,7 +185,11 @@ describe('CashReconciliationsService', () => {
 
     it('writes an OUT adjustment when the drawer has less than the system says', async () => {
       await service.createReconciliation(
-        { countedCash: 99900000, reason: 'Wrong change given' },
+        {
+          clientRequestId: CLIENT_REQUEST_ID,
+          countedCash: 99900000,
+          reason: 'Wrong change given',
+        },
         SHOP_ID,
         USER_ID,
       );
@@ -183,7 +214,11 @@ describe('CashReconciliationsService', () => {
 
     it('rejects a non-zero difference without a reason', async () => {
       const err = await service
-        .createReconciliation({ countedCash: 100050000 }, SHOP_ID, USER_ID)
+        .createReconciliation(
+          { clientRequestId: CLIENT_REQUEST_ID, countedCash: 100050000 },
+          SHOP_ID,
+          USER_ID,
+        )
         .catch((e) => e);
 
       expect(err).toBeInstanceOf(BadRequestException);
@@ -197,7 +232,11 @@ describe('CashReconciliationsService', () => {
     it('rejects a whitespace-only reason the same way', async () => {
       const err = await service
         .createReconciliation(
-          { countedCash: 100050000, reason: '   ' },
+          {
+            clientRequestId: CLIENT_REQUEST_ID,
+            countedCash: 100050000,
+            reason: '   ',
+          },
           SHOP_ID,
           USER_ID,
         )
@@ -212,7 +251,7 @@ describe('CashReconciliationsService', () => {
 
       await expect(
         service.createReconciliation(
-          { countedCash: 100000000 },
+          { clientRequestId: CLIENT_REQUEST_ID, countedCash: 100000000 },
           SHOP_ID,
           USER_ID,
         ),

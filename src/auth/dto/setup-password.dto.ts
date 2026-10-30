@@ -31,4 +31,12 @@ export class SetupPasswordDto {
   @Matches(/[A-Za-z]/, { message: 'password must contain at least one letter' })
   @Matches(/\d/, { message: 'password must contain at least one digit' })
   password: string;
+
+  @ApiProperty({
+    description: 'Cloudflare Turnstile token from the setup-password widget.',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @Length(1, 2048)
+  turnstileToken: string;
 }

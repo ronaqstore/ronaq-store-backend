@@ -22,8 +22,12 @@ const prismaStub = {
   user: { findFirst: jest.fn() },
   platformAdmin: { findFirst: jest.fn() },
   customer: { findFirst: jest.fn() },
-  purchase: { findMany: jest.fn(), groupBy: jest.fn() },
-  supplierPayment: { findMany: jest.fn(), groupBy: jest.fn() },
+  purchase: { findMany: jest.fn(), groupBy: jest.fn(), count: jest.fn() },
+  supplierPayment: {
+    findMany: jest.fn(),
+    groupBy: jest.fn(),
+    count: jest.fn(),
+  },
   $queryRaw: jest.fn(),
 };
 
@@ -65,7 +69,9 @@ describe('SuppliersService', () => {
     prismaStub.customer.findFirst.mockResolvedValue(null);
     prismaStub.supplier.findFirst.mockResolvedValue(null);
     prismaStub.purchase.groupBy.mockResolvedValue([]);
+    prismaStub.purchase.count.mockResolvedValue(0);
     prismaStub.supplierPayment.groupBy.mockResolvedValue([]);
+    prismaStub.supplierPayment.count.mockResolvedValue(0);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -373,7 +379,7 @@ describe('SuppliersService', () => {
       });
     });
 
-    it('sends openingBalance as BigInt on update', async () => {
+    it('sends openingBalance as BigInt on update when ledger is still empty', async () => {
       prismaStub.supplier.findFirst.mockResolvedValue(baseSupplierRow());
       prismaStub.supplier.update.mockResolvedValue({});
 
@@ -384,9 +390,45 @@ describe('SuppliersService', () => {
         'u1',
       );
 
+      expect(prismaStub.supplierPayment.count).toHaveBeenCalled();
+      expect(prismaStub.purchase.count).toHaveBeenCalled();
       expect(prismaStub.supplier.update).toHaveBeenCalledWith({
         where: { id: SUPPLIER_ID },
         data: { openingBalance: 1234500n },
+      });
+    });
+
+    it('rejects openingBalance edits after supplier payments exist', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue(baseSupplierRow());
+      prismaStub.supplierPayment.count.mockResolvedValue(1);
+
+      await expect(
+        service.updateSupplier(
+          SUPPLIER_ID,
+          { openingBalance: 0 },
+          SHOP_ID,
+          'u1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.supplier.update).not.toHaveBeenCalled();
+    });
+
+    it('allows unrelated field updates even when payments exist', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValue(baseSupplierRow());
+      prismaStub.supplierPayment.count.mockResolvedValue(2);
+      prismaStub.supplier.update.mockResolvedValue({});
+
+      await service.updateSupplier(
+        SUPPLIER_ID,
+        { notes: 'Call before delivery' },
+        SHOP_ID,
+        'u1',
+      );
+
+      expect(prismaStub.supplierPayment.count).not.toHaveBeenCalled();
+      expect(prismaStub.supplier.update).toHaveBeenCalledWith({
+        where: { id: SUPPLIER_ID },
+        data: { notes: 'Call before delivery' },
       });
     });
 

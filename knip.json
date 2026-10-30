@@ -22,7 +22,11 @@
     "dist/**",
     "coverage/**",
     "api/**",
-    "scripts/.temp-jscpd/**"
+    "scripts/.temp-jscpd/**",
+    "scripts/full-audit-verify.mjs",
+    "scripts/live-verify-open-fixes.mjs",
+    "scripts/retest-audit-bugs.mjs",
+    "scripts/.audit-verify/**"
   ],
   "ignoreDependencies": [
     "@nestjs/cli",

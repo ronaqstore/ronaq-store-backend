@@ -11,6 +11,16 @@ export const cashReconciliationReasonRequired = (): ErrorResponseDTO => {
   );
 };
 
+export const supplierOpeningBalanceLocked = (): ErrorResponseDTO => {
+  return new ErrorResponseDTO(
+    'Cannot change opening balance',
+    [
+      'This supplier already has payments or purchases on the ledger, so the opening balance can no longer be edited. Correct the balance with a payment or purchase instead of changing the opening figure.',
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const invalidReportRange = (
   from: string,
   to: string,

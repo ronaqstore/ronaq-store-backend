@@ -24,11 +24,16 @@ import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import { businessDayRange } from '../../helpers/date.helper.js';
 import {
+  isUniqueConstraintViolation,
+  violatedColumn,
+} from '../../helpers/prisma-error-helper.js';
+import {
   cashReconciliationReasonRequired,
   resourceNotFound,
 } from '../../errors/error.builder.js';
 
 const CREATED = 'Cash reconciliation recorded successfully';
+const ALREADY_SAVED = 'Cash reconciliation already saved';
 
 @Injectable()
 export class CashReconciliationsService {
@@ -41,53 +46,80 @@ export class CashReconciliationsService {
     shopId: string,
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
+    const existing = await this.prisma.cashReconciliation.findFirst({
+      where: { shopId, clientRequestId: dto.clientRequestId },
+      select: { id: true },
+    });
+    if (existing) {
+      return new StatusBaseResponseDTO(true, ALREADY_SAVED);
+    }
+
     const reason = dto.reason?.trim() ? dto.reason : null;
 
-    await this.prisma.$transaction(async (tx) => {
-      const shop = await tx.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
-      `;
-      if (!shop?.length) {
-        throw new NotFoundException(resourceNotFound('Shop', shopId));
-      }
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const shop = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM shops WHERE id = ${shopId} FOR UPDATE
+        `;
+        if (!shop?.length) {
+          throw new NotFoundException(resourceNotFound('Shop', shopId));
+        }
 
-      const countedCash = BigInt(dto.countedCash);
-      const systemCash = BigInt(await aggregateCurrentCash(tx, shopId));
-      const difference = countedCash - systemCash;
+        const already = await tx.cashReconciliation.findFirst({
+          where: { shopId, clientRequestId: dto.clientRequestId },
+          select: { id: true },
+        });
+        if (already) {
+          return;
+        }
 
-      if (difference !== 0n && !reason) {
-        throw new BadRequestException(cashReconciliationReasonRequired());
-      }
+        const countedCash = BigInt(dto.countedCash);
+        const systemCash = BigInt(await aggregateCurrentCash(tx, shopId));
+        const difference = countedCash - systemCash;
 
-      const reconciliation = await tx.cashReconciliation.create({
-        data: {
-          shopId,
-          systemCash,
-          countedCash,
-          difference,
-          reason,
-          createdById: userId,
-        },
-        select: { id: true },
-      });
+        if (difference !== 0n && !reason) {
+          throw new BadRequestException(cashReconciliationReasonRequired());
+        }
 
-      if (difference !== 0n) {
-        const absolute = difference < 0n ? -difference : difference;
-        const now = new Date();
-        await tx.cashMovement.create({
+        const reconciliation = await tx.cashReconciliation.create({
           data: {
             shopId,
-            type: CashMovementType.RECONCILIATION_ADJUSTMENT,
-            direction: difference > 0n ? CashDirection.IN : CashDirection.OUT,
-            amount: absolute,
-            movementDate: now,
-            referenceType: ReferenceType.RECONCILIATION,
-            referenceId: reconciliation.id,
+            systemCash,
+            countedCash,
+            difference,
+            reason,
+            clientRequestId: dto.clientRequestId,
             createdById: userId,
           },
+          select: { id: true },
         });
+
+        if (difference !== 0n) {
+          const absolute = difference < 0n ? -difference : difference;
+          const now = new Date();
+          await tx.cashMovement.create({
+            data: {
+              shopId,
+              type: CashMovementType.RECONCILIATION_ADJUSTMENT,
+              direction: difference > 0n ? CashDirection.IN : CashDirection.OUT,
+              amount: absolute,
+              movementDate: now,
+              referenceType: ReferenceType.RECONCILIATION,
+              referenceId: reconciliation.id,
+              createdById: userId,
+            },
+          });
+        }
+      });
+    } catch (error) {
+      if (
+        isUniqueConstraintViolation(error) &&
+        violatedColumn(error, 'client_request_id')
+      ) {
+        return new StatusBaseResponseDTO(true, ALREADY_SAVED);
       }
-    });
+      throw error;
+    }
 
     return new StatusBaseResponseDTO(true, CREATED);
   }

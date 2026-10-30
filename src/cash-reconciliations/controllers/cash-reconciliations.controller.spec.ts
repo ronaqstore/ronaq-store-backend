@@ -71,9 +71,15 @@ describe('CashReconciliationsController', () => {
         message: 'Cash reconciliation recorded successfully',
       });
 
-    await controller.createReconciliation({ countedCash: 100000000 }, {
-      user: { shopId: 'shop-from-jwt', userId: 'user-1' },
-    } as any);
+    await controller.createReconciliation(
+      {
+        clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+        countedCash: 100000000,
+      },
+      {
+        user: { shopId: 'shop-from-jwt', userId: 'user-1' },
+      } as any,
+    );
 
     expect(spy).toHaveBeenCalledWith(
       expect.anything(),
@@ -91,7 +97,10 @@ describe('CashReconciliationsController', () => {
       });
 
     const res = await controller.createReconciliation(
-      { countedCash: 100000000 },
+      {
+        clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+        countedCash: 100000000,
+      },
       {
         user: { shopId: 'shop-1', userId: 'user-1' },
       } as any,
@@ -112,9 +121,15 @@ describe('CashReconciliationsController', () => {
       );
 
     await expect(
-      controller.createReconciliation({ countedCash: 100050000 }, {
-        user: { shopId: 'shop-1', userId: 'user-1' },
-      } as any),
+      controller.createReconciliation(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          countedCash: 100050000,
+        },
+        {
+          user: { shopId: 'shop-1', userId: 'user-1' },
+        } as any,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -173,9 +188,15 @@ describe('CashReconciliationsController', () => {
       .mockRejectedValue(new Error('database unavailable'));
 
     await expect(
-      controller.createReconciliation({ countedCash: 100000000 }, {
-        user: { shopId: 'shop-1', userId: 'user-1' },
-      } as any),
+      controller.createReconciliation(
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          countedCash: 100000000,
+        },
+        {
+          user: { shopId: 'shop-1', userId: 'user-1' },
+        } as any,
+      ),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 });

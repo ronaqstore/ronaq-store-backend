@@ -722,7 +722,16 @@ describe('PaymentsService', () => {
         const sql = strings?.join('') ?? '';
         if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
         if (sql.includes('FROM payments'))
-          return [{ status: 'ACTIVE', amount: 5000000n }];
+          return [
+            {
+              id: 'payment-1',
+              status: 'ACTIVE',
+              amount: 5000000n,
+              receipt_group_id: null,
+              sale_id: null,
+              customer_id: 'customer-1',
+            },
+          ];
         return [];
       });
     });

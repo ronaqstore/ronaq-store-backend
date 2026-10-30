@@ -30,6 +30,7 @@ import {
   duplicateFieldValue,
   requiredFieldCannotBeNull,
   resourceNotFound,
+  supplierOpeningBalanceLocked,
   systemRowProtected,
 } from '../../errors/error.builder.js';
 import { supplierCurrentBalances } from '../../helpers/party-current-balance.helper.js';
@@ -302,7 +303,30 @@ export class SuppliersService {
       data.notes = dto.notes === null ? null : dto.notes.trim() || null;
     }
     if (dto.openingBalance !== undefined) {
-      data.openingBalance = BigInt(dto.openingBalance);
+      const nextOpening = BigInt(dto.openingBalance);
+      if (nextOpening !== existing.openingBalance) {
+        const [paymentCount, purchaseCount] = await Promise.all([
+          this.prisma.supplierPayment.count({
+            where: {
+              shopId,
+              supplierId: id,
+              status: RecordStatus.ACTIVE,
+            },
+          }),
+          this.prisma.purchase.count({
+            where: {
+              shopId,
+              supplierId: id,
+              status: RecordStatus.ACTIVE,
+              isOpeningStock: false,
+            },
+          }),
+        ]);
+        if (paymentCount > 0 || purchaseCount > 0) {
+          throw new BadRequestException(supplierOpeningBalanceLocked());
+        }
+      }
+      data.openingBalance = nextOpening;
     }
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 

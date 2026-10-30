@@ -31,6 +31,17 @@ export const productNotPublishable = (
   );
 };
 
+export const productsNeedPhotosToPublish = (
+  productNames: string[],
+): ErrorResponseDTO => {
+  const listed = productNames.join(', ');
+  return new ErrorResponseDTO(
+    'Photos required to publish',
+    [`Add at least one photo before publishing: ${listed}.`],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const ptaStatusNotAllowedForBrand = (
   brandName: string,
   ptaStatus: string,

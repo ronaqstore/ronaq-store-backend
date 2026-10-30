@@ -219,7 +219,10 @@ describe('CashService', () => {
 
     it('defaults the date to the current business day and blanks the note', async () => {
       await service.createOwnerInvestment(
-        { clientRequestId: '01924f0a-0000-7000-8000-00000000beef', amount: 100 },
+        {
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+          amount: 100,
+        },
         SHOP_ID,
         USER_ID,
       );

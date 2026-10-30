@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { RecordStatus } from '../../generated/prisma/enums.js';
-import { shiftDays } from '../../helpers/date.helper.js';
+import {
+  businessToday,
+  dateColumnRange,
+  shiftDays,
+} from '../../helpers/date.helper.js';
 import { resolveDashboardRange } from '../helpers/dashboard-date.helper.js';
 import { FlowKpiTotalsDto, SparklinesDto } from '../dto/shop/shop-kpis.dto.js';
 import { SalesTrendBucketDto } from '../dto/shop/sales-trend.dto.js';
@@ -62,10 +66,7 @@ export class DashboardFlowService {
         where: {
           shopId,
           status: ACTIVE,
-          expenseDate: {
-            gte: new Date(`${fromDateStr}T00:00:00.000Z`),
-            lte: new Date(`${toDateStr}T00:00:00.000Z`),
-          },
+          expenseDate: dateColumnRange(fromDateStr, toDateStr),
         },
         select: { expenseDate: true, amount: true },
       }),
@@ -79,8 +80,8 @@ export class DashboardFlowService {
     start: Date,
     end: Date,
   ): Promise<FlowKpiTotalsDto> {
-    const fromStr = start.toISOString().slice(0, 10);
-    const toStr = end.toISOString().slice(0, 10);
+    const fromStr = businessToday(start);
+    const toStr = businessToday(new Date(end.getTime() - 1));
 
     const [salesAgg, saleItems, returnsAgg, returnItems, expenseAgg] =
       await Promise.all([
@@ -124,10 +125,7 @@ export class DashboardFlowService {
           where: {
             shopId,
             status: ACTIVE,
-            expenseDate: {
-              gte: new Date(`${fromStr}T00:00:00.000Z`),
-              lte: new Date(`${toStr}T00:00:00.000Z`),
-            },
+            expenseDate: dateColumnRange(fromStr, toStr),
           },
           _sum: { amount: true },
         }),
@@ -184,22 +182,22 @@ export class DashboardFlowService {
     const retByDay = new Map<string, number>();
 
     for (const s of bundle.sales) {
-      const d = s.saleDate.toISOString().slice(0, 10);
+      const d = businessToday(s.saleDate);
       salesByDay.set(d, (salesByDay.get(d) ?? 0) + Number(s.totalAmount));
     }
     for (const item of bundle.saleItems) {
-      const d = item.sale.saleDate.toISOString().slice(0, 10);
+      const d = businessToday(item.sale.saleDate);
       cogsByDay.set(
         d,
         (cogsByDay.get(d) ?? 0) + Number(item.unitCost) * item.quantity,
       );
     }
     for (const r of bundle.returns) {
-      const d = r.returnDate.toISOString().slice(0, 10);
+      const d = businessToday(r.returnDate);
       retByDay.set(d, (retByDay.get(d) ?? 0) + Number(r.returnAmount));
     }
     for (const e of bundle.expenses) {
-      const d = e.expenseDate.toISOString().slice(0, 10);
+      const d = businessToday(e.expenseDate);
       expByDay.set(d, (expByDay.get(d) ?? 0) + Number(e.amount));
     }
 
@@ -272,7 +270,7 @@ export class DashboardFlowService {
     }
 
     for (const s of bundle.sales) {
-      const dateStr = s.saleDate.toISOString().slice(0, 10);
+      const dateStr = businessToday(s.saleDate);
       const b = this.findMatchingBucket(dateStr, buckets);
       const entry = bucketData.get(b);
       if (entry) {
@@ -282,7 +280,7 @@ export class DashboardFlowService {
     }
 
     for (const item of bundle.saleItems) {
-      const dateStr = item.sale.saleDate.toISOString().slice(0, 10);
+      const dateStr = businessToday(item.sale.saleDate);
       const b = this.findMatchingBucket(dateStr, buckets);
       const entry = bucketData.get(b);
       if (entry) {
@@ -291,7 +289,7 @@ export class DashboardFlowService {
     }
 
     for (const r of bundle.returns) {
-      const dateStr = r.returnDate.toISOString().slice(0, 10);
+      const dateStr = businessToday(r.returnDate);
       const b = this.findMatchingBucket(dateStr, buckets);
       const entry = bucketData.get(b);
       if (entry) {
@@ -300,7 +298,7 @@ export class DashboardFlowService {
     }
 
     for (const e of bundle.expenses) {
-      const dateStr = e.expenseDate.toISOString().slice(0, 10);
+      const dateStr = businessToday(e.expenseDate);
       const b = this.findMatchingBucket(dateStr, buckets);
       const entry = bucketData.get(b);
       if (entry) {

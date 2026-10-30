@@ -19,6 +19,7 @@ import {
 import {
   resourceNotFound,
   productNotPublishable,
+  productsNeedPhotosToPublish,
 } from '../../errors/error.builder.js';
 import { BulkPublishProductsDto } from '../dto/bulk-publish-products.dto.js';
 import {
@@ -466,7 +467,12 @@ export class ProductsService {
     const ids = [...new Set(dto.ids)];
     const products = await this.prisma.product.findMany({
       where: { id: { in: ids }, shopId },
-      select: { id: true, name: true, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        _count: { select: { images: true } },
+      },
     });
 
     if (products.length !== ids.length) {
@@ -481,6 +487,12 @@ export class ProductsService {
       const inactive = products.find((p) => !p.isActive);
       if (inactive) {
         throw new BadRequestException(productNotPublishable(inactive.name));
+      }
+      const withoutPhotos = products.filter((p) => p._count.images === 0);
+      if (withoutPhotos.length > 0) {
+        throw new BadRequestException(
+          productsNeedPhotosToPublish(withoutPhotos.map((p) => p.name)),
+        );
       }
     }
 
