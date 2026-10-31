@@ -1,4 +1,5 @@
 import { config as loadEnv } from 'dotenv';
+import { resolve } from 'node:path';
 import { toE2eDatabaseUrl } from './e2e/e2e-env.js';
 
 // Runs before the test file's imports, so ConfigModule sees the env vars.
