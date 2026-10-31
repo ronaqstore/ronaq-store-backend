@@ -62,12 +62,22 @@ SELECT pg_temp.expect_fail('T11 zero-amount expense',
 SELECT pg_temp.expect_fail('T12 negative customer opening balance',
   $$INSERT INTO customers (id, shop_id, name, opening_balance, updated_at) VALUES ('4a4a4a4a-4a4a-4a4a-4a4a-4a4a4a4a4a4a','11111111-1111-1111-1111-111111111111','Neg',-100, now())$$);
 
+SELECT pg_temp.expect_fail('T12a negative counted_cash in cash_reconciliation',
+  $$INSERT INTO cash_reconciliations (id, shop_id, system_cash, counted_cash, difference, reason, client_request_id, created_by_id) VALUES ('8a8a8a8a-8a8a-8a8a-8a8a-8a8a8a8a8a8a','11111111-1111-1111-1111-111111111111',-5000,-100,4900,'negative counted cash','9a9a9a9a-9a9a-9a9a-9a9a-9a9a9a9a9a9a','22222222-2222-2222-2222-222222222222')$$);
+
+SELECT pg_temp.expect_fail('T12b difference mismatch in cash_reconciliation',
+  $$INSERT INTO cash_reconciliations (id, shop_id, system_cash, counted_cash, difference, reason, client_request_id, created_by_id) VALUES ('8a8a8a8a-8a8a-8a8a-8a8a-8a8a8a8a8a8a','11111111-1111-1111-1111-111111111111',-5000,0,1000,'wrong difference math','9a9a9a9a-9a9a-9a9a-9a9a-9a9a9a9a9a9a','22222222-2222-2222-2222-222222222222')$$);
+
+SELECT pg_temp.expect_fail('T12c non-zero difference without reason in cash_reconciliation',
+  $$INSERT INTO cash_reconciliations (id, shop_id, system_cash, counted_cash, difference, client_request_id, created_by_id) VALUES ('8a8a8a8a-8a8a-8a8a-8a8a-8a8a8a8a8a8a','11111111-1111-1111-1111-111111111111',-5000,0,5000,'9a9a9a9a-9a9a-9a9a-9a9a-9a9a9a9a9a9a','22222222-2222-2222-2222-222222222222')$$);
+
 \echo ''
 \echo '=== POSITIVE SETUP: these must all SUCCEED ==='
 INSERT INTO stock_levels (product_id, shop_id, quantity_on_hand, avg_unit_cost, updated_at) VALUES ('66666666-6666-6666-6666-666666666666','11111111-1111-1111-1111-111111111111',10,100, now());
 INSERT INTO sales (id, shop_id, sale_no, sale_date, subtotal, discount, total_amount, client_request_id, created_by_id, updated_at) VALUES ('77777777-7777-7777-7777-777777777777','11111111-1111-1111-1111-111111111111','S-0001',now(),10000,500,9500,'88888888-8888-8888-8888-888888888888','22222222-2222-2222-2222-222222222222', now());
 INSERT INTO sale_items (id, shop_id, sale_id, product_id, quantity, unit_price, unit_cost, total) VALUES ('2a2a2a2a-2a2a-2a2a-2a2a-2a2a2a2a2a2a','11111111-1111-1111-1111-111111111111','77777777-7777-7777-7777-777777777777','66666666-6666-6666-6666-666666666666',2,1000,500,2000);
 INSERT INTO cash_movements (id, shop_id, type, direction, amount, movement_date, created_by_id) VALUES ('99999999-9999-9999-9999-999999999999','11111111-1111-1111-1111-111111111111','CUSTOMER_PAYMENT','IN',500,now(),'22222222-2222-2222-2222-222222222222');
+INSERT INTO cash_reconciliations (id, shop_id, system_cash, counted_cash, difference, reason, client_request_id, created_by_id) VALUES ('8a8a8a8a-8a8a-8a8a-8a8a-8a8a8a8a8a8a','11111111-1111-1111-1111-111111111111',-5000,0,5000,'Overdraft drawer count','9a9a9a9a-9a9a-9a9a-9a9a-9a9a9a9a9a9a','22222222-2222-2222-2222-222222222222');
 INSERT INTO inventory_movements (id, shop_id, product_id, type, quantity_change) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','11111111-1111-1111-1111-111111111111','66666666-6666-6666-6666-666666666666','PURCHASE',3);
 INSERT INTO purchases (id, shop_id, supplier_id, purchase_no, purchase_date, total_amount, client_request_id, created_by_id, updated_at) VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd','11111111-1111-1111-1111-111111111111','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','P-0001',now(),5000,'14141414-1414-1414-1414-141414141414','22222222-2222-2222-2222-222222222222', now());
 INSERT INTO purchase_items (id, shop_id, purchase_id, product_id, quantity, unit_cost, total_cost) VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc','11111111-1111-1111-1111-111111111111','dddddddd-dddd-dddd-dddd-dddddddddddd','66666666-6666-6666-6666-666666666666',1,5000,5000);

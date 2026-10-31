@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CashReconciliationsService } from './cash-reconciliations.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { Prisma } from '../../generated/prisma/client.js';
 
 const SHOP_ID = 'shop-1';
 const USER_ID = 'user-1';
@@ -210,6 +211,252 @@ describe('CashReconciliationsService', () => {
           }),
         }),
       );
+    });
+
+    it('reproduces crash on overdraft: legacy cash_recon_amounts_chk constraint blocks systemCash < 0 (PostgreSQL 23514)', async () => {
+      // Overdraft state: Inbound 10,000,000 paisa, Outbound 15,000,000 paisa -> current cash = -5,000,000 paisa
+      tx.cashMovement.aggregate = jest.fn(
+        ({ where }: { where: { direction?: string } }) =>
+          Promise.resolve({
+            _sum: {
+              amount: where.direction === 'IN' ? 10000000n : 15000000n,
+            },
+          }),
+      ) as any;
+
+      // Legacy PostgreSQL check constraint: CHECK (system_cash >= 0 AND counted_cash >= 0 AND difference = counted_cash - system_cash)
+      tx.cashReconciliation.create = jest
+        .fn()
+        .mockImplementation(({ data }) => {
+          if (data.systemCash < 0n) {
+            const err = new Error(
+              'new row for relation "cash_reconciliations" violates check constraint "cash_recon_amounts_chk"',
+            );
+            (err as any).code = '23514';
+            throw err;
+          }
+          return Promise.resolve({ id: 'rec-overdraft' });
+        });
+
+      // Shop owner reconciles drawer while in overdraft -> crashes with check constraint violation
+      await expect(
+        service.createReconciliation(
+          {
+            clientRequestId: CLIENT_REQUEST_ID,
+            countedCash: 0,
+            reason: 'Closing overdraft drawer',
+          },
+          SHOP_ID,
+          USER_ID,
+        ),
+      ).rejects.toThrow(
+        'new row for relation "cash_reconciliations" violates check constraint "cash_recon_amounts_chk"',
+      );
+    });
+
+    it('successfully reconciles an overdraft drawer with countedCash = 0 under the new constraint', async () => {
+      // Overdraft state: Inbound 10,000,000 paisa, Outbound 15,000,000 paisa -> current cash = -5,000,000 paisa
+      tx.cashMovement.aggregate = jest.fn(
+        ({ where }: { where: { direction?: string } }) =>
+          Promise.resolve({
+            _sum: {
+              amount: where.direction === 'IN' ? 10000000n : 15000000n,
+            },
+          }),
+      ) as any;
+
+      // New PostgreSQL check constraint: CHECK (counted_cash >= 0 AND difference = counted_cash - system_cash)
+      // Allows systemCash < 0, while maintaining countedCash >= 0 and difference equation.
+      tx.cashReconciliation.create = jest
+        .fn()
+        .mockImplementation(({ data }) => {
+          if (
+            data.countedCash < 0n ||
+            data.difference !== data.countedCash - data.systemCash
+          ) {
+            const err = new Error(
+              'new row for relation "cash_reconciliations" violates check constraint "cash_recon_amounts_chk"',
+            );
+            (err as any).code = '23514';
+            throw err;
+          }
+          return Promise.resolve({ id: 'rec-overdraft' });
+        });
+
+      const res = await service.createReconciliation(
+        {
+          clientRequestId: CLIENT_REQUEST_ID,
+          countedCash: 0,
+          reason: 'Closing overdraft drawer',
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Cash reconciliation recorded successfully',
+      });
+      // System cash is negative BigInt (-5000000n), counted cash is 0n, difference is +5000000n
+      expect(tx.cashReconciliation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            shopId: SHOP_ID,
+            systemCash: -5000000n,
+            countedCash: 0n,
+            difference: 5000000n,
+            reason: 'Closing overdraft drawer',
+            clientRequestId: CLIENT_REQUEST_ID,
+            createdById: USER_ID,
+          }),
+        }),
+      );
+      // Because counted > system (0 > -5000000), an IN adjustment of 5000000n restores the drawer balance to 0
+      expect(tx.cashMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          shopId: SHOP_ID,
+          type: 'RECONCILIATION_ADJUSTMENT',
+          direction: 'IN',
+          amount: 5000000n,
+          movementDate: expect.any(Date),
+          referenceType: 'RECONCILIATION',
+          referenceId: 'rec-overdraft',
+          createdById: USER_ID,
+        }),
+      });
+    });
+
+    it('successfully reconciles an overdraft drawer with positive countedCash', async () => {
+      // Overdraft state: current cash = -5,000,000 paisa
+      tx.cashMovement.aggregate = jest.fn(
+        ({ where }: { where: { direction?: string } }) =>
+          Promise.resolve({
+            _sum: {
+              amount: where.direction === 'IN' ? 10000000n : 15000000n,
+            },
+          }),
+      ) as any;
+
+      tx.cashReconciliation.create = jest
+        .fn()
+        .mockImplementation(({ data }) => {
+          if (
+            data.countedCash < 0n ||
+            data.difference !== data.countedCash - data.systemCash
+          ) {
+            const err = new Error(
+              'new row for relation "cash_reconciliations" violates check constraint "cash_recon_amounts_chk"',
+            );
+            (err as any).code = '23514';
+            throw err;
+          }
+          return Promise.resolve({ id: 'rec-overdraft-positive' });
+        });
+
+      // Drawer has Rs 20,000 (2,000,000 paisa) physically counted in hand
+      const res = await service.createReconciliation(
+        {
+          clientRequestId: CLIENT_REQUEST_ID,
+          countedCash: 2000000,
+          reason: 'Owner deposited funds into overdraft drawer',
+        },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res.status).toBe(true);
+      // difference = 2000000 - (-5000000) = 7000000n
+      expect(tx.cashReconciliation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            systemCash: -5000000n,
+            countedCash: 2000000n,
+            difference: 7000000n,
+          }),
+        }),
+      );
+      // IN adjustment of 7000000 brings balance from -5,000,000 to +2,000,000
+      expect(tx.cashMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            direction: 'IN',
+            amount: 7000000n,
+          }),
+        }),
+      );
+    });
+
+    it('returns already-saved when clientRequestId is detected inside the transaction lock (Law 4 in-lock check)', async () => {
+      tx.cashReconciliation.findFirst.mockResolvedValue({ id: 'rec-already' });
+
+      const res = await service.createReconciliation(
+        { clientRequestId: CLIENT_REQUEST_ID, countedCash: 100000000 },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Cash reconciliation already saved',
+      });
+      expect(tx.cashReconciliation.create).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('returns already-saved on racing unique constraint violation on client_request_id (Law 4 concurrent race)', async () => {
+      const error = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the constraint: cash_reconciliations_shop_id_client_request_id_key',
+        {
+          code: 'P2002',
+          clientVersion: '7.10.0',
+          meta: {
+            target: ['cash_reconciliations_shop_id_client_request_id_key'],
+          },
+        },
+      );
+      tx.cashReconciliation.create.mockRejectedValue(error);
+
+      const res = await service.createReconciliation(
+        { clientRequestId: CLIENT_REQUEST_ID, countedCash: 100000000 },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Cash reconciliation already saved',
+      });
+    });
+
+    it('enforces the new constraint: counted_cash cannot be negative', async () => {
+      // Simulate new constraint blocking countedCash < 0n
+      tx.cashReconciliation.create = jest
+        .fn()
+        .mockImplementation(({ data }) => {
+          if (
+            data.countedCash < 0n ||
+            data.difference !== data.countedCash - data.systemCash
+          ) {
+            const err = new Error(
+              'new row for relation "cash_reconciliations" violates check constraint "cash_recon_amounts_chk"',
+            );
+            (err as any).code = '23514';
+            throw err;
+          }
+          return Promise.resolve({ id: 'rec-1' });
+        });
+
+      await expect(
+        service.createReconciliation(
+          {
+            clientRequestId: CLIENT_REQUEST_ID,
+            countedCash: -100 as any,
+            reason: 'Negative test',
+          },
+          SHOP_ID,
+          USER_ID,
+        ),
+      ).rejects.toThrow('violates check constraint "cash_recon_amounts_chk"');
     });
 
     it('rejects a non-zero difference without a reason', async () => {

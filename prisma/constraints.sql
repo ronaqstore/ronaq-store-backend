@@ -114,7 +114,7 @@ ALTER TABLE return_items ADD CONSTRAINT return_items_qty_chk CHECK (quantity > 0
 -- 2) (return_id, sale_item_id) UNIQUE: each sale item (phone or accessory) can appear at most once per return.
 ALTER TABLE refunds      ADD CONSTRAINT refunds_amount_chk   CHECK (amount > 0);
 ALTER TABLE cash_reconciliations
-  ADD CONSTRAINT cash_recon_amounts_chk CHECK (system_cash >= 0 AND counted_cash >= 0 AND difference = counted_cash - system_cash),
+  ADD CONSTRAINT cash_recon_amounts_chk CHECK (counted_cash >= 0 AND difference = counted_cash - system_cash),
   ADD CONSTRAINT cash_recon_reason_chk  CHECK (difference = 0 OR (reason IS NOT NULL AND length(btrim(reason)) > 0));
 
 -- -----------------------------------------------------------------------------

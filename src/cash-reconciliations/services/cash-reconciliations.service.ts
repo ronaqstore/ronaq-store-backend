@@ -76,7 +76,9 @@ export class CashReconciliationsService {
         }
 
         const countedCash = BigInt(dto.countedCash);
-        const systemCash = BigInt(await aggregateCurrentCash(tx, shopId));
+        const systemCash = BigInt(
+          Math.round(await aggregateCurrentCash(tx, shopId)),
+        );
         const difference = countedCash - systemCash;
 
         if (difference !== 0n && !reason) {

@@ -144,3 +144,16 @@ export const saleHasReturns = (saleNo: string): ErrorResponseDTO => {
     HttpStatus.BAD_REQUEST,
   );
 };
+
+export const paymentCancelExceedsRefunds = (
+  activeRefundsSum: bigint | number,
+): ErrorResponseDTO => {
+  const refundsRs = formatPaisaToRupees(activeRefundsSum);
+  return new ErrorResponseDTO(
+    'Cannot cancel payment',
+    [
+      `Cannot cancel payment: Active refunds (Rs ${refundsRs}) on this sale exceed remaining payments. The return/refund must be handled first.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};

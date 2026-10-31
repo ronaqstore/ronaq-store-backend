@@ -19,6 +19,7 @@ import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import { lockShopForUpdate } from '../../helpers/shop-lock.helper.js';
 import {
   cancelledRowMutationForbidden,
+  paymentCancelExceedsRefunds,
   resourceNotFound,
 } from '../../errors/error.builder.js';
 export type CancelPaymentResult =
@@ -136,6 +137,51 @@ export class PaymentsCancelService {
         );
       }
 
+      const salePaymentsToCancel = new Map<string, bigint>();
+      for (const sibling of siblings) {
+        if (sibling.saleId) {
+          const current = salePaymentsToCancel.get(sibling.saleId) ?? 0n;
+          salePaymentsToCancel.set(sibling.saleId, current + sibling.amount);
+        }
+      }
+
+      const sortedSaleIds = Array.from(salePaymentsToCancel.keys()).sort();
+      for (const saleId of sortedSaleIds) {
+        const paymentToCancelAmount = salePaymentsToCancel.get(saleId)!;
+
+        const lockedSale = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM sales
+          WHERE id = ${saleId} AND shop_id = ${shopId}
+          FOR UPDATE
+        `;
+        if (!lockedSale?.length) {
+          throw new NotFoundException(resourceNotFound('Sale', saleId));
+        }
+
+        const paymentAgg = await tx.$queryRaw<
+          Array<{ total: bigint | string }>
+        >`
+          SELECT COALESCE(SUM(amount), 0) AS total
+          FROM payments
+          WHERE sale_id = ${saleId} AND shop_id = ${shopId} AND status = 'ACTIVE'
+        `;
+        const activePaidSum = BigInt(paymentAgg[0]?.total ?? 0);
+
+        const refundAgg = await tx.$queryRaw<Array<{ total: bigint | string }>>`
+          SELECT COALESCE(SUM(rf.amount), 0) AS total
+          FROM refunds rf
+          INNER JOIN returns sr ON sr.id = rf.return_id
+          WHERE sr.sale_id = ${saleId} AND sr.shop_id = ${shopId} AND sr.status = 'ACTIVE'
+        `;
+        const activeRefundsSum = BigInt(refundAgg[0]?.total ?? 0);
+
+        if (activePaidSum - paymentToCancelAmount < activeRefundsSum) {
+          throw new BadRequestException(
+            paymentCancelExceedsRefunds(activeRefundsSum),
+          );
+        }
+      }
+
       let totalAmount = 0n;
       let totalCashAmount = 0n;
       for (const sibling of siblings) {
@@ -250,6 +296,7 @@ export class PaymentsCancelService {
         amount: true,
         method: true,
         customerId: true,
+        saleId: true,
         receiptGroupId: true,
       },
     });
@@ -269,7 +316,13 @@ export class PaymentsCancelService {
             receiptGroupId: payment.receiptGroupId,
             status: RecordStatus.ACTIVE,
           },
-          select: { id: true, amount: true, method: true, customerId: true },
+          select: {
+            id: true,
+            amount: true,
+            method: true,
+            customerId: true,
+            saleId: true,
+          },
         })
       : [
           {
@@ -277,6 +330,7 @@ export class PaymentsCancelService {
             amount: payment.amount,
             method: payment.method,
             customerId: payment.customerId,
+            saleId: payment.saleId,
           },
         ];
 
@@ -296,35 +350,91 @@ export class PaymentsCancelService {
     let customerUdharAfter: number | null = null;
     const customerId = payment.customerId ?? groupPayments[0]?.customerId;
     if (customerId) {
-      const [customer, salesAgg, paymentsAgg] = await Promise.all([
-        this.prisma.customer.findFirst({
-          where: { id: customerId, shopId },
-          select: { openingBalance: true },
-        }),
-        this.prisma.sale.aggregate({
-          where: {
-            shopId,
-            customerId,
-            status: RecordStatus.ACTIVE,
-          },
-          _sum: { totalAmount: true },
-        }),
+      const [customer, salesAgg, paymentsAgg, returnsAgg, refundsAgg] =
+        await Promise.all([
+          this.prisma.customer.findFirst({
+            where: { id: customerId, shopId },
+            select: { openingBalance: true },
+          }),
+          this.prisma.sale.aggregate({
+            where: {
+              shopId,
+              customerId,
+              status: RecordStatus.ACTIVE,
+            },
+            _sum: { totalAmount: true },
+          }),
+          this.prisma.payment.aggregate({
+            where: {
+              shopId,
+              customerId,
+              status: RecordStatus.ACTIVE,
+            },
+            _sum: { amount: true },
+          }),
+          this.prisma.saleReturn.aggregate({
+            where: {
+              shopId,
+              customerId,
+              status: RecordStatus.ACTIVE,
+            },
+            _sum: { returnAmount: true },
+          }),
+          this.prisma.refund.aggregate({
+            where: {
+              shopId,
+              saleReturn: {
+                customerId,
+                status: RecordStatus.ACTIVE,
+              },
+            },
+            _sum: { amount: true },
+          }),
+        ]);
+      if (customer) {
+        const balance =
+          customer.openingBalance +
+          (salesAgg._sum.totalAmount ?? 0n) -
+          (paymentsAgg._sum.amount ?? 0n) -
+          (returnsAgg._sum.returnAmount ?? 0n) +
+          (refundsAgg._sum.amount ?? 0n);
+
+        customerUdharAfter = Number(balance + totalAmount);
+      }
+    }
+
+    let blocked = false;
+    let blockedReason: string | null = null;
+
+    const salePaymentsToCancel = new Map<string, bigint>();
+    for (const p of groupPayments) {
+      if (p.saleId) {
+        const cur = salePaymentsToCancel.get(p.saleId) ?? 0n;
+        salePaymentsToCancel.set(p.saleId, cur + p.amount);
+      }
+    }
+
+    for (const [saleId, cancelAmount] of salePaymentsToCancel.entries()) {
+      const [paymentsAgg, refundsAgg] = await Promise.all([
         this.prisma.payment.aggregate({
+          where: { shopId, saleId, status: RecordStatus.ACTIVE },
+          _sum: { amount: true },
+        }),
+        this.prisma.refund.aggregate({
           where: {
             shopId,
-            customerId,
-            status: RecordStatus.ACTIVE,
+            saleReturn: { saleId, shopId, status: RecordStatus.ACTIVE },
           },
           _sum: { amount: true },
         }),
       ]);
-      if (customer) {
-        const balance =
-          Number(customer.openingBalance) +
-          Number(salesAgg._sum.totalAmount ?? 0n) -
-          Number(paymentsAgg._sum.amount ?? 0n);
-
-        customerUdharAfter = balance + Number(totalAmount);
+      const activePaid = paymentsAgg._sum.amount ?? 0n;
+      const activeRefunds = refundsAgg._sum.amount ?? 0n;
+      if (activePaid - cancelAmount < activeRefunds) {
+        blocked = true;
+        blockedReason =
+          paymentCancelExceedsRefunds(activeRefunds).message.join(' ');
+        break;
       }
     }
 
@@ -340,8 +450,8 @@ export class PaymentsCancelService {
       customerUdharAfter,
       supplierPayableAfter: null,
       stockItems: [],
-      blocked: false,
-      blockedReason: null,
+      blocked,
+      blockedReason,
     };
   }
 }

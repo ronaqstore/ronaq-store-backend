@@ -22,6 +22,8 @@ const prismaStub = {
   },
   customer: { findFirst: jest.fn() },
   sale: { findMany: jest.fn(), aggregate: jest.fn() },
+  saleReturn: { aggregate: jest.fn() },
+  refund: { aggregate: jest.fn() },
   cashMovement: { aggregate: jest.fn() },
   $transaction: jest.fn(),
 };
@@ -898,16 +900,26 @@ describe('PaymentsService', () => {
         method: 'BANK',
         receiptGroupId: null,
       });
-      tx.$queryRaw.mockResolvedValue([
-        {
-          id: 'payment-1',
-          status: 'ACTIVE',
-          amount: 50000n,
-          method: 'BANK',
-          sale_id: 'sale-1',
-          customer_id: 'cust-1',
-        },
-      ]);
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM payments') && sql.includes('FOR UPDATE'))
+          return [
+            {
+              id: 'payment-1',
+              status: 'ACTIVE',
+              amount: 50000n,
+              method: 'BANK',
+              sale_id: 'sale-1',
+              customer_id: 'cust-1',
+            },
+          ];
+        if (sql.includes('FROM sales')) return [{ id: 'sale-1' }];
+        if (sql.includes('SUM(amount)') && sql.includes('FROM payments'))
+          return [{ total: 50000n }];
+        if (sql.includes('FROM refunds')) return [{ total: 0n }];
+        return [];
+      });
       tx.payment.update.mockResolvedValue({ id: 'payment-1' });
 
       const res = await service.cancelPayment(
@@ -935,6 +947,240 @@ describe('PaymentsService', () => {
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
       expect(tx.payment.update).not.toHaveBeenCalled();
     });
+
+    it('rejects cancelling a payment when active refunds on the sale would exceed remaining paid amount', async () => {
+      prismaStub.payment.findFirst.mockResolvedValue({
+        id: 'payment-1',
+        status: 'ACTIVE',
+        amount: 100000n,
+        saleId: 'sale-1',
+      });
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM payments') && sql.includes('FOR UPDATE'))
+          return [
+            {
+              id: 'payment-1',
+              status: 'ACTIVE',
+              amount: 100000n,
+              receipt_group_id: null,
+              sale_id: 'sale-1',
+              customer_id: 'customer-1',
+            },
+          ];
+        if (sql.includes('FROM sales')) return [{ id: 'sale-1' }];
+        if (sql.includes('SUM(amount)') && sql.includes('FROM payments'))
+          return [{ total: 100000n }];
+        if (sql.includes('FROM refunds')) return [{ total: 100000n }];
+        return [];
+      });
+
+      await expect(
+        service.cancelPayment('payment-1', cancelDto, SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tx.payment.update).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects cancelling a non-cash payment when active refunds on the sale exceed remaining payments', async () => {
+      prismaStub.payment.findFirst.mockResolvedValue({
+        id: 'payment-bank-1',
+        status: 'ACTIVE',
+        amount: 100000n,
+        method: 'BANK',
+        saleId: 'sale-1',
+      });
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM payments') && sql.includes('FOR UPDATE'))
+          return [
+            {
+              id: 'payment-bank-1',
+              status: 'ACTIVE',
+              amount: 100000n,
+              method: 'BANK',
+              receipt_group_id: null,
+              sale_id: 'sale-1',
+              customer_id: 'customer-1',
+            },
+          ];
+        if (sql.includes('FROM sales')) return [{ id: 'sale-1' }];
+        if (sql.includes('SUM(amount)') && sql.includes('FROM payments'))
+          return [{ total: 100000n }];
+        if (sql.includes('FROM refunds')) return [{ total: 100000n }];
+        return [];
+      });
+
+      await expect(
+        service.cancelPayment('payment-bank-1', cancelDto, SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tx.payment.update).not.toHaveBeenCalled();
+    });
+
+    it('allows cancelling payment on a partial return where remaining paid is >= active refund amount', async () => {
+      prismaStub.payment.findFirst.mockResolvedValue({
+        id: 'payment-1',
+        status: 'ACTIVE',
+        amount: 100000n,
+        saleId: 'sale-1',
+      });
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM payments') && sql.includes('FOR UPDATE'))
+          return [
+            {
+              id: 'payment-1',
+              status: 'ACTIVE',
+              amount: 100000n,
+              receipt_group_id: null,
+              sale_id: 'sale-1',
+              customer_id: 'customer-1',
+            },
+          ];
+        if (sql.includes('FROM sales')) return [{ id: 'sale-1' }];
+        if (sql.includes('SUM(amount)') && sql.includes('FROM payments'))
+          return [{ total: 200000n }];
+        if (sql.includes('FROM refunds')) return [{ total: 50000n }];
+        return [];
+      });
+
+      const res = await service.cancelPayment(
+        'payment-1',
+        cancelDto,
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Payment cancelled successfully',
+      });
+      expect(tx.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'payment-1', shopId: SHOP_ID },
+          data: expect.objectContaining({ status: 'CANCELLED' }),
+        }),
+      );
+      expect(tx.cashMovement.create).toHaveBeenCalled();
+    });
+
+    it('rejects cancelling a receipt group payment when one sibling belongs to a sale with active refunds exceeding remaining paid', async () => {
+      const receiptGroupId = '01924f0a-0000-7000-8000-000000000099';
+      prismaStub.payment.findFirst.mockResolvedValue({
+        id: 'payment-group-1',
+        status: 'ACTIVE',
+        amount: 50000n,
+        receiptGroupId,
+        saleId: 'sale-1',
+      });
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM payments') && sql.includes('FOR UPDATE')) {
+          if (sql.includes('receipt_group_id')) {
+            return [
+              {
+                id: 'payment-group-1',
+                status: 'ACTIVE',
+                amount: 50000n,
+                receipt_group_id: receiptGroupId,
+                sale_id: 'sale-1',
+                customer_id: 'customer-1',
+              },
+              {
+                id: 'payment-group-2',
+                status: 'ACTIVE',
+                amount: 50000n,
+                receipt_group_id: receiptGroupId,
+                sale_id: 'sale-2',
+                customer_id: 'customer-1',
+              },
+            ];
+          }
+          return [
+            {
+              id: 'payment-group-1',
+              status: 'ACTIVE',
+              amount: 50000n,
+              receipt_group_id: receiptGroupId,
+              sale_id: 'sale-1',
+              customer_id: 'customer-1',
+            },
+          ];
+        }
+        if (sql.includes('FROM sales')) return [{ id: 'sale-1' }];
+        if (sql.includes('SUM(amount)') && sql.includes('FROM payments'))
+          return [{ total: 50000n }];
+        if (sql.includes('FROM refunds')) return [{ total: 50000n }];
+        return [];
+      });
+
+      await expect(
+        service.cancelPayment('payment-group-1', cancelDto, SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tx.payment.update).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects cancelling a receipt group when multiple siblings on the same sale combined exceed remaining payments over refunds', async () => {
+      const receiptGroupId = '01924f0a-0000-7000-8000-000000000088';
+      prismaStub.payment.findFirst.mockResolvedValue({
+        id: 'payment-g1',
+        status: 'ACTIVE',
+        amount: 30000n,
+        receiptGroupId,
+        saleId: 'sale-1',
+      });
+      tx.$queryRaw.mockImplementation((strings: any) => {
+        const sql = strings?.join('') ?? '';
+        if (sql.includes('FROM shops')) return [{ id: SHOP_ID }];
+        if (sql.includes('FROM payments') && sql.includes('FOR UPDATE')) {
+          if (sql.includes('receipt_group_id')) {
+            return [
+              {
+                id: 'payment-g1',
+                status: 'ACTIVE',
+                amount: 30000n,
+                receipt_group_id: receiptGroupId,
+                sale_id: 'sale-1',
+                customer_id: 'customer-1',
+              },
+              {
+                id: 'payment-g2',
+                status: 'ACTIVE',
+                amount: 30000n,
+                receipt_group_id: receiptGroupId,
+                sale_id: 'sale-1',
+                customer_id: 'customer-1',
+              },
+            ];
+          }
+          return [
+            {
+              id: 'payment-g1',
+              status: 'ACTIVE',
+              amount: 30000n,
+              receipt_group_id: receiptGroupId,
+              sale_id: 'sale-1',
+              customer_id: 'customer-1',
+            },
+          ];
+        }
+        if (sql.includes('FROM sales')) return [{ id: 'sale-1' }];
+        if (sql.includes('SUM(amount)') && sql.includes('FROM payments'))
+          return [{ total: 60000n }];
+        if (sql.includes('FROM refunds')) return [{ total: 40000n }];
+        return [];
+      });
+
+      await expect(
+        service.cancelPayment('payment-g1', cancelDto, SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(tx.payment.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('getCancelImpact', () => {
@@ -959,6 +1205,12 @@ describe('PaymentsService', () => {
       prismaStub.payment.aggregate.mockResolvedValue({
         _sum: { amount: 300000n },
       });
+      prismaStub.saleReturn.aggregate.mockResolvedValue({
+        _sum: { returnAmount: 0n },
+      });
+      prismaStub.refund.aggregate.mockResolvedValue({
+        _sum: { amount: 0n },
+      });
     });
 
     it('shows cash out and the Udhar back, writing nothing', async () => {
@@ -982,6 +1234,51 @@ describe('PaymentsService', () => {
         blockedReason: null,
       });
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('factors in active returns and refunds when calculating customerUdharAfter', async () => {
+      prismaStub.saleReturn.aggregate.mockResolvedValue({
+        _sum: { returnAmount: 150000n },
+      });
+      prismaStub.refund.aggregate.mockResolvedValue({
+        _sum: { amount: 50000n },
+      });
+
+      const res = await service.getCancelImpact('payment-1', SHOP_ID);
+
+      // balance: opening 100000 + sales 700000 - payments 300000 - returns 150000 + refunds 50000 = 400000.
+      // After cancelling 400000 payment: 400000 + 400000 = 800000.
+      expect(res.customerUdharAfter).toBe(800000);
+    });
+
+    it('marks blocked true and sets blockedReason when active refunds exceed remaining payments', async () => {
+      prismaStub.payment.findFirst.mockResolvedValue({
+        id: 'payment-1',
+        status: 'ACTIVE',
+        amount: 400000n,
+        customerId: CUSTOMER_ID,
+        saleId: 'sale-1',
+      });
+      prismaStub.payment.aggregate.mockImplementation((args: any) => {
+        if (args?.where?.saleId === 'sale-1') {
+          return Promise.resolve({ _sum: { amount: 400000n } });
+        }
+        return Promise.resolve({ _sum: { amount: 400000n } });
+      });
+      prismaStub.refund.aggregate.mockImplementation((args: any) => {
+        if (args?.where?.saleReturn?.saleId === 'sale-1') {
+          return Promise.resolve({ _sum: { amount: 400000n } });
+        }
+        return Promise.resolve({ _sum: { amount: 0n } });
+      });
+
+      const res = await service.getCancelImpact('payment-1', SHOP_ID);
+
+      expect(res.blocked).toBe(true);
+      expect(res.blockedReason).toContain(
+        'Cannot cancel payment: Active refunds',
+      );
+      expect(res.blockedReason).toContain('Rs 4,000');
     });
 
     it('400s when the payment is already cancelled', async () => {
