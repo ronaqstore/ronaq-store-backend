@@ -25,6 +25,7 @@ export function marketplaceShopWhere(
   const cityTokens = resolveHubCityTokens(city);
   return {
     status: ShopStatus.ACTIVE,
+    subscriptionEndsAt: { gt: new Date() },
     storeSettings: {
       isEnabled: true,
       ...(cityTokens

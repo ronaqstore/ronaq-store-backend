@@ -282,6 +282,7 @@ export class MarketplaceService {
         publishedAt: { not: null },
         shop: {
           status: ShopStatus.ACTIVE,
+          subscriptionEndsAt: { gt: new Date() },
           storeSettings: { isEnabled: true },
         },
       },

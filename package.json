@@ -9,6 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
+    "db:clean": "tsx prisma/clean-db.ts",
     "postinstall": "prisma generate",
     "build": "prisma generate && nest build",
     "start": "nest start -p tsconfig.build.json",

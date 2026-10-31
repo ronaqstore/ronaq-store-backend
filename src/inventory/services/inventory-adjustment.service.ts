@@ -42,6 +42,20 @@ export class InventoryAdjustmentService {
     dto: CreateInventoryAdjustmentDto,
     shopId: string,
   ): Promise<InventoryAdjustmentOutcome> {
+    if (dto.clientRequestId) {
+      const existing = await this.prisma.inventoryMovement.findFirst({
+        where: {
+          shopId,
+          referenceType: ReferenceType.MANUAL,
+          referenceId: dto.clientRequestId,
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        return { kind: 'created', message: CREATED };
+      }
+    }
+
     const product = await this.prisma.product.findFirst({
       where: { id: dto.productId, shopId, isActive: true },
       select: { id: true, name: true, trackingType: true },
@@ -63,6 +77,7 @@ export class InventoryAdjustmentService {
         countedQuantity,
         dto.reason,
         shopId,
+        dto.clientRequestId,
       );
     } else if (dto.type === 'RESTORE') {
       outcome = await this.restorePhone(product, dto, shopId);
@@ -79,6 +94,7 @@ export class InventoryAdjustmentService {
         dto.type,
         dto.reason,
         shopId,
+        dto.clientRequestId,
       );
     }
     if (outcome.kind === 'created') {
@@ -92,8 +108,21 @@ export class InventoryAdjustmentService {
     countedQuantity: number,
     reason: string,
     shopId: string,
+    clientRequestId?: string,
   ): Promise<InventoryAdjustmentOutcome> {
     const outcome = await this.prisma.$transaction(async (tx) => {
+      if (clientRequestId) {
+        const existingInTx = await tx.inventoryMovement.findFirst({
+          where: {
+            shopId,
+            referenceType: ReferenceType.MANUAL,
+            referenceId: clientRequestId,
+          },
+          select: { id: true },
+        });
+        if (existingInTx) return { kind: 'created' as const };
+      }
+
       const rows = await tx.$queryRaw<Array<{ quantity_on_hand: number }>>`
         SELECT quantity_on_hand FROM stock_levels
         WHERE product_id = ${product.id} AND shop_id = ${shopId}
@@ -135,6 +164,8 @@ export class InventoryAdjustmentService {
           type: InventoryMovementType.ADJUSTMENT,
           quantityChange: delta,
           reason,
+          referenceType: clientRequestId ? ReferenceType.MANUAL : undefined,
+          referenceId: clientRequestId ?? undefined,
         },
       });
       return { kind: 'created' as const };
@@ -151,8 +182,21 @@ export class InventoryAdjustmentService {
     type: 'DAMAGED' | 'LOST',
     reason: string,
     shopId: string,
+    clientRequestId?: string,
   ): Promise<InventoryAdjustmentOutcome> {
     await this.prisma.$transaction(async (tx) => {
+      if (clientRequestId) {
+        const existingInTx = await tx.inventoryMovement.findFirst({
+          where: {
+            shopId,
+            referenceType: ReferenceType.MANUAL,
+            referenceId: clientRequestId,
+          },
+          select: { id: true },
+        });
+        if (existingInTx) return { kind: 'created' as const };
+      }
+
       const removed = await tx.$executeRaw`
         UPDATE stock_levels
         SET quantity_on_hand = quantity_on_hand - ${quantity}, updated_at = now()
@@ -180,6 +224,8 @@ export class InventoryAdjustmentService {
           type,
           quantityChange: -quantity,
           reason,
+          referenceType: clientRequestId ? ReferenceType.MANUAL : undefined,
+          referenceId: clientRequestId ?? undefined,
         },
       });
       return { kind: 'created' as const };
@@ -194,6 +240,18 @@ export class InventoryAdjustmentService {
     shopId: string,
   ): Promise<InventoryAdjustmentOutcome> {
     await this.prisma.$transaction(async (tx) => {
+      if (dto.clientRequestId) {
+        const existingInTx = await tx.inventoryMovement.findFirst({
+          where: {
+            shopId,
+            referenceType: ReferenceType.MANUAL,
+            referenceId: dto.clientRequestId,
+          },
+          select: { id: true },
+        });
+        if (existingInTx) return { kind: 'created' as const };
+      }
+
       const locked = await tx.$queryRaw<
         Array<{ id: string; status: string; imei1: string }>
       >`
@@ -240,6 +298,8 @@ export class InventoryAdjustmentService {
               : InventoryMovementType.DAMAGED,
           quantityChange: -1,
           reason: dto.reason,
+          referenceType: dto.clientRequestId ? ReferenceType.MANUAL : undefined,
+          referenceId: dto.clientRequestId ?? undefined,
         },
       });
       return { kind: 'created' as const };
@@ -254,6 +314,18 @@ export class InventoryAdjustmentService {
     shopId: string,
   ): Promise<InventoryAdjustmentOutcome> {
     await this.prisma.$transaction(async (tx) => {
+      if (dto.clientRequestId) {
+        const existingInTx = await tx.inventoryMovement.findFirst({
+          where: {
+            shopId,
+            referenceType: ReferenceType.MANUAL,
+            referenceId: dto.clientRequestId,
+          },
+          select: { id: true },
+        });
+        if (existingInTx) return { kind: 'created' as const };
+      }
+
       const locked = await tx.$queryRaw<
         Array<{
           id: string;
@@ -314,7 +386,7 @@ export class InventoryAdjustmentService {
           quantityChange: 1,
           reason: dto.reason,
           referenceType: ReferenceType.MANUAL,
-          referenceId: unit.id,
+          referenceId: dto.clientRequestId ?? unit.id,
         },
       });
       return { kind: 'created' as const };

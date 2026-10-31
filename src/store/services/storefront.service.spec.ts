@@ -29,6 +29,7 @@ const settingsRow = {
 
 const activeShopWithProducts = {
   status: 'ACTIVE',
+  subscriptionEndsAt: new Date(Date.now() + 86400000),
   _count: { products: 1 },
 };
 
@@ -148,6 +149,18 @@ describe('StorefrontService (public catalog)', () => {
       for (const forbidden of ['shopId', 'isEnabled', 'showExactStock']) {
         expect(forbidden in profile).toBe(false);
       }
+    });
+
+    it('throws NotFoundException when shop subscription is expired', async () => {
+      prisma.shopStoreSettings.findUnique.mockResolvedValue(settingsRow);
+      prisma.shop.findUnique.mockResolvedValue({
+        status: 'ACTIVE',
+        subscriptionEndsAt: new Date(Date.now() - 1000),
+        _count: { products: 1 },
+      });
+      await expect(service.getStore('khalid-mobile')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('reads shops.status fresh even when the slug row is cached', async () => {

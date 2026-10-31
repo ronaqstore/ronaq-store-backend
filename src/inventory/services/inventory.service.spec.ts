@@ -24,6 +24,7 @@ const prismaStub = {
     update: jest.fn(),
   },
   inventoryMovement: {
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
     create: jest.fn(),
@@ -43,7 +44,10 @@ interface TxStub {
     findFirst: jest.Mock;
     update: jest.Mock;
   };
-  inventoryMovement: { create: jest.Mock };
+  inventoryMovement: {
+    findFirst: jest.Mock;
+    create: jest.Mock;
+  };
 }
 
 function makeTx(overrides: Partial<TxStub> = {}): TxStub {
@@ -69,6 +73,7 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
       update: jest.fn().mockResolvedValue({}),
     },
     inventoryMovement: {
+      findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({}),
     },
     ...overrides,
@@ -144,6 +149,45 @@ describe('InventoryService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('createAdjustment — idempotency', () => {
+    it('returns existing created result and performs no duplicate writes when clientRequestId already processed', async () => {
+      prismaStub.inventoryMovement.findFirst.mockResolvedValue({ id: 'mov-1' });
+      const outcome = await service.createAdjustment(
+        adjustmentRequest({
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+        }),
+        SHOP_ID,
+      );
+      expect(outcome).toEqual({
+        kind: 'created',
+        message: 'Stock change recorded successfully',
+      });
+      expect(tx.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('persists clientRequestId on new adjustment inventory movement', async () => {
+      prismaStub.inventoryMovement.findFirst.mockResolvedValue(null);
+      const outcome = await service.createAdjustment(
+        adjustmentRequest({
+          clientRequestId: '01924f0a-0000-7000-8000-00000000beef',
+        }),
+        SHOP_ID,
+      );
+      expect(outcome).toEqual({
+        kind: 'created',
+        message: 'Stock change recorded successfully',
+      });
+      expect(tx.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            referenceType: 'MANUAL',
+            referenceId: '01924f0a-0000-7000-8000-00000000beef',
+          }),
+        }),
+      );
+    });
   });
 
   describe('createAdjustment — product gate', () => {

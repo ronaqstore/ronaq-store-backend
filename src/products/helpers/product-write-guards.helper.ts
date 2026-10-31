@@ -20,7 +20,7 @@ export async function assertCategoryOwned(
   shopId: string,
 ): Promise<void> {
   const found = await prisma.category.findFirst({
-    where: { id: categoryId, shopId },
+    where: { id: categoryId, shopId, isActive: true },
     select: { id: true },
   });
   if (!found) {
@@ -34,7 +34,7 @@ export async function assertBrandOwned(
   shopId: string,
 ): Promise<string> {
   const found = await prisma.brand.findFirst({
-    where: { id: brandId, shopId },
+    where: { id: brandId, shopId, isActive: true },
     select: { id: true, name: true },
   });
   if (!found) {

@@ -1,3 +1,4 @@
+import { ParseUUIDPipe } from '@nestjs/common';
 import {
   Body,
   Controller,
@@ -113,7 +114,7 @@ export class PurchasesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async cancelPurchase(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() cancelPurchaseDto: CancelPurchaseDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -156,7 +157,7 @@ export class PurchasesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
@@ -225,7 +226,7 @@ export class PurchasesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getPurchaseById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponsePurchaseDto>> {
     try {

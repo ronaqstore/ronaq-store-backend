@@ -8,6 +8,7 @@ import {
   CashDirection,
   CashMovementType,
   InventoryMovementType,
+  PaymentMethod,
   RecordStatus,
   ReferenceType,
   UnitStatus,
@@ -107,11 +108,16 @@ export class SalesCancelService {
       });
       const payments = await tx.payment.findMany({
         where: { shopId, saleId: id, status: RecordStatus.ACTIVE },
-        select: { id: true, amount: true },
+        select: { id: true, amount: true, method: true },
       });
 
       let refund = 0n;
-      for (const payment of payments) refund += payment.amount;
+      for (const payment of payments) {
+        const m = payment.method ?? PaymentMethod.CASH;
+        if (m === PaymentMethod.CASH) {
+          refund += payment.amount;
+        }
+      }
 
       let overdraft = false;
       if (refund > 0n) {
@@ -160,36 +166,39 @@ export class SalesCancelService {
           },
         });
 
-        const original = await tx.cashMovement.findFirst({
-          where: {
-            shopId,
-            type: CashMovementType.CUSTOMER_PAYMENT,
-            referenceType: ReferenceType.PAYMENT,
-            referenceId: payment.id,
-          },
-          select: { id: true },
-        });
-        if (!original) {
-          throw new NotFoundException(
-            resourceNotFound('Cash movement for payment', payment.id),
-          );
-        }
+        const m = payment.method ?? PaymentMethod.CASH;
+        if (m === PaymentMethod.CASH) {
+          const original = await tx.cashMovement.findFirst({
+            where: {
+              shopId,
+              type: CashMovementType.CUSTOMER_PAYMENT,
+              referenceType: ReferenceType.PAYMENT,
+              referenceId: payment.id,
+            },
+            select: { id: true },
+          });
+          if (!original) {
+            throw new NotFoundException(
+              resourceNotFound('Cash movement for payment', payment.id),
+            );
+          }
 
-        await tx.cashMovement.create({
-          data: {
-            shopId,
-            type: CashMovementType.REVERSAL,
-            direction: CashDirection.OUT,
-            amount: payment.amount,
-            movementDate: now,
-            referenceType: ReferenceType.PAYMENT,
-            referenceId: payment.id,
-            reversesMovementId: original.id,
-            isOverdraft: overdraft,
-            note: dto.cancelReason,
-            createdById: userId,
-          },
-        });
+          await tx.cashMovement.create({
+            data: {
+              shopId,
+              type: CashMovementType.REVERSAL,
+              direction: CashDirection.OUT,
+              amount: payment.amount,
+              movementDate: now,
+              referenceType: ReferenceType.PAYMENT,
+              referenceId: payment.id,
+              reversesMovementId: original.id,
+              isOverdraft: overdraft,
+              note: dto.cancelReason,
+              createdById: userId,
+            },
+          });
+        }
       }
 
       await tx.sale.update({
@@ -266,10 +275,15 @@ export class SalesCancelService {
 
     const payments = await this.prisma.payment.findMany({
       where: { shopId, saleId: id, status: RecordStatus.ACTIVE },
-      select: { amount: true },
+      select: { amount: true, method: true },
     });
     let refund = 0n;
-    for (const payment of payments) refund += payment.amount;
+    for (const payment of payments) {
+      const m = payment.method ?? PaymentMethod.CASH;
+      if (m === PaymentMethod.CASH) {
+        refund += payment.amount;
+      }
+    }
 
     const currentCash = await aggregateCurrentCash(this.prisma, shopId);
     const cashAfter = currentCash - Number(refund);

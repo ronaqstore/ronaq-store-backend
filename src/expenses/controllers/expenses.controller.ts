@@ -1,3 +1,4 @@
+import { ParseUUIDPipe } from '@nestjs/common';
 import {
   Body,
   Controller,
@@ -105,7 +106,7 @@ export class ExpensesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async cancelExpense(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() cancelExpenseDto: CancelExpenseDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -175,7 +176,7 @@ export class ExpensesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getExpenseById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseExpenseDto>> {
     try {

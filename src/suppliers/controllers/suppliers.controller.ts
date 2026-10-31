@@ -27,6 +27,7 @@ import {
   StatusBaseResponseDTO,
   PaginatedResponseDTO,
   logError,
+  ParseUUIDPipe,
 } from '../../helpers/crud-controller.imports.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { SuppliersService } from '../services/suppliers.service.js';
@@ -124,7 +125,7 @@ export class SuppliersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getSupplierById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseSupplierDto>> {
     try {
@@ -160,7 +161,7 @@ export class SuppliersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getSupplierLedger(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Query() query: LedgerQueryFilterDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<SupplierLedgerDto>> {
@@ -199,7 +200,7 @@ export class SuppliersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async updateSupplier(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateSupplierDto: UpdateSupplierDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -239,7 +240,7 @@ export class SuppliersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteSupplier(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {

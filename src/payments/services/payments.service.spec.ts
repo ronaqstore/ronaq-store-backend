@@ -201,6 +201,16 @@ describe('PaymentsService', () => {
       expect(tx.cashMovement.create).toHaveBeenCalledTimes(2);
     });
 
+    it('records a BANK payment without creating a cash drawer movement', async () => {
+      await service.createPayment(
+        paymentRequest({ method: 'BANK' }),
+        SHOP_ID,
+        USER_ID,
+      );
+      expect(tx.payment.create).toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
     it('pays the opening balance first, then the oldest sale', async () => {
       txConfig.openingBalance = 100000n;
 
@@ -880,6 +890,40 @@ describe('PaymentsService', () => {
         service.cancelPayment('payment-1', cancelDto, SHOP_ID, USER_ID),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('cancels a BANK payment without querying or reversing cash movements', async () => {
+      prismaStub.payment.findFirst.mockResolvedValue({
+        ...activePayment,
+        method: 'BANK',
+        receiptGroupId: null,
+      });
+      tx.$queryRaw.mockResolvedValue([
+        {
+          id: 'payment-1',
+          status: 'ACTIVE',
+          amount: 50000n,
+          method: 'BANK',
+          sale_id: 'sale-1',
+          customer_id: 'cust-1',
+        },
+      ]);
+      tx.payment.update.mockResolvedValue({ id: 'payment-1' });
+
+      const res = await service.cancelPayment(
+        'payment-1',
+        cancelDto,
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Payment cancelled successfully',
+      });
+      expect(tx.payment.update).toHaveBeenCalled();
+      expect(tx.cashMovement.findFirst).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 
     it('404s when the original cash movement is missing, writing nothing', async () => {

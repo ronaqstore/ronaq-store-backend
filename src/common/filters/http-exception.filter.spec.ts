@@ -69,4 +69,58 @@ describe('GlobalHttpExceptionFilter', () => {
       }),
     );
   });
+
+  it('maps Prisma P2002 unique constraint violation to 409 Conflict', () => {
+    const statusSpy = jest.fn();
+    const jsonSpy = jest.fn();
+    const p2002 = new Prisma.PrismaClientKnownRequestError(
+      'Unique constraint failed on the fields: (`name`)',
+      { code: 'P2002', clientVersion: '7.0.0', meta: { target: ['name'] } },
+    );
+    filter.catch(p2002, mockHost(statusSpy, jsonSpy) as never);
+    expect(statusSpy).toHaveBeenCalledWith(HttpStatus.CONFLICT);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.CONFLICT,
+        message: 'A resource with this identifier already exists',
+        traceId: 'trace-test',
+      }),
+    );
+  });
+
+  it('maps Prisma P2025 record not found to 404 Not Found', () => {
+    const statusSpy = jest.fn();
+    const jsonSpy = jest.fn();
+    const p2025 = new Prisma.PrismaClientKnownRequestError(
+      'Record to update not found',
+      { code: 'P2025', clientVersion: '7.0.0', meta: {} },
+    );
+    filter.catch(p2025, mockHost(statusSpy, jsonSpy) as never);
+    expect(statusSpy).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.NOT_FOUND,
+        message: 'Resource not found',
+        traceId: 'trace-test',
+      }),
+    );
+  });
+
+  it('maps Prisma P2023 invalid data/UUID to 400 Bad Request', () => {
+    const statusSpy = jest.fn();
+    const jsonSpy = jest.fn();
+    const p2023 = new Prisma.PrismaClientKnownRequestError(
+      'Inconsistent column data: invalid input syntax for type uuid',
+      { code: 'P2023', clientVersion: '7.0.0', meta: {} },
+    );
+    filter.catch(p2023, mockHost(statusSpy, jsonSpy) as never);
+    expect(statusSpy).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: HttpStatus.BAD_REQUEST,
+        message: 'Invalid identifier or data type',
+        traceId: 'trace-test',
+      }),
+    );
+  });
 });

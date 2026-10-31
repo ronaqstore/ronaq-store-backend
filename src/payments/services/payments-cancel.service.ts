@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import {
   CashDirection,
   CashMovementType,
+  PaymentMethod,
   RecordStatus,
   ReferenceType,
 } from '../../generated/prisma/enums.js';
@@ -63,12 +64,13 @@ export class PaymentsCancelService {
           id: string;
           status: string;
           amount: bigint | string;
+          method?: string;
           receipt_group_id: string | null;
           sale_id: string | null;
           customer_id: string | null;
         }>
       >`
-        SELECT id, status, amount, receipt_group_id, sale_id, customer_id
+        SELECT id, status, amount, method, receipt_group_id, sale_id, customer_id
         FROM payments
         WHERE id = ${id} AND shop_id = ${shopId}
         FOR UPDATE
@@ -86,6 +88,7 @@ export class PaymentsCancelService {
       let siblings: Array<{
         id: string;
         amount: bigint;
+        method?: PaymentMethod;
         saleId: string | null;
         customerId: string | null;
       }>;
@@ -96,11 +99,12 @@ export class PaymentsCancelService {
             id: string;
             status: string;
             amount: bigint | string;
+            method?: string;
             sale_id: string | null;
             customer_id: string | null;
           }>
         >`
-          SELECT id, status, amount, sale_id, customer_id
+          SELECT id, status, amount, method, sale_id, customer_id
           FROM payments
           WHERE shop_id = ${shopId}
             AND receipt_group_id = ${receiptGroupId}::uuid
@@ -110,6 +114,7 @@ export class PaymentsCancelService {
         siblings = groupRows.map((row) => ({
           id: row.id,
           amount: BigInt(row.amount),
+          method: (row.method as PaymentMethod) ?? PaymentMethod.CASH,
           saleId: row.sale_id,
           customerId: row.customer_id,
         }));
@@ -118,6 +123,7 @@ export class PaymentsCancelService {
           {
             id: locked[0].id,
             amount: BigInt(locked[0].amount),
+            method: (locked[0].method as PaymentMethod) ?? PaymentMethod.CASH,
             saleId: locked[0].sale_id,
             customerId: locked[0].customer_id,
           },
@@ -131,33 +137,45 @@ export class PaymentsCancelService {
       }
 
       let totalAmount = 0n;
-      for (const sibling of siblings) totalAmount += sibling.amount;
+      let totalCashAmount = 0n;
+      for (const sibling of siblings) {
+        totalAmount += sibling.amount;
+        if (sibling.method === PaymentMethod.CASH) {
+          totalCashAmount += sibling.amount;
+        }
+      }
 
       let overdraft = false;
-      const after =
-        (await aggregateCurrentCash(tx, shopId)) - Number(totalAmount);
-      if (after < 0) {
-        if (!dto.confirmOverdraft) {
-          return { kind: 'overdraft' as const, shortfall: -after };
+      if (totalCashAmount > 0n) {
+        const after =
+          (await aggregateCurrentCash(tx, shopId)) - Number(totalCashAmount);
+        if (after < 0) {
+          if (!dto.confirmOverdraft) {
+            return { kind: 'overdraft' as const, shortfall: -after };
+          }
+          overdraft = true;
         }
-        overdraft = true;
       }
 
       const now = new Date();
       for (const sibling of siblings) {
-        const original = await tx.cashMovement.findFirst({
-          where: {
-            shopId,
-            type: CashMovementType.CUSTOMER_PAYMENT,
-            referenceType: ReferenceType.PAYMENT,
-            referenceId: sibling.id,
-          },
-          select: { id: true },
-        });
-        if (!original) {
-          throw new NotFoundException(
-            resourceNotFound('Cash movement for payment', sibling.id),
-          );
+        let original: { id: string } | null = null;
+        const m = sibling.method ?? PaymentMethod.CASH;
+        if (m === PaymentMethod.CASH) {
+          original = await tx.cashMovement.findFirst({
+            where: {
+              shopId,
+              type: CashMovementType.CUSTOMER_PAYMENT,
+              referenceType: ReferenceType.PAYMENT,
+              referenceId: sibling.id,
+            },
+            select: { id: true },
+          });
+          if (!original) {
+            throw new NotFoundException(
+              resourceNotFound('Cash movement for payment', sibling.id),
+            );
+          }
         }
 
         await tx.payment.update({
@@ -189,21 +207,23 @@ export class PaymentsCancelService {
           },
         });
 
-        await tx.cashMovement.create({
-          data: {
-            shopId,
-            type: CashMovementType.REVERSAL,
-            direction: CashDirection.OUT,
-            amount: sibling.amount,
-            movementDate: now,
-            referenceType: ReferenceType.PAYMENT,
-            referenceId: sibling.id,
-            reversesMovementId: original.id,
-            isOverdraft: overdraft,
-            note: dto.cancelReason,
-            createdById: userId,
-          },
-        });
+        if (m === PaymentMethod.CASH && original) {
+          await tx.cashMovement.create({
+            data: {
+              shopId,
+              type: CashMovementType.REVERSAL,
+              direction: CashDirection.OUT,
+              amount: sibling.amount,
+              movementDate: now,
+              referenceType: ReferenceType.PAYMENT,
+              referenceId: sibling.id,
+              reversesMovementId: original.id,
+              isOverdraft: overdraft,
+              note: dto.cancelReason,
+              createdById: userId,
+            },
+          });
+        }
       }
 
       return { kind: 'cancelled' as const };
@@ -228,6 +248,7 @@ export class PaymentsCancelService {
         id: true,
         status: true,
         amount: true,
+        method: true,
         customerId: true,
         receiptGroupId: true,
       },
@@ -248,21 +269,29 @@ export class PaymentsCancelService {
             receiptGroupId: payment.receiptGroupId,
             status: RecordStatus.ACTIVE,
           },
-          select: { id: true, amount: true, customerId: true },
+          select: { id: true, amount: true, method: true, customerId: true },
         })
       : [
           {
             id: payment.id,
             amount: payment.amount,
+            method: payment.method,
             customerId: payment.customerId,
           },
         ];
 
     let totalAmount = 0n;
-    for (const row of groupPayments) totalAmount += row.amount;
+    let totalCashAmount = 0n;
+    for (const row of groupPayments) {
+      totalAmount += row.amount;
+      const m = row.method ?? PaymentMethod.CASH;
+      if (m === PaymentMethod.CASH) {
+        totalCashAmount += row.amount;
+      }
+    }
 
     const currentCash = await aggregateCurrentCash(this.prisma, shopId);
-    const cashAfter = currentCash - Number(totalAmount);
+    const cashAfter = currentCash - Number(totalCashAmount);
 
     let customerUdharAfter: number | null = null;
     const customerId = payment.customerId ?? groupPayments[0]?.customerId;
@@ -304,7 +333,7 @@ export class PaymentsCancelService {
       recordId: payment.id,
       recordNo: null,
       currentCash,
-      cashReversedAmount: Number(totalAmount),
+      cashReversedAmount: Number(totalCashAmount),
       cashReversedDirection: 'OUT',
       cashAfter,
       willCauseOverdraft: cashAfter < 0,

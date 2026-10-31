@@ -1,3 +1,4 @@
+import { ParseUUIDPipe } from '@nestjs/common';
 import {
   Body,
   Controller,
@@ -151,7 +152,7 @@ export class CashReconciliationsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getReconciliationById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseCashReconciliationDto>> {
     try {

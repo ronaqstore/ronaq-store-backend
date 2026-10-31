@@ -26,6 +26,7 @@ import {
   StatusBaseResponseDTO,
   PaginatedResponseDTO,
   logError,
+  ParseUUIDPipe,
 } from '../../helpers/crud-controller.imports.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { CustomersService } from '../services/customers.service.js';
@@ -123,7 +124,7 @@ export class CustomersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getCustomerById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseCustomerDto>> {
     try {
@@ -159,7 +160,7 @@ export class CustomersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getCustomerLedger(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Query() query: LedgerQueryFilterDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CustomerLedgerDto>> {
@@ -197,7 +198,7 @@ export class CustomersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async updateCustomer(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateCustomerDto: UpdateCustomerDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -236,7 +237,7 @@ export class CustomersController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteCustomer(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {

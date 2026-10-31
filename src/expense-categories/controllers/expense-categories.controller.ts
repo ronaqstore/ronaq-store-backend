@@ -26,6 +26,7 @@ import {
   StatusBaseResponseDTO,
   PaginatedResponseDTO,
   logError,
+  ParseUUIDPipe,
 } from '../../helpers/crud-controller.imports.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { ExpenseCategoriesService } from '../services/expense-categories.service.js';
@@ -149,7 +150,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getExpenseCategoryById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseExpenseCategoryDto>> {
     try {
@@ -192,7 +193,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async updateExpenseCategory(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateExpenseCategoryDto: UpdateExpenseCategoryDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -238,7 +239,7 @@ export class ExpenseCategoriesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteExpenseCategory(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {

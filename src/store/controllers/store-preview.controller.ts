@@ -21,6 +21,7 @@ import {
   ApiSuccessResponseDTO,
   PaginatedResponseDTO,
   logError,
+  ParseUUIDPipe,
 } from '../helpers/store-controller.imports.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { StorefrontService } from '../services/storefront.service.js';
@@ -167,7 +168,7 @@ export class StorePreviewController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getPreviewProduct(
-    @Param('productId') productId: string,
+    @Param('productId', new ParseUUIDPipe()) productId: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseStoreProductDto>> {
     try {

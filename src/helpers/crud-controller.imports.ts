@@ -11,6 +11,7 @@ export {
   Query,
   Req,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 export {
   ApiBearerAuth,

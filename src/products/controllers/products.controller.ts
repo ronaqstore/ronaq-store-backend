@@ -26,6 +26,7 @@ import {
   StatusBaseResponseDTO,
   PaginatedResponseDTO,
   logError,
+  ParseUUIDPipe,
 } from '../../helpers/crud-controller.imports.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { ProductsService } from '../services/products.service.js';
@@ -122,7 +123,7 @@ export class ProductsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async getProductById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseProductDto>> {
     try {
@@ -188,7 +189,7 @@ export class ProductsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async updateProduct(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateProductDto: UpdateProductDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -227,7 +228,7 @@ export class ProductsController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async deleteProduct(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {

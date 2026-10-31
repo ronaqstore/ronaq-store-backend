@@ -1,3 +1,4 @@
+import { ParseUUIDPipe } from '@nestjs/common';
 import {
   Body,
   Controller,
@@ -106,7 +107,7 @@ export class PaymentsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async cancelPayment(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() cancelPaymentDto: CancelPaymentDto,
     @Req() req: OwnerRequest,
     @Res({ passthrough: true }) res: Response,
@@ -149,7 +150,7 @@ export class PaymentsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCancelImpact(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CancelImpactResponseDto>> {
     try {
@@ -221,7 +222,7 @@ export class PaymentsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getCustomerReceivable(
-    @Param('customerId') customerId: string,
+    @Param('customerId', new ParseUUIDPipe()) customerId: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<CustomerReceivableDto>> {
     try {
@@ -259,7 +260,7 @@ export class PaymentsController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getPaymentById(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponsePaymentDto>> {
     try {

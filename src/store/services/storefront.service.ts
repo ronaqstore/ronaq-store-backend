@@ -68,6 +68,7 @@ export class StorefrontService {
       isEnabled: true,
       shop: {
         status: ShopStatus.ACTIVE,
+        subscriptionEndsAt: { gt: new Date() },
         products: { some: publicProductWhere },
       },
     };
@@ -202,6 +203,7 @@ export class StorefrontService {
       where: { id: settings.shopId },
       select: {
         status: true,
+        subscriptionEndsAt: true,
         _count: {
           select: {
             products: {
@@ -218,6 +220,8 @@ export class StorefrontService {
     if (
       !shop ||
       shop.status !== ShopStatus.ACTIVE ||
+      !shop.subscriptionEndsAt ||
+      shop.subscriptionEndsAt.getTime() <= Date.now() ||
       (shop._count?.products ?? 0) < 1
     ) {
       throw new NotFoundException(storeNotAvailable());

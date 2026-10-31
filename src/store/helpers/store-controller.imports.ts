@@ -14,6 +14,7 @@ export {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 export { FileInterceptor } from '@nestjs/platform-express';
 export {

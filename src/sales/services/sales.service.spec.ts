@@ -1248,6 +1248,29 @@ describe('SalesService', () => {
       });
     });
 
+    it('cancels a sale with BANK payments without creating cash movements', async () => {
+      tx.payment.findMany.mockResolvedValue([
+        { id: 'payment-bank-1', amount: 5000000n, method: 'BANK' },
+      ]);
+      tx.cashMovement.aggregate.mockResolvedValue({ _sum: { amount: 0n } });
+
+      const res = await service.cancelSale(
+        'sale-1',
+        { ...cancelDto },
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Sale cancelled successfully',
+      });
+      expect(tx.sale.update).toHaveBeenCalled();
+      expect(tx.payment.update).toHaveBeenCalled();
+      expect(tx.cashMovement.findFirst).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
     it('returns a confirm prompt and writes nothing when refunds take cash below zero', async () => {
       tx.payment.findMany.mockResolvedValue([
         { id: 'payment-1', amount: 5000000n },

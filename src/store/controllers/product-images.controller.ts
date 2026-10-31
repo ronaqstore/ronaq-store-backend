@@ -30,6 +30,7 @@ import {
   ApiSuccessResponseDTO,
   StatusBaseResponseDTO,
   logError,
+  ParseUUIDPipe,
 } from '../helpers/store-controller.imports.js';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
 import { photoFileRequired } from '../../errors/error.builder.js';
@@ -59,7 +60,7 @@ export class ProductImagesController {
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   async getProductImages(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<ResponseProductImagesDto>> {
     try {
@@ -110,7 +111,7 @@ export class ProductImagesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async addProductImage(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @UploadedFile() file: UploadedImageFile,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -153,7 +154,7 @@ export class ProductImagesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async reorderProductImages(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
     @Body() reorderProductImagesDto: ReorderProductImagesDto,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
@@ -196,8 +197,8 @@ export class ProductImagesController {
   @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
   @ApiResponse(NOT_FOUND_REQUEST_RESPONSE)
   async removeProductImage(
-    @Param('id') id: string,
-    @Param('imageId') imageId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('imageId', new ParseUUIDPipe()) imageId: string,
     @Req() req: OwnerRequest,
   ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
     try {

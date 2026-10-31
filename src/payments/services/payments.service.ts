@@ -259,6 +259,7 @@ export class PaymentsService {
 
         const receiptGroupId = randomUUID();
         for (const portion of portions) {
+          const paymentMethod = dto.method ?? PaymentMethod.CASH;
           const payment = await tx.payment.create({
             data: {
               shopId,
@@ -267,25 +268,27 @@ export class PaymentsService {
               receiptGroupId,
               amount: portion.amount,
               paymentDate: paymentMoment,
-              method: dto.method ?? PaymentMethod.CASH,
+              method: paymentMethod,
               clientRequestId: dto.clientRequestId,
               notes: dto.notes?.trim() ? dto.notes : null,
               createdById: userId,
             },
             select: { id: true },
           });
-          await tx.cashMovement.create({
-            data: {
-              shopId,
-              type: CashMovementType.CUSTOMER_PAYMENT,
-              direction: CashDirection.IN,
-              amount: portion.amount,
-              movementDate: paymentMoment,
-              referenceType: ReferenceType.PAYMENT,
-              referenceId: payment.id,
-              createdById: userId,
-            },
-          });
+          if (paymentMethod === PaymentMethod.CASH) {
+            await tx.cashMovement.create({
+              data: {
+                shopId,
+                type: CashMovementType.CUSTOMER_PAYMENT,
+                direction: CashDirection.IN,
+                amount: portion.amount,
+                movementDate: paymentMoment,
+                referenceType: ReferenceType.PAYMENT,
+                referenceId: payment.id,
+                createdById: userId,
+              },
+            });
+          }
         }
 
         return new StatusBaseResponseDTO(true, CREATED);

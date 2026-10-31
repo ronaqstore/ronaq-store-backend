@@ -211,11 +211,11 @@ describe('ProductsService', () => {
       await service.createProduct(validCreate, 'shop-2', 'user-1');
 
       expect(prismaStub.category.findFirst).toHaveBeenCalledWith({
-        where: { id: CATEGORY_ID, shopId: 'shop-2' },
+        where: { id: CATEGORY_ID, shopId: 'shop-2', isActive: true },
         select: { id: true },
       });
       expect(prismaStub.brand.findFirst).toHaveBeenCalledWith({
-        where: { id: BRAND_ID, shopId: 'shop-2' },
+        where: { id: BRAND_ID, shopId: 'shop-2', isActive: true },
         select: { id: true, name: true },
       });
     });

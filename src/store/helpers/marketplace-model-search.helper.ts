@@ -63,6 +63,7 @@ export function buildMarketplaceModelSearchSql(
       AND p.is_published = true
       AND p.published_at IS NOT NULL
       AND s.status = 'ACTIVE'
+      AND s.subscription_ends_at > NOW()
       AND ss.is_enabled = true
       AND ${cityFilter}
       AND ${Prisma.join(tokenFilters, ' AND ')}
