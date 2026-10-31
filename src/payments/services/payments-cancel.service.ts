@@ -147,7 +147,7 @@ export class PaymentsCancelService {
 
       const sortedSaleIds = Array.from(salePaymentsToCancel.keys()).sort();
       for (const saleId of sortedSaleIds) {
-        const paymentToCancelAmount = salePaymentsToCancel.get(saleId)!;
+        const paymentToCancelAmount = salePaymentsToCancel.get(saleId) ?? 0n;
 
         const lockedSale = await tx.$queryRaw<Array<{ id: string }>>`
           SELECT id FROM sales
