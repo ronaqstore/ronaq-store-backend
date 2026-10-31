@@ -254,6 +254,16 @@ export class ProductsService {
     if (dto.isPublished === true && !willBeActive) {
       throw new BadRequestException(productNotPublishable(existing.name));
     }
+    if (dto.isPublished === true) {
+      const imageCount = await this.prisma.productImage.count({
+        where: { productId: id },
+      });
+      if (imageCount === 0) {
+        throw new BadRequestException(
+          productsNeedPhotosToPublish([existing.name]),
+        );
+      }
+    }
 
     const nextTrackingForPta = dto.trackingType ?? existing.trackingType;
     const nextPta =

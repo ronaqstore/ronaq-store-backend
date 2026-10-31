@@ -581,6 +581,93 @@ describe('ReturnsService', () => {
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
 
+    it('rejects return inside transaction when fresh settlement refundable is less than refundAmount due to concurrent mutation', async () => {
+      // Outside transaction: 9,000,000 paid, refundable is 9,000,000.
+      // Inside transaction: concurrent mutation reduced paid or increased refunds/prior returns
+      // so fresh refundable is less than refundAmount.
+      tx.payment.aggregate.mockResolvedValue({ _sum: { amount: 4000000n } });
+
+      await expect(
+        service.createReturn(
+          SALE_ID,
+          returnRequest({ refundAmount: 5000000 }),
+          SHOP_ID,
+          USER_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.saleReturn.create).not.toHaveBeenCalled();
+      expect(tx.refund.create).not.toHaveBeenCalled();
+      expect(tx.cashMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('allows zero-refund returns (refundAmount = 0n) even when refundable is 0', async () => {
+      // 0 paid, so refundable is 0
+      primeSettlement(tx, { paid: 0n });
+
+      const res = await service.createReturn(
+        SALE_ID,
+        returnRequest({ refundAmount: 0 }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Return recorded successfully',
+      });
+      expect(tx.saleReturn.create).toHaveBeenCalledTimes(1);
+      expect(tx.refund.create).not.toHaveBeenCalled();
+    });
+
+    it('allows partial return with exact refundable amount', async () => {
+      // Returning 1 accessory: net return amount is 900,000 paisa
+      const res = await service.createReturn(
+        SALE_ID,
+        returnRequest({
+          items: [{ saleItemId: ACC_ITEM_ID, quantity: 1, condition: 'GOOD' }],
+          refundAmount: 900000,
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Return recorded successfully',
+      });
+      expect(tx.refund.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount: 900000n,
+          }),
+        }),
+      );
+    });
+
+    it('allows full return with exact refundable amount', async () => {
+      // Full return of phone + 2 accessories: returnAmount = 9,000,000 paisa, paid = 9,000,000
+      const res = await service.createReturn(
+        SALE_ID,
+        returnRequest({ refundAmount: 9000000 }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Return recorded successfully',
+      });
+      expect(tx.refund.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            amount: 9000000n,
+          }),
+        }),
+      );
+    });
+
     it('prompts and writes nothing when the refund would go below zero', async () => {
       tx.cashMovement.aggregate.mockImplementation((args: any) =>
         Promise.resolve({

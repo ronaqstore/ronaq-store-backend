@@ -32,6 +32,7 @@ import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-fi
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
 import {
   dateColumnRange,
+  resolveDateOnly,
   resolveTransactionDate,
 } from '../../helpers/date.helper.js';
 import {
@@ -108,13 +109,14 @@ export class ExpensesService {
         }
         const overdraft = overdraftProbe.overdraft;
         const expenseMoment = resolveTransactionDate(dto.expenseDate);
+        const expenseDate = resolveDateOnly(dto.expenseDate);
 
         const expense = await tx.expense.create({
           data: {
             shopId,
             categoryId: dto.categoryId,
             amount,
-            expenseDate: expenseMoment,
+            expenseDate,
             description: dto.description?.trim() ? dto.description : null,
             clientRequestId: dto.clientRequestId,
             createdById: userId,

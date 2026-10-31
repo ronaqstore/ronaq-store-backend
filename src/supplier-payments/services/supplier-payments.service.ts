@@ -46,7 +46,10 @@ import {
   resourceNotFound,
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
-import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  resolveDateOnly,
+  resolveTransactionDate,
+} from '../../helpers/date.helper.js';
 import {
   isUniqueConstraintViolation,
   violatedColumn,
@@ -144,7 +147,7 @@ export class SupplierPaymentsService {
             supplierId: dto.supplierId,
             purchaseId: dto.purchaseId ?? null,
             amount,
-            paymentDate: paymentMoment,
+            paymentDate: resolveDateOnly(dto.paymentDate),
             clientRequestId: dto.clientRequestId,
             notes: dto.notes?.trim() ? dto.notes : null,
             createdById: userId,

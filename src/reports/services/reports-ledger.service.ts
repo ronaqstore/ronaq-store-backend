@@ -114,7 +114,7 @@ export class ReportsLedgerService {
         returns,
         refunds,
         outstanding: Number(sale.totalAmount) - returns + refunds - paid,
-        profit: subtotal - cogs,
+        profit: subtotal - Number(sale.discount) - cogs,
       };
     });
 
@@ -163,12 +163,13 @@ export class ReportsLedgerService {
       0,
     );
     const sumSubtotal = Number(agg._sum.subtotal ?? 0n);
+    const sumDiscount = Number(agg._sum.discount ?? 0n);
     return {
       count: agg._count._all,
       sumSubtotal,
-      sumDiscount: Number(agg._sum.discount ?? 0n),
+      sumDiscount,
       sumTotalAmount: Number(agg._sum.totalAmount ?? 0n),
-      sumProfit: sumSubtotal - cogs,
+      sumProfit: sumSubtotal - sumDiscount - cogs,
       sumReturns: returns.reduce((s, r) => s + Number(r.returnAmount), 0),
       sumPaid: payments.reduce((s, p) => s + Number(p.amount), 0),
     };
@@ -391,39 +392,55 @@ export class ReportsLedgerService {
       saleDate: { gte: range.start, lt: range.end },
     };
 
-    const [sales, saleItems, expenses, returns] = await Promise.all([
-      this.prisma.sale.findMany({
-        where: saleWhere,
-        select: { saleDate: true, totalAmount: true },
-      }),
-      this.prisma.saleItem.findMany({
-        where: { shopId, sale: saleWhere },
-        select: {
-          quantity: true,
-          unitCost: true,
-          sale: { select: { saleDate: true } },
-        },
-      }),
-      this.prisma.expense.findMany({
-        where: {
-          shopId,
-          status: ACTIVE,
-          expenseDate: dateColumnRange(range.from, range.to),
-        },
-        select: { expenseDate: true, amount: true },
-      }),
-      this.prisma.saleReturn.findMany({
-        where: {
-          shopId,
-          status: ACTIVE,
-          returnDate: { gte: range.start, lt: range.end },
-        },
-        select: { returnDate: true, returnAmount: true },
-      }),
-    ]);
+    const [sales, saleItems, expenses, returns, returnItems] =
+      await Promise.all([
+        this.prisma.sale.findMany({
+          where: saleWhere,
+          select: { saleDate: true, totalAmount: true },
+        }),
+        this.prisma.saleItem.findMany({
+          where: { shopId, sale: saleWhere },
+          select: {
+            quantity: true,
+            unitCost: true,
+            sale: { select: { saleDate: true } },
+          },
+        }),
+        this.prisma.expense.findMany({
+          where: {
+            shopId,
+            status: ACTIVE,
+            expenseDate: dateColumnRange(range.from, range.to),
+          },
+          select: { expenseDate: true, amount: true },
+        }),
+        this.prisma.saleReturn.findMany({
+          where: {
+            shopId,
+            status: ACTIVE,
+            returnDate: { gte: range.start, lt: range.end },
+          },
+          select: { returnDate: true, returnAmount: true },
+        }),
+        this.prisma.returnItem.findMany({
+          where: {
+            shopId,
+            saleReturn: {
+              status: ACTIVE,
+              returnDate: { gte: range.start, lt: range.end },
+            },
+          },
+          select: {
+            quantity: true,
+            saleItem: { select: { unitCost: true } },
+            saleReturn: { select: { returnDate: true } },
+          },
+        }),
+      ]);
 
     const gross = new Map<string, number>();
     const cogs = new Map<string, number>();
+    const returnedCogsByDay = new Map<string, number>();
     const expenseByDay = new Map<string, number>();
     const returnByDay = new Map<string, number>();
 
@@ -436,6 +453,14 @@ export class ReportsLedgerService {
       cogs.set(
         day,
         (cogs.get(day) ?? 0) + Number(item.unitCost) * item.quantity,
+      );
+    }
+    for (const item of returnItems) {
+      const day = formatBusinessDate(item.saleReturn.returnDate);
+      returnedCogsByDay.set(
+        day,
+        (returnedCogsByDay.get(day) ?? 0) +
+          Number(item.saleItem.unitCost) * item.quantity,
       );
     }
     for (const expense of expenses) {
@@ -456,38 +481,47 @@ export class ReportsLedgerService {
     const rows: ProfitDayRowDTO[] = [];
     let day = range.from;
     let tGross = 0;
-    let tCogs = 0;
+    let tGrossCogs = 0;
+    let tReturnedCogs = 0;
     let tReturns = 0;
     let tExpenses = 0;
     while (day <= range.to) {
       const d = day;
       const g = gross.get(d) ?? 0;
-      const c = cogs.get(d) ?? 0;
+      const grossC = cogs.get(d) ?? 0;
+      const retC = returnedCogsByDay.get(d) ?? 0;
+      const netC = Math.max(0, grossC - retC);
       const ret = returnByDay.get(d) ?? 0;
       const exp = expenseByDay.get(d) ?? 0;
       tGross += g;
-      tCogs += c;
+      tGrossCogs += grossC;
+      tReturnedCogs += retC;
       tReturns += ret;
       tExpenses += exp;
       rows.push({
         date: d,
         grossSales: g,
-        cogs: c,
+        cogs: netC,
         returns: ret,
         expenses: exp,
-        profit: g - c - ret - exp,
+        profit: g - ret - netC - exp,
       });
       day = shiftDays(day, 1);
     }
 
+    const tNetCogs = Math.max(0, tGrossCogs - tReturnedCogs);
+    const netSales = Math.max(0, tGross - tReturns);
+    const grossProfit = netSales - tNetCogs;
+    const netProfit = grossProfit - tExpenses;
+
     const startIndex = (page - 1) * pageSize;
     const summary: ProfitReportSummaryDTO = {
       grossSales: tGross,
-      cogs: tCogs,
-      grossProfit: tGross - tCogs,
+      cogs: tNetCogs,
+      grossProfit,
       returns: tReturns,
       expenses: tExpenses,
-      netProfit: tGross - tCogs - tReturns - tExpenses,
+      netProfit,
       salesCount: sales.length,
     };
 

@@ -5,6 +5,8 @@ import {
   resolveGranularity,
   resolvePreviousPeriod,
 } from '../helpers/dashboard-date.helper.js';
+import { DashboardShopService } from './dashboard-shop.service.js';
+import { DashboardCacheService } from './dashboard-cache.service.js';
 
 describe('DashboardShopService Date & Math Logic', () => {
   it('correctly calculates daysBetween two dates inclusive', () => {
@@ -72,5 +74,41 @@ describe('DashboardShopService Date & Math Logic', () => {
     const netProfit = grossSales - cogs - returns - expenses;
 
     expect(netProfit).toBe(200000);
+  });
+
+  describe('DashboardShopService Profit Waterfall', () => {
+    it('profit waterfall includes actual return amounts and returns step', async () => {
+      const flowStub = {
+        calculateFlowTotals: jest.fn().mockResolvedValue({
+          sales: 8000000,
+          grossProfit: 5000000,
+          netProfit: 4000000,
+          expenses: 1000000,
+          returns: 2000000,
+        }),
+        calculateSparklines: jest.fn(),
+        buildTrendSeries: jest.fn(),
+      };
+      const cache = new DashboardCacheService();
+      const service = new DashboardShopService(
+        {} as any,
+        cache,
+        {} as any,
+        flowStub as any,
+      );
+
+      const result = await service.getProfitWaterfall('shop-1', {
+        period: '7d',
+      });
+
+      expect(result.totals.returns).toBe(2000000);
+      expect(result.totals.grossSales).toBe(10000000);
+      expect(result.steps.find((s) => s.name === 'Returns & Refunds')).toEqual({
+        name: 'Returns & Refunds',
+        amount: 2000000,
+        isNegative: true,
+        runningTotal: 8000000,
+      });
+    });
   });
 });

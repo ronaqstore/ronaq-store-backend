@@ -157,6 +157,29 @@ describe('SupplierPaymentsService', () => {
       });
     });
 
+    it('resolves paymentDate to today in Asia/Karachi during midnight window (e.g. 1:00 AM PKT / 20:00 UTC)', async () => {
+      jest.useFakeTimers();
+      const midnightWindowNow = new Date('2026-10-30T20:00:00.000Z');
+      jest.setSystemTime(midnightWindowNow);
+
+      try {
+        await service.createSupplierPayment(
+          paymentRequest({ paymentDate: undefined }),
+          SHOP_ID,
+          USER_ID,
+        );
+
+        expect(tx.supplierPayment.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            paymentDate: new Date('2026-10-31T00:00:00.000Z'),
+          }),
+          select: { id: true },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('locks the shop row first, then the supplier, so cash reads and the outstanding check serialize', async () => {
       await service.createSupplierPayment(paymentRequest(), SHOP_ID, USER_ID);
 

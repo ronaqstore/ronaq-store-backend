@@ -1,6 +1,8 @@
 import {
   businessDayRange,
   businessToday,
+  dateColumnRange,
+  resolveDateOnly,
   resolveTransactionDate,
 } from './date.helper.js';
 
@@ -61,6 +63,55 @@ describe('date.helper', () => {
       const result = resolveTransactionDate(past, now);
       expect(result).not.toBe(now);
       expect(result.toISOString()).toContain('2026-10-01');
+    });
+  });
+
+  describe('resolveDateOnly', () => {
+    it('resolves the transaction date to today in Asia/Karachi even when UTC time is still yesterday (e.g. 1:00 AM PKT / 20:00 UTC)', () => {
+      // 1:00 AM PKT on Oct 31, 2026 = 20:00 UTC on Oct 30, 2026
+      const mockNow = new Date('2026-10-30T20:00:00.000Z');
+      const expected = new Date('2026-10-31T00:00:00.000Z');
+
+      expect(resolveDateOnly(undefined, mockNow)).toEqual(expected);
+      expect(resolveDateOnly('2026-10-31', mockNow)).toEqual(expected);
+      expect(resolveDateOnly(mockNow, mockNow)).toEqual(expected);
+    });
+
+    it('resolves explicit past or future date strings correctly', () => {
+      const result = resolveDateOnly('2026-10-15');
+      expect(result).toEqual(new Date('2026-10-15T00:00:00.000Z'));
+    });
+
+    it('trims whitespace and falls back to businessToday when string is too short', () => {
+      const mockNow = new Date('2026-10-30T20:00:00.000Z');
+      expect(resolveDateOnly('  2026-10-15  ', mockNow)).toEqual(
+        new Date('2026-10-15T00:00:00.000Z'),
+      );
+      expect(resolveDateOnly('   ', mockNow)).toEqual(
+        new Date('2026-10-31T00:00:00.000Z'),
+      );
+    });
+
+    it('ensures transactions recorded across all PKT hours match dateColumnRange for today', () => {
+      // 12:00 AM PKT (19:00 UTC Oct 30)
+      const midnightPKT = new Date('2026-10-30T19:00:00.000Z');
+      // 4:59 AM PKT (23:59 UTC Oct 30)
+      const lateNightPKT = new Date('2026-10-30T23:59:00.000Z');
+      // 5:00 AM PKT (00:00 UTC Oct 31)
+      const dawnPKT = new Date('2026-10-31T00:00:00.000Z');
+      // 11:59 PM PKT (18:59 UTC Oct 31)
+      const endOfDayPKT = new Date('2026-10-31T18:59:00.000Z');
+
+      const expectedDay = '2026-10-31';
+      const range = dateColumnRange(expectedDay, expectedDay);
+
+      for (const instant of [midnightPKT, lateNightPKT, dawnPKT, endOfDayPKT]) {
+        expect(businessToday(instant)).toBe(expectedDay);
+        const resolved = resolveDateOnly(undefined, instant);
+        expect(resolved).toEqual(new Date(`${expectedDay}T00:00:00.000Z`));
+        expect(resolved.getTime()).toBeGreaterThanOrEqual(range.gte.getTime());
+        expect(resolved.getTime()).toBeLessThan(range.lt.getTime());
+      }
     });
   });
 });

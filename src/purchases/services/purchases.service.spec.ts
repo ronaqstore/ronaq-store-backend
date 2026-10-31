@@ -257,6 +257,38 @@ describe('PurchasesService', () => {
       });
     });
 
+    it('resolves purchaseDate and paymentDate to today in Asia/Karachi during midnight window (e.g. 1:00 AM PKT / 20:00 UTC)', async () => {
+      jest.useFakeTimers();
+      const midnightWindowNow = new Date('2026-10-30T20:00:00.000Z');
+      jest.setSystemTime(midnightWindowNow);
+
+      try {
+        await service.createPurchase(
+          serialisePurchaseRequest({
+            purchaseDate: undefined,
+            paidNow: 500000,
+          }),
+          SHOP_ID,
+          USER_ID,
+        );
+
+        expect(tx.purchase.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            purchaseDate: new Date('2026-10-31T00:00:00.000Z'),
+          }),
+          select: { id: true },
+        });
+
+        expect(tx.supplierPayment.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            paymentDate: new Date('2026-10-31T00:00:00.000Z'),
+          }),
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('rejects a paid amount larger than the purchase total', async () => {
       await expect(
         service.createPurchase(

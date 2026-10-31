@@ -30,7 +30,10 @@ import {
   purchasePaidExceedsTotal,
   resourceNotFound,
 } from '../../errors/error.builder.js';
-import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  resolveDateOnly,
+  resolveTransactionDate,
+} from '../../helpers/date.helper.js';
 import {
   isUniqueConstraintViolation,
   violatedColumn,
@@ -162,7 +165,7 @@ export class PurchasesService {
                 supplierId: dto.supplierId,
                 purchaseId: purchase.id,
                 amount: paidNow,
-                paymentDate: purchaseMoment,
+                paymentDate: resolveDateOnly(dto.purchaseDate),
                 clientRequestId: dto.clientRequestId,
                 createdById: userId,
               },

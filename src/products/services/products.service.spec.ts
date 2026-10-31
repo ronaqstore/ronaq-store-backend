@@ -30,6 +30,7 @@ const prismaStub = {
   },
   purchaseItem: { count: jest.fn() },
   saleItem: { count: jest.fn() },
+  productImage: { count: jest.fn() },
   $transaction: jest.fn(async (fn: (tx: any) => Promise<any>) =>
     fn(prismaStub),
   ),
@@ -131,6 +132,7 @@ describe('ProductsService', () => {
     });
     // Default: no name+variant clash (create / update uniqueness probe).
     prismaStub.product.findFirst.mockResolvedValue(null);
+    prismaStub.productImage.count.mockResolvedValue(1);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -978,6 +980,21 @@ describe('ProductsService', () => {
         service.updateProduct(
           'prod-1',
           { isActive: false, isPublished: true },
+          SHOP_ID,
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prismaStub.product.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to publish a product with zero images on update', async () => {
+      mockProductFoundForUpdate(baseProductRow({ isActive: true }));
+      prismaStub.productImage.count.mockResolvedValue(0);
+
+      await expect(
+        service.updateProduct(
+          'prod-1',
+          { isPublished: true },
           SHOP_ID,
           'user-1',
         ),

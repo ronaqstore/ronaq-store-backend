@@ -166,6 +166,14 @@ export class ReturnsService {
         }
 
         const fresh = await this.flow.prepare(tx, saleId, shopId, dto.items);
+        if (refundAmount > fresh.settlement.refundable) {
+          throw new BadRequestException(
+            refundExceedsAvailable(
+              Number(refundAmount),
+              Number(fresh.settlement.refundable),
+            ),
+          );
+        }
 
         let overdraft = false;
         if (refundAmount > 0n) {

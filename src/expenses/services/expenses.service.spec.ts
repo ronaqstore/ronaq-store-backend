@@ -146,6 +146,30 @@ describe('ExpensesService', () => {
       });
     });
 
+    it('resolves the transaction date to today in Asia/Karachi even when UTC time is still yesterday (e.g. 1:00 AM PKT / 20:00 UTC)', async () => {
+      jest.useFakeTimers();
+      // 1:00 AM PKT on Oct 31, 2026 is 20:00 UTC on Oct 30, 2026
+      const midnightWindowNow = new Date('2026-10-30T20:00:00.000Z');
+      jest.setSystemTime(midnightWindowNow);
+
+      try {
+        await service.createExpense(
+          makeExpenseRequest({ expenseDate: undefined }),
+          SHOP_ID,
+          USER_ID,
+        );
+
+        expect(tx.expense.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            expenseDate: new Date('2026-10-31T00:00:00.000Z'),
+          }),
+          select: { id: true },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('stores blank description as null instead of an empty string', async () => {
       await service.createExpense(
         makeExpenseRequest({ description: '   ' }),

@@ -447,6 +447,20 @@ describe('StoreService (owner surface)', () => {
       );
     });
 
+    it('refuses to publish a product with zero images', async () => {
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-1',
+        name: 'iPhone 14',
+        isActive: true,
+        _count: { images: 0 },
+      });
+
+      await expect(service.publishProduct('prod-1', 'shop-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.product.update).not.toHaveBeenCalled();
+    });
+
     it('404s publishing a product owned by another shop', async () => {
       prisma.product.findFirst.mockResolvedValue(null);
 
@@ -644,6 +658,24 @@ describe('StoreService (owner surface)', () => {
       expect(r2.deleteByUrl).toHaveBeenCalledWith(
         'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x.jpg',
       );
+    });
+
+    it('blocks deleting the last photo of a published product', async () => {
+      prisma.productImage.findFirst.mockResolvedValue({
+        id: 'img-1',
+        url: 'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x.jpg',
+      });
+      prisma.product.findFirst.mockResolvedValue({
+        id: 'prod-1',
+        isPublished: true,
+        _count: { images: 1 },
+      });
+
+      await expect(
+        service.removeProductImage('prod-1', 'img-1', 'shop-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.productImage.delete).not.toHaveBeenCalled();
+      expect(r2.deleteByUrl).not.toHaveBeenCalled();
     });
 
     it('404s removing a foreign image', async () => {

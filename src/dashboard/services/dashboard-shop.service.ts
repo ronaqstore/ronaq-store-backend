@@ -172,23 +172,23 @@ export class DashboardShopService {
     );
 
     const cogs = Math.max(0, flow.sales - flow.grossProfit);
-    const returnsEstimate = 0;
+    const returns = flow.returns ?? 0;
 
-    let running = flow.sales;
+    let running = flow.sales + returns;
     const steps: WaterfallStepDto[] = [
       {
         name: 'Gross Sales',
-        amount: flow.sales + returnsEstimate,
+        amount: flow.sales + returns,
         isNegative: false,
-        runningTotal: flow.sales + returnsEstimate,
+        runningTotal: running,
       },
     ];
 
-    if (returnsEstimate > 0) {
-      running -= returnsEstimate;
+    if (returns > 0) {
+      running -= returns;
       steps.push({
         name: 'Returns & Refunds',
-        amount: returnsEstimate,
+        amount: returns,
         isNegative: true,
         runningTotal: running,
       });
@@ -211,9 +211,9 @@ export class DashboardShopService {
     });
 
     const netProfit = waterfallNetProfit({
-      grossSales: flow.sales + returnsEstimate,
+      grossSales: flow.sales + returns,
       costOfGoods: cogs,
-      returns: returnsEstimate,
+      returns,
       expenses: flow.expenses,
     });
 
@@ -225,9 +225,9 @@ export class DashboardShopService {
     });
 
     const totals: WaterfallTotalsDto = {
-      grossSales: flow.sales + returnsEstimate,
+      grossSales: flow.sales + returns,
       costOfGoods: cogs,
-      returns: returnsEstimate,
+      returns,
       expenses: flow.expenses,
       netProfit,
     };

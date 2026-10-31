@@ -248,6 +248,20 @@ describe('SalesService', () => {
       expect(tx.cashMovement.create).not.toHaveBeenCalled();
     });
 
+    it('resolves dueDate using resolveDateOnly when provided', async () => {
+      await service.createSale(
+        serialiseSaleRequest({
+          dueDate: '2026-11-15',
+          customerId: CUSTOMER_ID,
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      const saleData = tx.sale.create.mock.calls[0][0].data;
+      expect(saleData.dueDate).toEqual(new Date('2026-11-15T00:00:00.000Z'));
+    });
+
     it('writes a payment and an IN cash row for a part payment', async () => {
       await service.createSale(
         serialiseSaleRequest({ paidNow: 50000, customerId: CUSTOMER_ID }),

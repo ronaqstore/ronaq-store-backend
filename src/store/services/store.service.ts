@@ -22,6 +22,7 @@ import {
   requiredFieldCannotBeNull,
   slugReserved,
   productNotPublishable,
+  productsNeedPhotosToPublish,
   imageLimitExceeded,
   reorderImageMismatch,
 } from '../../errors/error.builder.js';
@@ -262,13 +263,22 @@ export class StoreService {
   ): Promise<StatusBaseResponseDTO> {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, shopId },
-      select: { isActive: true, name: true },
+      select: {
+        isActive: true,
+        name: true,
+        _count: { select: { images: true } },
+      },
     });
     if (!product) {
       throw new NotFoundException(resourceNotFound('Product', productId));
     }
     if (!product.isActive) {
       throw new BadRequestException(productNotPublishable(product.name));
+    }
+    if (product._count?.images === 0) {
+      throw new BadRequestException(
+        productsNeedPhotosToPublish([product.name]),
+      );
     }
 
     await this.prisma.product.update({
@@ -419,6 +429,20 @@ export class StoreService {
     if (!image) {
       throw new NotFoundException(resourceNotFound('Product image', imageId));
     }
+
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, shopId },
+      select: {
+        isPublished: true,
+        _count: { select: { images: true } },
+      },
+    });
+    if (product?.isPublished && (product._count?.images ?? 0) <= 1) {
+      throw new BadRequestException(
+        'Cannot remove the last photo of a published product',
+      );
+    }
+
     await this.prisma.productImage.delete({ where: { id: imageId } });
     await this.syncProductCoverImage(productId, shopId);
 

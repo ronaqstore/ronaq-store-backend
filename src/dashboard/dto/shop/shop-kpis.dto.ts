@@ -13,6 +13,13 @@ export class FlowKpiTotalsDto {
 
   @ApiProperty({ description: 'Expenses in paisa', example: 1000000 })
   expenses: number;
+
+  @ApiProperty({
+    description: 'Returns in paisa',
+    example: 500000,
+    required: false,
+  })
+  returns?: number;
 }
 
 export class BalanceKpiDto {

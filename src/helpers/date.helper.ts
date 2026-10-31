@@ -12,6 +12,24 @@ export function businessToday(now: Date = new Date()): string {
   return businessDayFormatter.format(now);
 }
 
+export function resolveDateOnly(
+  inputDate?: string | Date,
+  now: Date = new Date(),
+): Date {
+  let dateStr: string;
+  if (!inputDate) {
+    dateStr = businessToday(now);
+  } else if (inputDate instanceof Date) {
+    dateStr = businessToday(inputDate);
+  } else if (typeof inputDate === 'string') {
+    const trimmed = inputDate.trim();
+    dateStr = trimmed.length >= 10 ? trimmed.slice(0, 10) : businessToday(now);
+  } else {
+    dateStr = businessToday(now);
+  }
+  return new Date(`${dateStr}T00:00:00.000Z`);
+}
+
 export function resolveTransactionDate(
   inputDate?: string | Date,
   now: Date = new Date(),

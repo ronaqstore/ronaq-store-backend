@@ -13,6 +13,7 @@ const prismaStub = {
   sale: { findMany: jest.fn(), count: jest.fn(), aggregate: jest.fn() },
   saleItem: { findMany: jest.fn(), groupBy: jest.fn() },
   saleReturn: { findMany: jest.fn() },
+  returnItem: { findMany: jest.fn() },
   refund: { findMany: jest.fn() },
   payment: { findMany: jest.fn() },
   purchase: { findMany: jest.fn(), count: jest.fn(), aggregate: jest.fn() },
@@ -34,6 +35,7 @@ describe('ReportsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prismaStub.returnItem.findMany.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -153,6 +155,47 @@ describe('ReportsService', () => {
     );
     expect(result.from).toBe('2026-10-01');
     expect(result.to).toBe('2026-10-31');
+  });
+
+  it('deducts discount from subtotal when calculating sale profit', async () => {
+    prismaStub.sale.findMany.mockResolvedValue([
+      {
+        id: 's-disc',
+        saleNo: 'S-0002',
+        saleDate: new Date('2026-10-05T00:00:00.000Z'),
+        subtotal: 100000n,
+        discount: 10000n,
+        totalAmount: 90000n,
+        customer: { name: 'Farhan' },
+        items: [{ quantity: 1, unitCost: 70000n }],
+        payments: [{ amount: 90000n }],
+        saleReturns: [],
+      },
+    ]);
+    prismaStub.sale.count.mockResolvedValue(1);
+    prismaStub.sale.aggregate.mockResolvedValue({
+      _count: { _all: 1 },
+      _sum: { subtotal: 100000n, discount: 10000n, totalAmount: 90000n },
+    });
+    prismaStub.saleItem.findMany.mockResolvedValue([
+      { unitCost: 70000n, quantity: 1 },
+    ]);
+    prismaStub.saleReturn.findMany.mockResolvedValue([]);
+    prismaStub.payment.findMany.mockResolvedValue([{ amount: 90000n }]);
+
+    const result = await service.getSalesReport(
+      {
+        period: 'custom',
+        from: '2026-10-01',
+        to: '2026-10-31',
+        page: 1,
+        pageSize: 10,
+      } as any,
+      SHOP_ID,
+    );
+
+    expect(result.items[0].profit).toBe(100000 - 10000 - 70000);
+    expect(result.summary.sumProfit).toBe(100000 - 10000 - 70000);
   });
 
   // ---------------------------------------------------------------------------
@@ -297,13 +340,60 @@ describe('ReportsService', () => {
       expect.objectContaining({
         grossSales: 100000,
         cogs: 60000,
-        grossProfit: 40000,
+        grossProfit: 35000,
         returns: 5000,
         expenses: 10000,
         netProfit: 25000,
         salesCount: 1,
       }),
     );
+  });
+
+  it('when a sale has a full return, net profit equals 0 (not negative COGS)', async () => {
+    prismaStub.sale.findMany.mockResolvedValue([
+      {
+        saleDate: new Date('2026-10-02T12:00:00.000Z'),
+        totalAmount: 10000000n,
+      },
+    ]);
+    prismaStub.saleItem.findMany.mockResolvedValue([
+      {
+        quantity: 1,
+        unitCost: 9000000n,
+        sale: { saleDate: new Date('2026-10-02T12:00:00.000Z') },
+      },
+    ]);
+    prismaStub.expense.findMany.mockResolvedValue([]);
+    prismaStub.saleReturn.findMany.mockResolvedValue([
+      {
+        returnDate: new Date('2026-10-02T14:00:00.000Z'),
+        returnAmount: 10000000n,
+      },
+    ]);
+    prismaStub.returnItem.findMany.mockResolvedValue([
+      {
+        quantity: 1,
+        saleItem: { unitCost: 9000000n },
+        saleReturn: { returnDate: new Date('2026-10-02T14:00:00.000Z') },
+      },
+    ]);
+
+    const result = await service.getProfitReport(
+      { period: 'custom', from: '2026-10-01', to: '2026-10-03' } as any,
+      SHOP_ID,
+    );
+
+    expect(result.summary.grossSales).toBe(10000000);
+    expect(result.summary.cogs).toBe(0);
+    expect(result.summary.returns).toBe(10000000);
+    expect(result.summary.grossProfit).toBe(0);
+    expect(result.summary.netProfit).toBe(0);
+
+    const day2 = result.items.find((r) => r.date === '2026-10-02');
+    expect(day2).toBeDefined();
+    expect(day2!.cogs).toBe(0);
+    expect(day2!.returns).toBe(10000000);
+    expect(day2!.profit).toBe(0);
   });
 
   // ---------------------------------------------------------------------------

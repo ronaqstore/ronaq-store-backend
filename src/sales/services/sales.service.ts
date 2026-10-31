@@ -47,7 +47,10 @@ import {
   type CancelSaleResult,
 } from './sales-cancel.service.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
-import { resolveTransactionDate } from '../../helpers/date.helper.js';
+import {
+  resolveDateOnly,
+  resolveTransactionDate,
+} from '../../helpers/date.helper.js';
 import {
   BelowCostSaleResponseDto,
   type BelowCostItem,
@@ -177,7 +180,7 @@ export class SalesService {
             subtotal,
             discount,
             totalAmount,
-            dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+            dueDate: dto.dueDate ? resolveDateOnly(dto.dueDate) : null,
             clientRequestId: dto.clientRequestId,
             notes: dto.notes?.trim() ? dto.notes : null,
             createdById: userId,

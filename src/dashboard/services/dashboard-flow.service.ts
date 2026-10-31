@@ -21,6 +21,11 @@ interface FlowRecordsBundle {
   }>;
   expenses: Array<{ expenseDate: Date; amount: bigint }>;
   returns: Array<{ returnDate: Date; returnAmount: bigint }>;
+  returnItems: Array<{
+    quantity: number;
+    saleItem: { unitCost: bigint };
+    saleReturn: { returnDate: Date };
+  }>;
 }
 
 @Injectable()
@@ -34,45 +39,60 @@ export class DashboardFlowService {
     fromDateStr: string,
     toDateStr: string,
   ): Promise<FlowRecordsBundle> {
-    const [sales, saleItems, returns, expenses] = await Promise.all([
-      this.prisma.sale.findMany({
-        where: {
-          shopId,
-          status: ACTIVE,
-          saleDate: { gte: start, lte: end },
-        },
-        select: { saleDate: true, totalAmount: true },
-      }),
-      this.prisma.saleItem.findMany({
-        where: {
-          shopId,
-          sale: { status: ACTIVE, saleDate: { gte: start, lte: end } },
-        },
-        select: {
-          quantity: true,
-          unitCost: true,
-          sale: { select: { saleDate: true } },
-        },
-      }),
-      this.prisma.saleReturn.findMany({
-        where: {
-          shopId,
-          status: ACTIVE,
-          returnDate: { gte: start, lte: end },
-        },
-        select: { returnDate: true, returnAmount: true },
-      }),
-      this.prisma.expense.findMany({
-        where: {
-          shopId,
-          status: ACTIVE,
-          expenseDate: dateColumnRange(fromDateStr, toDateStr),
-        },
-        select: { expenseDate: true, amount: true },
-      }),
-    ]);
+    const [sales, saleItems, returns, expenses, returnItems] =
+      await Promise.all([
+        this.prisma.sale.findMany({
+          where: {
+            shopId,
+            status: ACTIVE,
+            saleDate: { gte: start, lte: end },
+          },
+          select: { saleDate: true, totalAmount: true },
+        }),
+        this.prisma.saleItem.findMany({
+          where: {
+            shopId,
+            sale: { status: ACTIVE, saleDate: { gte: start, lte: end } },
+          },
+          select: {
+            quantity: true,
+            unitCost: true,
+            sale: { select: { saleDate: true } },
+          },
+        }),
+        this.prisma.saleReturn.findMany({
+          where: {
+            shopId,
+            status: ACTIVE,
+            returnDate: { gte: start, lte: end },
+          },
+          select: { returnDate: true, returnAmount: true },
+        }),
+        this.prisma.expense.findMany({
+          where: {
+            shopId,
+            status: ACTIVE,
+            expenseDate: dateColumnRange(fromDateStr, toDateStr),
+          },
+          select: { expenseDate: true, amount: true },
+        }),
+        this.prisma.returnItem.findMany({
+          where: {
+            shopId,
+            saleReturn: {
+              status: ACTIVE,
+              returnDate: { gte: start, lte: end },
+            },
+          },
+          select: {
+            quantity: true,
+            saleItem: { select: { unitCost: true } },
+            saleReturn: { select: { returnDate: true } },
+          },
+        }),
+      ]);
 
-    return { sales, saleItems, returns, expenses };
+    return { sales, saleItems, returns, expenses, returnItems };
   }
 
   async calculateFlowTotals(
@@ -149,7 +169,7 @@ export class DashboardFlowService {
     const expenses = Number(expenseAgg._sum.amount ?? 0n);
     const netProfit = grossProfit - expenses;
 
-    return { sales, grossProfit, netProfit, expenses };
+    return { sales, grossProfit, netProfit, expenses, returns };
   }
 
   async calculateSparklines(
@@ -178,6 +198,7 @@ export class DashboardFlowService {
 
     const salesByDay = new Map<string, number>();
     const cogsByDay = new Map<string, number>();
+    const returnedCogsByDay = new Map<string, number>();
     const expByDay = new Map<string, number>();
     const retByDay = new Map<string, number>();
 
@@ -190,6 +211,14 @@ export class DashboardFlowService {
       cogsByDay.set(
         d,
         (cogsByDay.get(d) ?? 0) + Number(item.unitCost) * item.quantity,
+      );
+    }
+    for (const item of bundle.returnItems) {
+      const d = businessToday(item.saleReturn.returnDate);
+      returnedCogsByDay.set(
+        d,
+        (returnedCogsByDay.get(d) ?? 0) +
+          Number(item.saleItem.unitCost) * item.quantity,
       );
     }
     for (const r of bundle.returns) {
@@ -208,7 +237,9 @@ export class DashboardFlowService {
 
     for (const d of days) {
       const s = Math.max(0, (salesByDay.get(d) ?? 0) - (retByDay.get(d) ?? 0));
-      const c = cogsByDay.get(d) ?? 0;
+      const grossC = cogsByDay.get(d) ?? 0;
+      const retC = returnedCogsByDay.get(d) ?? 0;
+      const c = Math.max(0, grossC - retC);
       const gp = s - c;
       const exp = expByDay.get(d) ?? 0;
       const np = gp - exp;
@@ -254,6 +285,7 @@ export class DashboardFlowService {
       {
         sales: number;
         cogs: number;
+        returnedCogs: number;
         returns: number;
         expenses: number;
         ordersCount: number;
@@ -263,6 +295,7 @@ export class DashboardFlowService {
       bucketData.set(b, {
         sales: 0,
         cogs: 0,
+        returnedCogs: 0,
         returns: 0,
         expenses: 0,
         ordersCount: 0,
@@ -288,6 +321,15 @@ export class DashboardFlowService {
       }
     }
 
+    for (const item of bundle.returnItems) {
+      const dateStr = businessToday(item.saleReturn.returnDate);
+      const b = this.findMatchingBucket(dateStr, buckets);
+      const entry = bucketData.get(b);
+      if (entry) {
+        entry.returnedCogs += Number(item.saleItem.unitCost) * item.quantity;
+      }
+    }
+
     for (const r of bundle.returns) {
       const dateStr = businessToday(r.returnDate);
       const b = this.findMatchingBucket(dateStr, buckets);
@@ -310,12 +352,14 @@ export class DashboardFlowService {
       const entry = bucketData.get(b) ?? {
         sales: 0,
         cogs: 0,
+        returnedCogs: 0,
         returns: 0,
         expenses: 0,
         ordersCount: 0,
       };
       const netSales = Math.max(0, entry.sales - entry.returns);
-      const grossProfit = netSales - entry.cogs;
+      const netCogs = Math.max(0, entry.cogs - entry.returnedCogs);
+      const grossProfit = netSales - netCogs;
       const netProfit = grossProfit - entry.expenses;
       return {
         date: b,
