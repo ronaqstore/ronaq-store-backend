@@ -133,7 +133,7 @@ export class AppConfigurationService {
     return value;
   }
 
-  get corsOrigins(): string[] | string {
+  get corsOrigins(): (string | RegExp)[] | string {
     let value = this.configService.get<string>('CORS_ORIGINS');
     if (!value) {
       throw new Error('CORS_ORIGINS environment variable is missing');
@@ -142,7 +142,23 @@ export class AppConfigurationService {
     if (value === '*') {
       return '*';
     }
-    return value.split(',').map((origin) => origin.trim());
+    const origins: (string | RegExp)[] = value
+      .split(',')
+      .map((origin) => origin.trim());
+
+    const defaults: (string | RegExp)[] = [
+      'https://ronaq-store-admin.vercel.app',
+      'https://ronaq-store-web.vercel.app',
+      /^https:\/\/.*\.vercel\.app$/,
+    ];
+    for (const d of defaults) {
+      if (typeof d === 'string' && !origins.includes(d)) {
+        origins.push(d);
+      } else if (d instanceof RegExp) {
+        origins.push(d);
+      }
+    }
+    return origins;
   }
 
   get appBaseUrl(): string {
