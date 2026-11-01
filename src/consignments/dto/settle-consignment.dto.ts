@@ -69,4 +69,3 @@ export class SettleConsignmentDto {
   @Length(0, 500)
   notes?: string;
 }
-

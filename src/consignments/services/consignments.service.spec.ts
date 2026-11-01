@@ -94,6 +94,53 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
   };
 }
 
+function makeMockConsignmentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: CONSIGNMENT_ID,
+    consignmentNo: 'CON-0001',
+    shopId: SHOP_ID,
+    customerId: null,
+    consignorName: 'Muhammad Ali',
+    consignorPhone: '03001234567',
+    consignorCnic: '17301-1234567-1',
+    productId: PRODUCT_ID,
+    imei1: '356938035643803',
+    imei2: '356938035643804',
+    condition: 'USED',
+    batteryHealth: 88,
+    defectNotes: null,
+    agreedPayout: 5000000n,
+    targetSellingPrice: 5500000n,
+    status: ConsignmentStatus.IN_CUSTODY,
+    intakeDate: new Date('2026-11-01T00:00:00Z'),
+    inventoryUnits: [
+      { id: 'unit-1', status: 'IN_STOCK', askingPrice: 5500000n },
+    ],
+    product: {
+      id: PRODUCT_ID,
+      name: 'iPhone 13',
+      brand: { name: 'Apple' },
+      trackingType: 'SERIALIZED',
+    },
+    customer: null,
+    saleItem: null,
+    soldAt: null,
+    soldPrice: null,
+    settledAt: null,
+    settledAmount: null,
+    payoutMethod: null,
+    payoutReference: null,
+    returnedAt: null,
+    returnReason: null,
+    cancelledAt: null,
+    cancelReason: null,
+    notes: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
 describe('ConsignmentsService', () => {
   let service: ConsignmentsService;
 
@@ -111,7 +158,9 @@ describe('ConsignmentsService', () => {
 
   describe('1. Happy Path Execution', () => {
     it('creates a new consignment agreement and places unit in stock', async () => {
-      prismaStub.consignment.findFirst.mockResolvedValueOnce(null);
+      prismaStub.consignment.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeMockConsignmentRow());
       prismaStub.product.findFirst.mockResolvedValueOnce({
         id: PRODUCT_ID,
         name: 'iPhone 13',
@@ -142,11 +191,60 @@ describe('ConsignmentsService', () => {
 
       const result = await service.createConsignment(dto, SHOP_ID, USER_ID);
 
-      expect(result.status).toBe(true);
       expect(result.id).toBe(CONSIGNMENT_ID);
+      expect(result.consignmentNo).toBe('CON-0001');
+      expect(result.agreedPayout).toBe(5000000);
       expect(tx.consignment.create).toHaveBeenCalledTimes(1);
       expect(tx.inventoryUnit.create).toHaveBeenCalledTimes(1);
       expect(tx.inventoryMovement.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('creates a new consignment agreement when imei2 is omitted', async () => {
+      prismaStub.consignment.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeMockConsignmentRow({ imei2: null }));
+      prismaStub.product.findFirst.mockResolvedValueOnce({
+        id: PRODUCT_ID,
+        name: 'iPhone 13',
+        trackingType: 'SERIALIZED',
+        brand: { name: 'Apple' },
+      });
+      prismaStub.inventoryUnit.findFirst.mockResolvedValueOnce(null);
+
+      const tx = makeTx();
+      prismaStub.$transaction.mockImplementationOnce(
+        (cb: (txClient: TxStub) => unknown) => cb(tx),
+      );
+
+      const dto: CreateConsignmentDto = {
+        clientRequestId: '01924f0a-0000-7000-8000-000000000019',
+        consignorName: 'Muhammad Ali',
+        consignorPhone: '03001234567',
+        productId: PRODUCT_ID,
+        imei1: '356938035643803',
+        agreedPayout: 5000000,
+        intakeDate: '2026-11-01',
+      };
+
+      const result = await service.createConsignment(dto, SHOP_ID, USER_ID);
+
+      expect(result.id).toBe(CONSIGNMENT_ID);
+      expect(tx.consignment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            imei1: '356938035643803',
+            imei2: null,
+          }),
+        }),
+      );
+      expect(tx.inventoryUnit.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            imei1: '356938035643803',
+            imei2: null,
+          }),
+        }),
+      );
     });
 
     it('returns a consignment agreement to owner', async () => {
@@ -193,6 +291,14 @@ describe('ConsignmentsService', () => {
     });
 
     it('settles a sold consignment with owner via cash when drawer has funds', async () => {
+      prismaStub.consignment.findFirst.mockResolvedValueOnce(
+        makeMockConsignmentRow({
+          status: ConsignmentStatus.SETTLED,
+          settledAmount: 5000000n,
+          payoutMethod: PaymentMethod.CASH,
+        }),
+      );
+
       const tx = makeTx({
         $queryRaw: jest.fn().mockResolvedValueOnce([
           {
@@ -227,7 +333,8 @@ describe('ConsignmentsService', () => {
         USER_ID,
       );
 
-      expect('status' in result && result.status).toBe(true);
+      expect(result).toHaveProperty('id', CONSIGNMENT_ID);
+      expect(result).toHaveProperty('status', ConsignmentStatus.SETTLED);
       expect(tx.consignment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -378,9 +485,9 @@ describe('ConsignmentsService', () => {
 
   describe('3. Negative Tests - Adverse State & Lifecycle Violations', () => {
     it('returns idempotency replay response when clientRequestId already processed', async () => {
-      prismaStub.consignment.findFirst.mockResolvedValueOnce({
-        id: CONSIGNMENT_ID,
-      });
+      prismaStub.consignment.findFirst
+        .mockResolvedValueOnce({ id: CONSIGNMENT_ID })
+        .mockResolvedValueOnce(makeMockConsignmentRow());
 
       const dto: CreateConsignmentDto = {
         clientRequestId: '01924f0a-0000-7000-8000-000000000015',
@@ -395,9 +502,8 @@ describe('ConsignmentsService', () => {
 
       const result = await service.createConsignment(dto, SHOP_ID, USER_ID);
 
-      expect(result.status).toBe(true);
-      expect(result.message).toContain('already recorded');
       expect(result.id).toBe(CONSIGNMENT_ID);
+      expect(result.consignmentNo).toBe('CON-0001');
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
 

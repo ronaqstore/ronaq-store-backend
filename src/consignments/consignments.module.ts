@@ -11,4 +11,3 @@ import { AppConfigurationService } from '../app-configuration/app-configuration.
   exports: [ConsignmentsService],
 })
 export class ConsignmentsModule {}
-

@@ -30,6 +30,9 @@ export class CreateConsignmentDto {
     description: 'Existing customer ID if registered in shop.',
     example: '01924f0a-0000-7000-8000-00000000000a',
   })
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined,
+  )
   @IsOptional()
   @IsUUID()
   customerId?: string;
@@ -64,13 +67,17 @@ export class CreateConsignmentDto {
   @Matches(IMEI_PATTERN)
   imei1: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Secondary IMEI (15 digits, must differ from imei1).',
     example: '356938035643804',
   })
+  @Transform(({ value }) =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined,
+  )
+  @IsOptional()
   @IsString()
   @Matches(IMEI_PATTERN)
-  imei2: string;
+  imei2?: string;
 
   @ApiPropertyOptional({
     description: 'Physical condition of the unit.',
@@ -85,10 +92,13 @@ export class CreateConsignmentDto {
     description: 'iPhone battery health percentage (1-100).',
     example: 85,
   })
+  @Transform(({ value }) =>
+    value !== '' && value != null ? Number(value) : undefined,
+  )
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(100)
   batteryHealth?: number;
 
@@ -117,6 +127,9 @@ export class CreateConsignmentDto {
     description: 'Target or asking sale price in PAISA (Rs 55,000 = 5500000).',
     example: 5500000,
   })
+  @Transform(({ value }) =>
+    value !== '' && value != null ? Number(value) : undefined,
+  )
   @IsOptional()
   @Type(() => Number)
   @IsInt()

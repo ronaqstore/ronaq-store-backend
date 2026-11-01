@@ -12,7 +12,7 @@ model Consignment {
   consignorCnic      String?           @map("consignor_cnic")
   productId          String            @map("product_id") @db.Uuid
   imei1              String
-  imei2              String
+  imei2              String?
   condition          UnitCondition     @default(USED)
   batteryHealth      Int?              @map("battery_health")
   defectNotes        String?           @map("defect_notes")

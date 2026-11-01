@@ -29,4 +29,3 @@ export class CancelConsignmentDto {
   @Length(0, 500)
   notes?: string;
 }
-

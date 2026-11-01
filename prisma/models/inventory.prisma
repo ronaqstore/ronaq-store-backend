@@ -10,7 +10,7 @@ model InventoryUnit {
   purchaseItemId String?       @map("purchase_item_id") @db.Uuid
   consignmentId  String?       @map("consignment_id") @db.Uuid
   imei1          String
-  imei2          String
+  imei2          String?
   condition      UnitCondition @default(NEW)
   unitCost       BigInt        @map("unit_cost")
   /// iPhone only (1–100). Null for Android / NEW when unknown.

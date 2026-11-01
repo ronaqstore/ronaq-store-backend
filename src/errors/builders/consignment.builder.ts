@@ -60,4 +60,3 @@ export const saleCancelConsignmentSettled = (
     HttpStatus.BAD_REQUEST,
   );
 };
-
