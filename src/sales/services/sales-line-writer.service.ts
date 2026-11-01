@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import {
+  ConsignmentStatus,
   InventoryMovementType,
   ReferenceType,
   UnitCondition,
@@ -37,6 +38,7 @@ export type LockedSaleLine =
       unitId: string;
       imei: string;
       unitCost: bigint;
+      consignmentId?: string | null;
       available?: never;
     }
   | {
@@ -44,6 +46,7 @@ export type LockedSaleLine =
       unitId?: never;
       imei?: never;
       unitCost: bigint;
+      consignmentId?: never;
       available: number;
     };
 
@@ -133,9 +136,10 @@ export class SalesLineWriterService {
         imei1: string;
         unit_cost: bigint;
         condition: string;
+        consignment_id: string | null;
       }>
     >`
-      SELECT id, status, imei1, unit_cost, condition FROM inventory_units
+      SELECT id, status, imei1, unit_cost, condition, consignment_id FROM inventory_units
       WHERE id = ${line.inventoryUnitId} AND shop_id = ${shopId}
         AND product_id = ${line.productId}
       FOR UPDATE
@@ -170,6 +174,7 @@ export class SalesLineWriterService {
       unitId: unit.id,
       imei: unit.imei1,
       unitCost: BigInt(unit.unit_cost),
+      consignmentId: unit.consignment_id,
     };
   }
 
@@ -206,7 +211,7 @@ export class SalesLineWriterService {
   ): Promise<void> {
     const { line } = locked;
 
-    await tx.saleItem.create({
+    const saleItem = await tx.saleItem.create({
       data: {
         shopId,
         saleId,
@@ -220,6 +225,18 @@ export class SalesLineWriterService {
         warrantyDays: locked.unitId ? (line.warrantyDays ?? null) : null,
       },
     });
+
+    if (locked.consignmentId) {
+      await tx.consignment.update({
+        where: { id: locked.consignmentId },
+        data: {
+          status: ConsignmentStatus.SOLD,
+          saleItemId: saleItem.id,
+          soldAt: new Date(),
+          soldPrice: BigInt(line.unitPrice),
+        },
+      });
+    }
 
     if (locked.unitId) {
       const updatedUnits = await tx.$queryRaw<Array<{ id: string }>>`

@@ -7,6 +7,7 @@ import './builders/sale.builder.js';
 import './builders/store.builder.js';
 import './builders/return.builder.js';
 import './builders/misc.builder.js';
+import './builders/consignment.builder.js';
 
 export * from './builders/auth.builder.js';
 export * from './builders/entity.builder.js';
@@ -17,3 +18,4 @@ export * from './builders/sale.builder.js';
 export * from './builders/store.builder.js';
 export * from './builders/return.builder.js';
 export * from './builders/misc.builder.js';
+export * from './builders/consignment.builder.js';

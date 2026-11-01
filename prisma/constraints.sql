@@ -18,7 +18,7 @@
 
 -- shops
 ALTER TABLE shops
-  ADD CONSTRAINT shops_counters_chk CHECK (next_sale_no >= 1 AND next_purchase_no >= 1);
+  ADD CONSTRAINT shops_counters_chk CHECK (next_sale_no >= 1 AND next_purchase_no >= 1 AND next_consignment_no >= 1);
 
 -- products
 ALTER TABLE products
@@ -101,7 +101,7 @@ ALTER TABLE cash_movements
   -- direction must match the type (REVERSAL and RECONCILIATION_ADJUSTMENT can go either way)
   ADD CONSTRAINT cash_movements_direction_chk CHECK (
     (type IN ('OPENING_CASH','CUSTOMER_PAYMENT','OWNER_INVESTMENT') AND direction = 'IN')
-    OR (type IN ('SUPPLIER_PAYMENT','EXPENSE','REFUND','OWNER_WITHDRAWAL') AND direction = 'OUT')
+    OR (type IN ('SUPPLIER_PAYMENT','EXPENSE','REFUND','OWNER_WITHDRAWAL','CONSIGNMENT_PAYOUT') AND direction = 'OUT')
     OR type IN ('REVERSAL','RECONCILIATION_ADJUSTMENT'));
 
 -- Release 1.1 tables
@@ -275,7 +275,8 @@ BEGIN
     'products','suppliers','customers',
     'purchases','purchase_items','supplier_payments','inventory_units',
     'sales','sale_items','payments','expenses',
-    'returns','return_items','refunds','cash_reconciliations','audit_logs'
+    'returns','return_items','refunds','cash_reconciliations','audit_logs',
+    'consignments'
   ] LOOP
     EXECUTE format(
       'CREATE TRIGGER %I BEFORE DELETE ON %I FOR EACH ROW EXECUTE FUNCTION forbid_delete()',

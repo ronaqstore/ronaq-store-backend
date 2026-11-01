@@ -78,6 +78,7 @@ model Product {
   inventoryMovements InventoryMovement[]
   saleItems          SaleItem[]
   images             ProductImage[]
+  consignments       Consignment[]
 
   // Same display name is allowed for different variants (e.g. two "iPhone 7"
   // with different color/storage). Exact name+variant dupes are blocked in the service.

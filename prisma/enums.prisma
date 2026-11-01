@@ -76,6 +76,7 @@ enum CashMovementType {
   OWNER_INVESTMENT // Release 1.1
   OWNER_WITHDRAWAL // Release 1.1
   RECONCILIATION_ADJUSTMENT // Release 1.1
+  CONSIGNMENT_PAYOUT
 }
 
 enum InventoryMovementType {
@@ -87,6 +88,8 @@ enum InventoryMovementType {
   DAMAGED
   LOST
   ADJUSTMENT
+  CONSIGNMENT_INTAKE
+  CONSIGNMENT_RETURN
 }
 
 // What a movement points to (reference_id has no FK on purpose: it is polymorphic).
@@ -100,6 +103,15 @@ enum ReferenceType {
   REFUND
   RECONCILIATION
   MANUAL
+  CONSIGNMENT
+}
+
+enum ConsignmentStatus {
+  IN_CUSTODY
+  SOLD
+  SETTLED
+  RETURNED_TO_OWNER
+  CANCELLED
 }
 
 enum ReturnCondition {

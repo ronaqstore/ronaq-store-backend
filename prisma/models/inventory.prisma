@@ -7,7 +7,8 @@ model InventoryUnit {
   id             String        @id @default(uuid(7)) @db.Uuid
   shopId         String        @map("shop_id") @db.Uuid
   productId      String        @map("product_id") @db.Uuid
-  purchaseItemId String        @map("purchase_item_id") @db.Uuid
+  purchaseItemId String?       @map("purchase_item_id") @db.Uuid
+  consignmentId  String?       @map("consignment_id") @db.Uuid
   imei1          String
   imei2          String
   condition      UnitCondition @default(NEW)
@@ -22,9 +23,10 @@ model InventoryUnit {
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  shop         Shop         @relation(fields: [shopId], references: [id], onDelete: Restrict)
-  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
-  purchaseItem PurchaseItem @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+  shop         Shop          @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  purchaseItem PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+  consignment  Consignment?  @relation(fields: [consignmentId], references: [id], onDelete: Restrict)
 
   movements   InventoryMovement[]
   saleItems   SaleItem[]
@@ -36,6 +38,7 @@ model InventoryUnit {
   @@index([productId, status, condition])
   @@index([shopId, status])
   @@index([purchaseItemId])
+  @@index([consignmentId])
   @@map("inventory_units")
 }
 

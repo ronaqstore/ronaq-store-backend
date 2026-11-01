@@ -312,7 +312,45 @@ describe('SalesService', () => {
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
 
-    it('rejects a walk-in phone sale even when fully paid', async () => {
+    it('allows a walk-in full-cash phone sale with no customer', async () => {
+      tx.$queryRaw.mockImplementation((strings: any) =>
+        strings?.[0]?.includes('inventory_units')
+          ? Promise.resolve([
+              {
+                id: UNIT_ID,
+                status: 'IN_STOCK',
+                imei1: '111',
+                unit_cost: 9000000n,
+              },
+            ])
+          : Promise.resolve([{ next: 7 }]),
+      );
+
+      const res = await service.createSale(
+        serialiseSaleRequest({
+          items: [
+            {
+              productId: SERIAL_PRODUCT_ID,
+              quantity: 1,
+              unitPrice: 10000000,
+              inventoryUnitId: UNIT_ID,
+            },
+          ],
+          paidNow: 10000000,
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(res).toEqual({
+        status: true,
+        message: 'Sale created successfully',
+      });
+      expect(tx.sale.create.mock.calls[0][0].data.customerId).toBeNull();
+      expect(tx.payment.create.mock.calls[0][0].data.customerId).toBeNull();
+    });
+
+    it('rejects a walk-in phone sale that leaves an unpaid balance', async () => {
       await expect(
         service.createSale(
           serialiseSaleRequest({
@@ -324,7 +362,7 @@ describe('SalesService', () => {
                 inventoryUnitId: UNIT_ID,
               },
             ],
-            paidNow: 10000000,
+            paidNow: 5000000,
           }),
           SHOP_ID,
           USER_ID,

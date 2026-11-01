@@ -29,7 +29,7 @@ export class CreateSaleDto {
 
   @ApiPropertyOptional({
     description:
-      'Who is buying. Required when the sale contains a phone, or when any amount stays unpaid (Udhar). Omit for a walk-in full-cash accessory sale.',
+      'Who is buying. Required when any amount stays unpaid (Udhar). Omit for a walk-in full-cash sale.',
     example: '01924f0a-0000-7000-8000-0000000000a7',
   })
   @IsOptional()

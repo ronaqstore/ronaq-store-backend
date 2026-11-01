@@ -115,9 +115,8 @@ export class SalesService {
       );
     }
 
-    const hasPhone = lines.some((line) => line.inventoryUnitId);
     const outstanding = totalAmount - paidNow;
-    if ((hasPhone || outstanding > 0n) && !customerId) {
+    if (outstanding > 0n && !customerId) {
       throw new BadRequestException(customerRequiredForSale());
     }
 

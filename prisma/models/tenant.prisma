@@ -14,8 +14,9 @@ model Shop {
 
   // Automatic numbers (S-0001, P-0001). Read + increase inside the same transaction
   // that saves the sale / purchase (UPDATE ... RETURNING).
-  nextSaleNo     Int @default(1) @map("next_sale_no")
-  nextPurchaseNo Int @default(1) @map("next_purchase_no")
+  nextSaleNo        Int @default(1) @map("next_sale_no")
+  nextPurchaseNo    Int @default(1) @map("next_purchase_no")
+  nextConsignmentNo Int @default(1) @map("next_consignment_no")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -45,6 +46,7 @@ model Shop {
   storeSettings       ShopStoreSettings?
   productImages       ProductImage[]
   auditLogs           AuditLog[]
+  consignments        Consignment[]
 
   @@map("shops")
 }
@@ -86,6 +88,10 @@ model User {
   createdRefunds            Refund[]             @relation("RefundCreatedBy")
   createdReconciliations    CashReconciliation[] @relation("ReconciliationCreatedBy")
   auditLogs                 AuditLog[]
+  createdConsignments       Consignment[]        @relation("ConsignmentCreatedBy")
+  settledConsignments       Consignment[]        @relation("ConsignmentSettledBy")
+  returnedConsignments      Consignment[]        @relation("ConsignmentReturnedBy")
+  cancelledConsignments     Consignment[]        @relation("ConsignmentCancelledBy")
 
   @@index([shopId])
   @@map("users")

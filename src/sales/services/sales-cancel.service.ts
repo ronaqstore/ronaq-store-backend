@@ -7,6 +7,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import {
   CashDirection,
   CashMovementType,
+  ConsignmentStatus,
   InventoryMovementType,
   PaymentMethod,
   RecordStatus,
@@ -26,6 +27,7 @@ import { lockShopForUpdate } from '../../helpers/shop-lock.helper.js';
 import {
   cancelledRowMutationForbidden,
   resourceNotFound,
+  saleCancelConsignmentSettled,
   saleCancelImeiAlreadyInStock,
   saleCancelUnitNotSold,
   saleHasReturns,
@@ -254,11 +256,15 @@ export class SalesCancelService {
         customerId: true,
         items: {
           select: {
+            id: true,
             inventoryUnitId: true,
             quantity: true,
             product: { select: { name: true } },
             inventoryUnit: {
               select: { imei1: true, imei2: true, status: true },
+            },
+            consignment: {
+              select: { consignmentNo: true, status: true },
             },
           },
         },
@@ -333,6 +339,12 @@ export class SalesCancelService {
               blockedReason = saleCancelImeiAlreadyInStock(
                 sale.saleNo,
                 unit.imei1,
+              ).message.join(' ');
+            } else if (item.consignment?.status === ConsignmentStatus.SETTLED) {
+              blocked = true;
+              blockedReason = saleCancelConsignmentSettled(
+                sale.saleNo,
+                item.consignment.consignmentNo,
               ).message.join(' ');
             }
           }
@@ -434,9 +446,10 @@ export class SalesCancelService {
         status: string;
         imei1: string;
         imei2: string | null;
+        consignment_id: string | null;
       }>
     >`
-      SELECT id, status, imei1, imei2 FROM inventory_units
+      SELECT id, status, imei1, imei2, consignment_id FROM inventory_units
       WHERE id = ${unitId} AND shop_id = ${shopId}
       FOR UPDATE
     `;
@@ -448,6 +461,32 @@ export class SalesCancelService {
       throw new BadRequestException(
         saleCancelUnitNotSold(saleNo, unit.imei1, unit.status),
       );
+    }
+
+    if (unit.consignment_id) {
+      const conRows = await tx.$queryRaw<
+        Array<{ id: string; consignment_no: string; status: string }>
+      >`
+        SELECT id, consignment_no, status FROM consignments
+        WHERE id = ${unit.consignment_id}::uuid
+      `;
+      const con = conRows?.[0];
+      if (con) {
+        if (con.status === ConsignmentStatus.SETTLED) {
+          throw new BadRequestException(
+            saleCancelConsignmentSettled(saleNo, con.consignment_no),
+          );
+        }
+        await tx.$executeRaw`
+          UPDATE consignments
+          SET status = ${ConsignmentStatus.IN_CUSTODY}::"ConsignmentStatus",
+              sale_item_id = NULL,
+              sold_at = NULL,
+              sold_price = NULL,
+              updated_at = now()
+          WHERE id = ${con.id}::uuid
+        `;
+      }
     }
 
     await assertImeiNotInStock(

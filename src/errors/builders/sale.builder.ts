@@ -6,7 +6,7 @@ export const customerRequiredForSale = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'This sale needs a customer',
     [
-      'A sale that includes a phone, or that leaves any amount unpaid (Udhar), cannot be walk-in. Pick a customer first.',
+      'A sale that leaves any amount unpaid (Udhar) cannot be walk-in. Pick a customer first.',
     ],
     HttpStatus.BAD_REQUEST,
   );

@@ -33,6 +33,7 @@ import { StoreModule } from './store/store.module.js';
 import { ReturnsModule } from './returns/returns.module.js';
 import { CashReconciliationsModule } from './cash-reconciliations/cash-reconciliations.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { ConsignmentsModule } from './consignments/consignments.module.js';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { ReportsModule } from './reports/reports.module.js';
     ReturnsModule,
     CashReconciliationsModule,
     ReportsModule,
+    ConsignmentsModule,
   ],
   controllers: [AppController],
   providers: [

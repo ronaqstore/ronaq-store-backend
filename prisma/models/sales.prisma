@@ -16,8 +16,9 @@ model Customer {
 
   shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Restrict)
   sales       Sale[]
-  payments    Payment[]
-  saleReturns SaleReturn[]
+  payments     Payment[]
+  saleReturns  SaleReturn[]
+  consignments Consignment[]
 
   // phone: unique per shop when set.
   @@unique([shopId, phone])
@@ -29,7 +30,7 @@ model Customer {
 model Sale {
   id              String       @id @default(uuid(7)) @db.Uuid
   shopId          String       @map("shop_id") @db.Uuid
-  customerId      String?      @map("customer_id") @db.Uuid // null = walk-in (accessories only)
+  customerId      String?      @map("customer_id") @db.Uuid // null = walk-in (full cash sale)
   saleNo          String       @map("sale_no") // automatic: S-0001
   saleDate        DateTime     @map("sale_date") @db.Timestamptz(3)
   subtotal        BigInt
@@ -81,6 +82,7 @@ model SaleItem {
   inventoryUnit InventoryUnit? @relation(fields: [inventoryUnitId], references: [id], onDelete: Restrict)
 
   returnItems ReturnItem[]
+  consignment Consignment?
 
   @@index([saleId])
   @@index([shopId, productId])

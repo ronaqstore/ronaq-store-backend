@@ -1,0 +1,61 @@
+// =============================================================================
+// MODULE 12 : CONSIGNMENTS ("Sell on Behalf" / Custody / Amanat)
+// =============================================================================
+
+model Consignment {
+  id                 String            @id @default(uuid(7)) @db.Uuid
+  shopId             String            @map("shop_id") @db.Uuid
+  consignmentNo      String            @map("consignment_no")
+  customerId         String?           @map("customer_id") @db.Uuid
+  consignorName      String            @map("consignor_name")
+  consignorPhone     String            @map("consignor_phone")
+  consignorCnic      String?           @map("consignor_cnic")
+  productId          String            @map("product_id") @db.Uuid
+  imei1              String
+  imei2              String
+  condition          UnitCondition     @default(USED)
+  batteryHealth      Int?              @map("battery_health")
+  defectNotes        String?           @map("defect_notes")
+  agreedPayout       BigInt            @map("agreed_payout")
+  targetSellingPrice BigInt?           @map("target_selling_price")
+  status             ConsignmentStatus @default(IN_CUSTODY)
+  intakeDate         DateTime          @map("intake_date") @db.Date
+  soldAt             DateTime?         @map("sold_at") @db.Timestamptz(3)
+  saleItemId         String?           @unique @map("sale_item_id") @db.Uuid
+  soldPrice          BigInt?           @map("sold_price")
+  settledAt          DateTime?         @map("settled_at") @db.Timestamptz(3)
+  settledAmount      BigInt?           @map("settled_amount")
+  payoutMethod       PaymentMethod?    @map("payout_method")
+  payoutReference    String?           @map("payout_reference")
+  returnedAt         DateTime?         @map("returned_at") @db.Timestamptz(3)
+  returnReason       String?           @map("return_reason")
+  cancelledAt        DateTime?         @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason       String?           @map("cancel_reason")
+  clientRequestId    String            @map("client_request_id") @db.Uuid
+  notes              String?
+  createdById        String            @map("created_by_id") @db.Uuid
+  settledById        String?           @map("settled_by_id") @db.Uuid
+  returnedById       String?           @map("returned_by_id") @db.Uuid
+  cancelledById      String?           @map("cancelled_by_id") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop           Shop            @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  saleItem       SaleItem?       @relation(fields: [saleItemId], references: [id], onDelete: Restrict)
+  createdBy      User            @relation("ConsignmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  settledBy      User?           @relation("ConsignmentSettledBy", fields: [settledById], references: [id], onDelete: Restrict)
+  returnedBy     User?           @relation("ConsignmentReturnedBy", fields: [returnedById], references: [id], onDelete: Restrict)
+  cancelledBy    User?           @relation("ConsignmentCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  inventoryUnits InventoryUnit[]
+
+  @@unique([shopId, consignmentNo])
+  @@unique([shopId, clientRequestId])
+  @@index([shopId, status])
+  @@index([shopId, intakeDate])
+  @@index([productId, status])
+  @@index([customerId])
+  @@map("consignments")
+}
+
