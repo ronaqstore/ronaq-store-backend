@@ -57,6 +57,10 @@ interface TxStub {
     create: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
+  };
+  saleItem: {
+    update: jest.Mock;
   };
   inventoryMovement: {
     create: jest.Mock;
@@ -82,6 +86,10 @@ function makeTx(overrides: Partial<TxStub> = {}): TxStub {
         .fn()
         .mockResolvedValue({ id: 'unit-1', status: UnitStatus.IN_STOCK }),
       update: jest.fn().mockResolvedValue({ id: 'unit-1' }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    saleItem: {
+      update: jest.fn().mockResolvedValue({ id: 'sale-item-1' }),
     },
     inventoryMovement: {
       create: jest.fn().mockResolvedValue({ id: 'mov-1' }),
@@ -344,6 +352,62 @@ describe('ConsignmentsService', () => {
           }),
         }),
       );
+    });
+
+    it('syncs saleItem unitCost and inventoryUnit unitCost when settled with a negotiated amount', async () => {
+      prismaStub.consignment.findFirst.mockResolvedValueOnce(
+        makeMockConsignmentRow({
+          status: ConsignmentStatus.SETTLED,
+          settledAmount: 4900000n,
+          payoutMethod: PaymentMethod.CASH,
+        }),
+      );
+
+      const tx = makeTx({
+        $queryRaw: jest.fn().mockResolvedValueOnce([
+          {
+            id: CONSIGNMENT_ID,
+            consignment_no: 'CON-0001',
+            status: ConsignmentStatus.SOLD,
+            agreed_payout: 5000000n,
+            consignor_name: 'Ali',
+            sale_item_id: 'sale-item-1',
+          },
+        ]),
+        cashMovement: {
+          aggregate: jest
+            .fn()
+            .mockResolvedValueOnce({ _sum: { amount: 10000000n } })
+            .mockResolvedValueOnce({ _sum: { amount: 0n } }),
+          create: jest.fn().mockResolvedValue({ id: 'cash-1' }),
+        },
+      });
+      prismaStub.$transaction.mockImplementationOnce(
+        (cb: (txClient: TxStub) => unknown) => cb(tx),
+      );
+
+      const dto: SettleConsignmentDto = {
+        clientRequestId: '01924f0a-0000-7000-8000-000000000031',
+        settledAmount: 4900000,
+        payoutMethod: PaymentMethod.CASH,
+      };
+
+      const result = await service.settleConsignment(
+        CONSIGNMENT_ID,
+        dto,
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(result).toHaveProperty('id', CONSIGNMENT_ID);
+      expect(tx.saleItem.update).toHaveBeenCalledWith({
+        where: { id: 'sale-item-1' },
+        data: { unitCost: 4900000n },
+      });
+      expect(tx.inventoryUnit.updateMany).toHaveBeenCalledWith({
+        where: { consignmentId: CONSIGNMENT_ID, shopId: SHOP_ID },
+        data: { unitCost: 4900000n },
+      });
     });
 
     it('cancels an active intake consignment agreement', async () => {

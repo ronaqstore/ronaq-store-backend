@@ -338,9 +338,10 @@ export class ConsignmentsService {
           status: string;
           agreed_payout: bigint;
           consignor_name: string;
+          sale_item_id: string | null;
         }>
       >`
-        SELECT id, consignment_no, status, agreed_payout, consignor_name FROM consignments
+        SELECT id, consignment_no, status, agreed_payout, consignor_name, sale_item_id FROM consignments
         WHERE id = ${id}::uuid AND shop_id = ${shopId}::uuid
         FOR UPDATE
       `;
@@ -402,6 +403,18 @@ export class ConsignmentsService {
             : null,
           notes: dto.notes?.trim() ? dto.notes.trim() : undefined,
         },
+      });
+
+      if (con.sale_item_id) {
+        await tx.saleItem.update({
+          where: { id: con.sale_item_id },
+          data: { unitCost: payout },
+        });
+      }
+
+      await tx.inventoryUnit.updateMany({
+        where: { consignmentId: id, shopId },
+        data: { unitCost: payout },
       });
 
       return { id };
