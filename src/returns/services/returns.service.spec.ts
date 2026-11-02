@@ -777,6 +777,139 @@ describe('ReturnsService', () => {
       expect(tx.saleReturn.create).not.toHaveBeenCalled();
       expect(tx.inventoryMovement.create).not.toHaveBeenCalled();
     });
+
+    describe('walk-in customer returns', () => {
+      beforeEach(() => {
+        const walkInSale = saleRow({ customerId: null, customer: null });
+        prismaStub.sale.findFirst.mockResolvedValue(walkInSale);
+        tx.sale.findFirst.mockResolvedValue(walkInSale);
+        primeSettlement(tx, { paid: 9000000n });
+      });
+
+      it('successfully processes full cash refund return for walk-in customer', async () => {
+        const res = await service.createReturn(
+          SALE_ID,
+          returnRequest({ refundAmount: 9000000 }),
+          SHOP_ID,
+          USER_ID,
+        );
+
+        expect(res).toEqual({
+          status: true,
+          message: 'Return recorded successfully',
+        });
+        expect(tx.saleReturn.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              customerId: null,
+              returnAmount: 9000000n,
+            }),
+          }),
+        );
+        expect(tx.refund.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              amount: 9000000n,
+            }),
+          }),
+        );
+        expect(tx.cashMovement.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              type: 'REFUND',
+              direction: 'OUT',
+              amount: 9000000n,
+            }),
+          }),
+        );
+      });
+
+      it('rejects walk-in customer return when refundAmount is 0', async () => {
+        try {
+          await service.createReturn(
+            SALE_ID,
+            returnRequest({ refundAmount: 0 }),
+            SHOP_ID,
+            USER_ID,
+          );
+          fail('should have thrown');
+        } catch (err: any) {
+          expect(err).toBeInstanceOf(BadRequestException);
+          expect(err.getResponse()).toEqual(
+            expect.objectContaining({
+              error: 'Walk-in customer returns require a full cash refund',
+            }),
+          );
+        }
+        expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('rejects walk-in customer return when refundAmount is partial', async () => {
+        try {
+          await service.createReturn(
+            SALE_ID,
+            returnRequest({ refundAmount: 5000000 }),
+            SHOP_ID,
+            USER_ID,
+          );
+          fail('should have thrown');
+        } catch (err: any) {
+          expect(err).toBeInstanceOf(BadRequestException);
+          expect(err.getResponse()).toEqual(
+            expect.objectContaining({
+              error: 'Walk-in customer returns require a full cash refund',
+            }),
+          );
+        }
+        expect(prismaStub.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('rejects walk-in customer return inside transaction when fresh settlement refundable mismatches refundAmount', async () => {
+        tx.payment.aggregate.mockResolvedValue({ _sum: { amount: 8000000n } });
+
+        await expect(
+          service.createReturn(
+            SALE_ID,
+            returnRequest({ refundAmount: 9000000 }),
+            SHOP_ID,
+            USER_ID,
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+        expect(tx.saleReturn.create).not.toHaveBeenCalled();
+      });
+
+      it('previewReturn automatically defaults refundAmount to settlement.refundable for walk-in customer when omitted', async () => {
+        const res = await service.previewReturn(
+          SALE_ID,
+          previewRequest(),
+          SHOP_ID,
+        );
+
+        expect(res.customerName).toBeNull();
+        expect(res.refundable).toBe(9000000);
+        expect(res.refundAmount).toBe(9000000);
+      });
+
+      it('previewReturn rejects walk-in customer when explicit non-matching refundAmount is sent', async () => {
+        try {
+          await service.previewReturn(
+            SALE_ID,
+            previewRequest({ refundAmount: 0 }),
+            SHOP_ID,
+          );
+          fail('should have thrown');
+        } catch (err: any) {
+          expect(err).toBeInstanceOf(BadRequestException);
+          expect(err.getResponse()).toEqual(
+            expect.objectContaining({
+              error: 'Walk-in customer returns require a full cash refund',
+            }),
+          );
+        }
+      });
+    });
   });
 
   describe('createReturn — idempotency', () => {

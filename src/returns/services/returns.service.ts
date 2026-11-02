@@ -42,6 +42,7 @@ import {
   cancelledRowMutationForbidden,
   refundExceedsAvailable,
   resourceNotFound,
+  walkInCustomerRefundRequired,
 } from '../../errors/error.builder.js';
 import {
   isUniqueConstraintViolation,
@@ -78,15 +79,38 @@ export class ReturnsService {
       dto.items,
     );
 
-    const refundAmount = BigInt(dto.refundAmount ?? 0);
-    if (refundAmount > settlement.refundable) {
+    const isWalkIn = !sale.customerId;
+    const requestedRefund =
+      dto.refundAmount !== undefined
+        ? BigInt(dto.refundAmount)
+        : isWalkIn
+          ? settlement.refundable
+          : 0n;
+
+    if (requestedRefund > settlement.refundable) {
       throw new BadRequestException(
         refundExceedsAvailable(
-          Number(refundAmount),
+          Number(requestedRefund),
           Number(settlement.refundable),
         ),
       );
     }
+
+    if (
+      isWalkIn &&
+      dto.refundAmount !== undefined &&
+      requestedRefund !== settlement.refundable
+    ) {
+      throw new BadRequestException(
+        walkInCustomerRefundRequired(
+          sale.saleNo,
+          Number(settlement.refundable),
+          Number(requestedRefund),
+        ),
+      );
+    }
+
+    const refundAmount = requestedRefund;
 
     const outstandingAfter =
       settlement.outstandingBefore - settlement.returnAmount + refundAmount;
@@ -144,6 +168,18 @@ export class ReturnsService {
         ),
       );
     }
+    if (
+      !first.sale.customerId &&
+      refundAmount !== first.settlement.refundable
+    ) {
+      throw new BadRequestException(
+        walkInCustomerRefundRequired(
+          first.sale.saleNo,
+          Number(first.settlement.refundable),
+          Number(refundAmount),
+        ),
+      );
+    }
 
     const returnMoment = resolveTransactionDate(dto.returnDate);
 
@@ -171,6 +207,18 @@ export class ReturnsService {
             refundExceedsAvailable(
               Number(refundAmount),
               Number(fresh.settlement.refundable),
+            ),
+          );
+        }
+        if (
+          !fresh.sale.customerId &&
+          refundAmount !== fresh.settlement.refundable
+        ) {
+          throw new BadRequestException(
+            walkInCustomerRefundRequired(
+              fresh.sale.saleNo,
+              Number(fresh.settlement.refundable),
+              Number(refundAmount),
             ),
           );
         }

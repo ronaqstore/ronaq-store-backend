@@ -97,3 +97,19 @@ export const refundExceedsAvailable = (
     HttpStatus.BAD_REQUEST,
   );
 };
+
+export const walkInCustomerRefundRequired = (
+  saleNo: string,
+  refundableAmount: number,
+  providedAmount: number,
+): ErrorResponseDTO => {
+  const refundableRs = formatPaisaToRupees(refundableAmount);
+  const providedRs = formatPaisaToRupees(providedAmount);
+  return new ErrorResponseDTO(
+    'Walk-in customer returns require a full cash refund',
+    [
+      `Sale ${saleNo} was for a walk-in customer without an Udhar account. A return on a walk-in sale must refund the full return value in cash (Rs ${refundableRs}), but Rs ${providedRs} was provided.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
