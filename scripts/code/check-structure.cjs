@@ -17,6 +17,7 @@ const ALLOWED_TOP_LEVEL_DIRS = new Set([
   'categories',
   'common',
   'common-dto',
+  'consignments',
   'constants',
   'customers',
   'dashboard',

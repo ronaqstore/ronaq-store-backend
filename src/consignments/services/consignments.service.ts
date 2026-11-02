@@ -296,51 +296,21 @@ export class ConsignmentsService {
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
     return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<
-        Array<{
-          id: string;
-          consignment_no: string;
-          status: string;
-          product_id: string;
-        }>
-      >`
-        SELECT id, consignment_no, status, product_id FROM consignments
-        WHERE id = ${id}::uuid AND shop_id = ${shopId}::uuid
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(consignmentNotFound(id));
-      }
-      const con = locked[0];
+      const con = await this.lockInCustodyConsignment(tx, id, shopId);
       if (con.status !== ConsignmentStatus.IN_CUSTODY) {
         throw new BadRequestException(
           consignmentNotAvailableForReturn(con.consignment_no, con.status),
         );
       }
 
-      const unit = await tx.inventoryUnit.findFirst({
-        where: { consignmentId: id, shopId },
-        select: { id: true, status: true },
-      });
-      if (unit && unit.status === UnitStatus.IN_STOCK) {
-        await tx.inventoryUnit.update({
-          where: { id: unit.id },
-          data: { status: UnitStatus.VOIDED },
-        });
-
-        await tx.inventoryMovement.create({
-          data: {
-            shopId,
-            productId: con.product_id,
-            inventoryUnitId: unit.id,
-            type: InventoryMovementType.CONSIGNMENT_RETURN,
-            quantityChange: -1,
-            referenceType: ReferenceType.CONSIGNMENT,
-            referenceId: id,
-            reason: dto.returnReason.trim(),
-          },
-        });
-      }
+      await this.voidInCustodyUnit(
+        tx,
+        con.id,
+        con.product_id,
+        shopId,
+        InventoryMovementType.CONSIGNMENT_RETURN,
+        dto.returnReason.trim(),
+      );
 
       await tx.consignment.update({
         where: { id },
@@ -448,22 +418,7 @@ export class ConsignmentsService {
     userId: string,
   ): Promise<StatusBaseResponseDTO> {
     return this.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<
-        Array<{
-          id: string;
-          consignment_no: string;
-          status: string;
-          product_id: string;
-        }>
-      >`
-        SELECT id, consignment_no, status, product_id FROM consignments
-        WHERE id = ${id}::uuid AND shop_id = ${shopId}::uuid
-        FOR UPDATE
-      `;
-      if (!locked?.length) {
-        throw new NotFoundException(consignmentNotFound(id));
-      }
-      const con = locked[0];
+      const con = await this.lockInCustodyConsignment(tx, id, shopId);
       if (con.status !== ConsignmentStatus.IN_CUSTODY) {
         throw new BadRequestException(
           consignmentNotAvailableForCancellation(
@@ -473,29 +428,14 @@ export class ConsignmentsService {
         );
       }
 
-      const unit = await tx.inventoryUnit.findFirst({
-        where: { consignmentId: id, shopId },
-        select: { id: true, status: true },
-      });
-      if (unit && unit.status === UnitStatus.IN_STOCK) {
-        await tx.inventoryUnit.update({
-          where: { id: unit.id },
-          data: { status: UnitStatus.VOIDED },
-        });
-
-        await tx.inventoryMovement.create({
-          data: {
-            shopId,
-            productId: con.product_id,
-            inventoryUnitId: unit.id,
-            type: InventoryMovementType.ADJUSTMENT,
-            quantityChange: -1,
-            referenceType: ReferenceType.CONSIGNMENT,
-            referenceId: id,
-            reason: dto.cancelReason.trim(),
-          },
-        });
-      }
+      await this.voidInCustodyUnit(
+        tx,
+        con.id,
+        con.product_id,
+        shopId,
+        InventoryMovementType.ADJUSTMENT,
+        dto.cancelReason.trim(),
+      );
 
       await tx.consignment.update({
         where: { id },
@@ -510,5 +450,66 @@ export class ConsignmentsService {
 
       return new StatusBaseResponseDTO(true, CANCELLED, id);
     });
+  }
+
+  private async lockInCustodyConsignment(
+    tx: Prisma.TransactionClient,
+    id: string,
+    shopId: string,
+  ): Promise<{
+    id: string;
+    consignment_no: string;
+    status: string;
+    product_id: string;
+  }> {
+    const locked = await tx.$queryRaw<
+      Array<{
+        id: string;
+        consignment_no: string;
+        status: string;
+        product_id: string;
+      }>
+    >`
+      SELECT id, consignment_no, status, product_id FROM consignments
+      WHERE id = ${id}::uuid AND shop_id = ${shopId}::uuid
+      FOR UPDATE
+    `;
+    if (!locked?.length) {
+      throw new NotFoundException(consignmentNotFound(id));
+    }
+    return locked[0];
+  }
+
+  private async voidInCustodyUnit(
+    tx: Prisma.TransactionClient,
+    conId: string,
+    productId: string,
+    shopId: string,
+    movementType: InventoryMovementType,
+    reason: string,
+  ): Promise<void> {
+    const unit = await tx.inventoryUnit.findFirst({
+      where: { consignmentId: conId, shopId },
+      select: { id: true, status: true },
+    });
+    if (unit && unit.status === UnitStatus.IN_STOCK) {
+      await tx.inventoryUnit.update({
+        where: { id: unit.id },
+        data: { status: UnitStatus.VOIDED },
+      });
+
+      await tx.inventoryMovement.create({
+        data: {
+          shopId,
+          productId,
+          inventoryUnitId: unit.id,
+          type: movementType,
+          quantityChange: -1,
+          referenceType: ReferenceType.CONSIGNMENT,
+          referenceId: conId,
+          reason,
+        },
+      });
+    }
   }
 }
