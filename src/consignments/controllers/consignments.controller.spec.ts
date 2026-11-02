@@ -32,13 +32,7 @@ describe('ConsignmentsController', () => {
     const serviceMock = {
       createConsignment: jest
         .fn()
-        .mockResolvedValue(
-          new StatusBaseResponseDTO(
-            true,
-            'Consignment recorded successfully',
-            CONSIGNMENT_ID,
-          ),
-        ),
+        .mockResolvedValue(new ResponseConsignmentDto()),
       listConsignments: jest
         .fn()
         .mockResolvedValue(
@@ -58,13 +52,7 @@ describe('ConsignmentsController', () => {
         ),
       settleConsignment: jest
         .fn()
-        .mockResolvedValue(
-          new StatusBaseResponseDTO(
-            true,
-            'Consignment settled successfully',
-            CONSIGNMENT_ID,
-          ),
-        ),
+        .mockResolvedValue(new ResponseConsignmentDto()),
       cancelConsignment: jest
         .fn()
         .mockResolvedValue(

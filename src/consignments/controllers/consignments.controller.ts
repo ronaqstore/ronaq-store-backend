@@ -56,7 +56,7 @@ export class ConsignmentsController {
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
-      StatusBaseResponseDTO,
+      ResponseConsignmentDto,
       'Consignment recorded successfully',
     ),
   )
@@ -66,14 +66,17 @@ export class ConsignmentsController {
   async createConsignment(
     @Body() dto: CreateConsignmentDto,
     @Req() req: OwnerRequest,
-  ): Promise<ApiSuccessResponseDTO<StatusBaseResponseDTO>> {
+  ): Promise<ApiSuccessResponseDTO<ResponseConsignmentDto>> {
     try {
       const res = await this.consignmentsService.createConsignment(
         dto,
         req.user.shopId,
         req.user.userId,
       );
-      return new ApiSuccessResponseDTO(res.message, res);
+      return new ApiSuccessResponseDTO(
+        'Consignment recorded successfully',
+        res,
+      );
     } catch (error) {
       logError('consignments.controller.ts', 'createConsignment', error, {
         shopId: req.user?.shopId,
@@ -202,7 +205,7 @@ export class ConsignmentsController {
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
-      StatusBaseResponseDTO,
+      ResponseConsignmentDto,
       'Consignment settled successfully',
     ),
   )
@@ -225,7 +228,10 @@ export class ConsignmentsController {
       if (result instanceof PurchaseOverdraftResponseDto) {
         return new ApiSuccessResponseDTO(result.message, result);
       }
-      return new ApiSuccessResponseDTO(result.message, result);
+      return new ApiSuccessResponseDTO(
+        'Consignment settled successfully',
+        result,
+      );
     } catch (error) {
       logError('consignments.controller.ts', 'settleConsignment', error, {
         shopId: req.user?.shopId,

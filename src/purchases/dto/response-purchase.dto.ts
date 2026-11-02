@@ -47,7 +47,7 @@ export class ResponsePurchaseItemDto {
   })
   phoneUnits?: Array<{
     imei1: string;
-    imei2: string;
+    imei2: string | null;
     condition?: string;
     batteryHealth?: number | null;
     askingPrice?: number | null;

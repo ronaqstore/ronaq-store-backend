@@ -48,12 +48,9 @@ import {
 } from '../helpers/consignment.mapper.js';
 
 export type SettleConsignmentResult =
-  StatusBaseResponseDTO | PurchaseOverdraftResponseDto;
+  ResponseConsignmentDto | PurchaseOverdraftResponseDto;
 
-const CREATED = 'Consignment recorded successfully';
-const ALREADY_SAVED = 'Consignment already recorded';
 const RETURNED = 'Consignment returned to owner successfully';
-const SETTLED = 'Consignment payout settled successfully';
 const CANCELLED = 'Consignment cancelled successfully';
 
 @Injectable()
@@ -64,16 +61,16 @@ export class ConsignmentsService {
     dto: CreateConsignmentDto,
     shopId: string,
     userId: string,
-  ): Promise<StatusBaseResponseDTO> {
+  ): Promise<ResponseConsignmentDto> {
     const existing = await this.prisma.consignment.findFirst({
       where: { shopId, clientRequestId: dto.clientRequestId },
       select: { id: true },
     });
     if (existing) {
-      return new StatusBaseResponseDTO(true, ALREADY_SAVED, existing.id);
+      return this.getConsignmentById(existing.id, shopId);
     }
 
-    if (dto.imei1 === dto.imei2) {
+    if (dto.imei2 && dto.imei1 === dto.imei2) {
       throw new BadRequestException(imeiPairMustDiffer(dto.imei1));
     }
 
@@ -116,22 +113,22 @@ export class ConsignmentsService {
       }
     }
 
+    const imeisToCheck = [dto.imei1, dto.imei2].filter(
+      (v): v is string => typeof v === 'string' && v.length > 0,
+    );
+
     const inUse = await this.prisma.inventoryUnit.findFirst({
       where: {
         shopId,
         status: UnitStatus.IN_STOCK,
-        OR: [
-          { imei1: { in: [dto.imei1, dto.imei2] } },
-          { imei2: { in: [dto.imei1, dto.imei2] } },
-        ],
+        OR: [{ imei1: { in: imeisToCheck } }, { imei2: { in: imeisToCheck } }],
       },
       select: { imei1: true, imei2: true },
     });
     if (inUse) {
       const hit =
-        [dto.imei1, dto.imei2].find(
-          (v) => v === inUse.imei1 || v === inUse.imei2,
-        ) ?? inUse.imei1;
+        imeisToCheck.find((v) => v === inUse.imei1 || v === inUse.imei2) ??
+        inUse.imei1;
       throw new BadRequestException(duplicateImei(hit));
     }
 
@@ -162,7 +159,7 @@ export class ConsignmentsService {
             : null,
           productId: dto.productId,
           imei1: dto.imei1.trim(),
-          imei2: dto.imei2.trim(),
+          imei2: dto.imei2?.trim() || null,
           condition,
           batteryHealth: dto.batteryHealth ?? null,
           defectNotes: dto.defectNotes?.trim() ? dto.defectNotes.trim() : null,
@@ -183,7 +180,7 @@ export class ConsignmentsService {
           consignmentId: created.id,
           purchaseItemId: null,
           imei1: dto.imei1.trim(),
-          imei2: dto.imei2.trim(),
+          imei2: dto.imei2?.trim() || null,
           condition,
           unitCost: agreedPayout,
           askingPrice: targetSellingPrice,
@@ -208,7 +205,7 @@ export class ConsignmentsService {
       return created;
     });
 
-    return new StatusBaseResponseDTO(true, CREATED, result.id);
+    return this.getConsignmentById(result.id, shopId);
   }
 
   async getConsignmentById(
@@ -333,7 +330,7 @@ export class ConsignmentsService {
     shopId: string,
     userId: string,
   ): Promise<SettleConsignmentResult> {
-    return this.prisma.$transaction(async (tx) => {
+    const outcome = await this.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<
         Array<{
           id: string;
@@ -407,8 +404,14 @@ export class ConsignmentsService {
         },
       });
 
-      return new StatusBaseResponseDTO(true, SETTLED, id);
+      return { id };
     });
+
+    if (outcome instanceof PurchaseOverdraftResponseDto) {
+      return outcome;
+    }
+
+    return this.getConsignmentById(id, shopId);
   }
 
   async cancelConsignment(

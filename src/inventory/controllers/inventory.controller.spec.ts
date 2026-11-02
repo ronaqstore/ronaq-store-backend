@@ -148,9 +148,7 @@ describe('InventoryController', () => {
       effectivePrice: 5500000,
       createdAt: new Date(),
     };
-    jest
-      .spyOn(inventoryService, 'updateUnit')
-      .mockResolvedValue(mockUnit as any);
+    jest.spyOn(inventoryService, 'updateUnit').mockResolvedValue(mockUnit);
 
     const body = await controller.updateUnit(
       '01924f0a-0000-7000-8000-000000000001',

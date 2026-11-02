@@ -10,8 +10,8 @@ export class ResponseInventoryUnitDto {
   @ApiProperty({ example: '111223344556677' })
   imei1: string;
 
-  @ApiProperty({ example: '111223344556688' })
-  imei2: string;
+  @ApiPropertyOptional({ example: '111223344556688', nullable: true })
+  imei2: string | null;
 
   @ApiProperty({ example: 'NEW', enum: ['NEW', 'USED'] })
   condition: string;

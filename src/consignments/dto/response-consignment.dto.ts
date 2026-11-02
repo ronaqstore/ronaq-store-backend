@@ -39,8 +39,8 @@ export class ResponseConsignmentDto {
   @ApiProperty({ example: '356938035643803' })
   imei1: string;
 
-  @ApiProperty({ example: '356938035643804' })
-  imei2: string;
+  @ApiPropertyOptional({ example: '356938035643804', nullable: true })
+  imei2: string | null;
 
   @ApiProperty({ enum: UnitCondition, example: UnitCondition.USED })
   condition: UnitCondition;
