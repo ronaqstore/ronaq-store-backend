@@ -181,8 +181,8 @@ export class AppConfigurationService {
 
   get turnstileEnabled(): boolean {
     const flag = this.configService.get<string>('TURNSTILE_ENABLED');
-    if (flag === 'false') return false;
-    return this.turnstileSecretKey.length > 0 || flag === 'true';
+    if (flag === 'true') return true;
+    return false;
   }
 
   get bcryptRounds(): number {
