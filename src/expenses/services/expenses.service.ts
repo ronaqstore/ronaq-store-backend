@@ -26,6 +26,7 @@ import {
 import { probeCashOverdraft } from '../../helpers/cash-balance.helper.js';
 import {
   cancelledRowMutationForbidden,
+  entityInactive,
   resourceNotFound,
 } from '../../errors/error.builder.js';
 import { buildAmountRangeFilter } from '../../common-dto/helpers/amount-range-filter.helper.js';
@@ -76,11 +77,16 @@ export class ExpensesService {
 
     const category = await this.prisma.expenseCategory.findFirst({
       where: { id: dto.categoryId, shopId },
-      select: { id: true },
+      select: { id: true, name: true, isActive: true },
     });
     if (!category) {
       throw new NotFoundException(
         resourceNotFound('Expense category', dto.categoryId),
+      );
+    }
+    if (category.isActive === false) {
+      throw new BadRequestException(
+        entityInactive('Expense category', category.name),
       );
     }
 

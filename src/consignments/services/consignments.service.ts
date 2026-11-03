@@ -39,6 +39,7 @@ import {
   consignmentNotAvailableForSettlement,
   consignmentNotFound,
   duplicateImei,
+  entityInactive,
   imeiPairMustDiffer,
   resourceNotFound,
 } from '../../errors/error.builder.js';
@@ -79,12 +80,16 @@ export class ConsignmentsService {
       select: {
         id: true,
         name: true,
+        isActive: true,
         trackingType: true,
         brand: { select: { name: true } },
       },
     });
     if (!product) {
       throw new NotFoundException(resourceNotFound('Product', dto.productId));
+    }
+    if (product.isActive === false) {
+      throw new BadRequestException(entityInactive('Product', product.name));
     }
     if (product.trackingType !== 'SERIALIZED') {
       throw new BadRequestException(
@@ -104,11 +109,16 @@ export class ConsignmentsService {
     if (dto.customerId) {
       const customer = await this.prisma.customer.findFirst({
         where: { id: dto.customerId, shopId },
-        select: { id: true },
+        select: { id: true, name: true, isActive: true },
       });
       if (!customer) {
         throw new NotFoundException(
           resourceNotFound('Customer', dto.customerId),
+        );
+      }
+      if (customer.isActive === false) {
+        throw new BadRequestException(
+          entityInactive('Customer', customer.name),
         );
       }
     }

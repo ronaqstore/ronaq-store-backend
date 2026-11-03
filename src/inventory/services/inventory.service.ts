@@ -319,6 +319,13 @@ export class InventoryService {
     });
 
     if (unit) {
+      if (unit.product.isActive === false) {
+        return {
+          found: false,
+          reason: 'INACTIVE',
+          message: `Product "${unit.product.name}" is deactivated`,
+        };
+      }
       return {
         found: true,
         type: 'SERIALIZED',

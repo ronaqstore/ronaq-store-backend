@@ -811,8 +811,21 @@ describe('PurchasesService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prismaStub.supplier.findFirst).toHaveBeenCalledWith({
         where: { id: SUPPLIER_ID, shopId: SHOP_ID },
-        select: { id: true },
+        select: { id: true, name: true, isActive: true },
       });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a purchase from an inactive supplier', async () => {
+      prismaStub.supplier.findFirst.mockResolvedValueOnce({
+        id: SUPPLIER_ID,
+        name: 'Tech Wholesalers',
+        isActive: false,
+      });
+
+      await expect(
+        service.createPurchase(serialisePurchaseRequest(), SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
 
@@ -828,9 +841,27 @@ describe('PurchasesService', () => {
           id: true,
           name: true,
           trackingType: true,
+          isActive: true,
           brand: { select: { name: true } },
         },
       });
+    });
+
+    it('rejects a purchase for an inactive product', async () => {
+      prismaStub.product.findMany.mockResolvedValueOnce([
+        {
+          id: QUANTITY_PRODUCT_ID,
+          name: 'Samsung Charger',
+          trackingType: 'QUANTITY',
+          isActive: false,
+          brand: { name: 'Samsung' },
+        },
+      ]);
+
+      await expect(
+        service.createPurchase(serialisePurchaseRequest(), SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
   });
 

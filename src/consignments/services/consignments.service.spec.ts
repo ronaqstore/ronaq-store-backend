@@ -722,6 +722,64 @@ describe('ConsignmentsService', () => {
   });
 
   describe('4. Negative Tests - Tenant & Permission Boundaries', () => {
+    it('rejects intake when product is inactive', async () => {
+      prismaStub.consignment.findFirst.mockResolvedValueOnce(null);
+      prismaStub.product.findFirst.mockResolvedValueOnce({
+        id: PRODUCT_ID,
+        name: 'iPhone 13',
+        isActive: false,
+        trackingType: 'SERIALIZED',
+        brand: { name: 'Apple' },
+      });
+
+      const dto: CreateConsignmentDto = {
+        clientRequestId: '01924f0a-0000-7000-8000-000000000017',
+        consignorName: 'Muhammad Ali',
+        consignorPhone: '03001234567',
+        productId: PRODUCT_ID,
+        imei1: '356938035643803',
+        imei2: '356938035643804',
+        agreedPayout: 5000000,
+        intakeDate: '2026-11-01',
+      };
+
+      await expect(
+        service.createConsignment(dto, SHOP_ID, USER_ID),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects intake when customer is inactive', async () => {
+      prismaStub.consignment.findFirst.mockResolvedValueOnce(null);
+      prismaStub.product.findFirst.mockResolvedValueOnce({
+        id: PRODUCT_ID,
+        name: 'iPhone 13',
+        isActive: true,
+        trackingType: 'SERIALIZED',
+        brand: { name: 'Apple' },
+      });
+      prismaStub.customer.findFirst.mockResolvedValueOnce({
+        id: 'cust-inactive-id',
+        name: 'Muhammad Ali',
+        isActive: false,
+      });
+
+      const dto: CreateConsignmentDto = {
+        clientRequestId: '01924f0a-0000-7000-8000-000000000018',
+        customerId: 'cust-inactive-id',
+        consignorName: 'Muhammad Ali',
+        consignorPhone: '03001234567',
+        productId: PRODUCT_ID,
+        imei1: '356938035643803',
+        imei2: '356938035643804',
+        agreedPayout: 5000000,
+        intakeDate: '2026-11-01',
+      };
+
+      await expect(
+        service.createConsignment(dto, SHOP_ID, USER_ID),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('rejects intake when product belongs to another shop', async () => {
       prismaStub.consignment.findFirst.mockResolvedValueOnce(null);
       prismaStub.product.findFirst.mockResolvedValueOnce(null);

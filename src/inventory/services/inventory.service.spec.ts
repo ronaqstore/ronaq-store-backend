@@ -961,5 +961,21 @@ describe('InventoryService', () => {
       expect(result.found).toBe(false);
       expect(result.reason).toBe('NOT_FOUND');
     });
+
+    it('Negative 5: returns INACTIVE when unit IMEI belongs to a deactivated product', async () => {
+      const inactiveUnit = {
+        ...mockUnit,
+        product: {
+          ...mockFullProduct,
+          isActive: false,
+        },
+      };
+      prismaStub.inventoryUnit.findFirst.mockResolvedValueOnce(inactiveUnit);
+
+      const result = await service.resolveScan('354892091234567', SHOP_ID);
+      expect(result.found).toBe(false);
+      expect(result.reason).toBe('INACTIVE');
+      expect(result.message).toContain('is deactivated');
+    });
   });
 });

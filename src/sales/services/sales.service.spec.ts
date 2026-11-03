@@ -398,8 +398,25 @@ describe('SalesService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prismaStub.customer.findFirst).toHaveBeenCalledWith({
         where: { id: CUSTOMER_ID, shopId: SHOP_ID },
-        select: { id: true },
+        select: { id: true, name: true, isActive: true },
       });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a sale for an inactive customer', async () => {
+      prismaStub.customer.findFirst.mockResolvedValueOnce({
+        id: CUSTOMER_ID,
+        name: 'Ali Khan',
+        isActive: false,
+      });
+
+      await expect(
+        service.createSale(
+          serialiseSaleRequest({ customerId: CUSTOMER_ID }),
+          SHOP_ID,
+          USER_ID,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
   });
@@ -802,9 +819,27 @@ describe('SalesService', () => {
           id: true,
           name: true,
           trackingType: true,
+          isActive: true,
           brand: { select: { name: true } },
         },
       });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a sale for an inactive product', async () => {
+      prismaStub.product.findMany.mockResolvedValueOnce([
+        {
+          id: QUANTITY_PRODUCT_ID,
+          name: 'Samsung Charger',
+          trackingType: 'QUANTITY',
+          isActive: false,
+          brand: { name: 'Samsung' },
+        },
+      ]);
+
+      await expect(
+        service.createSale(serialiseSaleRequest(), SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
   });

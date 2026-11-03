@@ -24,6 +24,7 @@ import {
 import {
   customerRequiredForSale,
   discountExceedsSubtotal,
+  entityInactive,
   resourceNotFound,
   salePaidExceedsTotal,
 } from '../../errors/error.builder.js';
@@ -88,10 +89,15 @@ export class SalesService {
     if (customerId) {
       const customer = await this.prisma.customer.findFirst({
         where: { id: customerId, shopId },
-        select: { id: true },
+        select: { id: true, name: true, isActive: true },
       });
       if (!customer) {
         throw new NotFoundException(resourceNotFound('Customer', customerId));
+      }
+      if (customer.isActive === false) {
+        throw new BadRequestException(
+          entityInactive('Customer', customer.name),
+        );
       }
     }
 

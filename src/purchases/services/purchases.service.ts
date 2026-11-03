@@ -26,6 +26,7 @@ import {
 import { aggregateCurrentCash } from '../../helpers/cash-balance.helper.js';
 import {
   duplicateImei,
+  entityInactive,
   openingStockCannotTakePayment,
   purchasePaidExceedsTotal,
   resourceNotFound,
@@ -84,10 +85,15 @@ export class PurchasesService {
 
     const supplier = await this.prisma.supplier.findFirst({
       where: { id: dto.supplierId, shopId },
-      select: { id: true },
+      select: { id: true, name: true, isActive: true },
     });
     if (!supplier) {
       throw new NotFoundException(resourceNotFound('Supplier', dto.supplierId));
+    }
+    if (supplier.isActive === false) {
+      throw new BadRequestException(
+        entityInactive('Supplier', supplier.name),
+      );
     }
 
     const items = await this.writeFlow.validateLines(dto, shopId);

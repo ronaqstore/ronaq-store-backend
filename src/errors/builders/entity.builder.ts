@@ -97,6 +97,20 @@ export const outstandingExceeded = (): ErrorResponseDTO => {
   );
 };
 
+export const entityInactive = (
+  entityName: string,
+  name?: string,
+): ErrorResponseDTO => {
+  const label = name ? `${entityName} "${name}"` : entityName;
+  return new ErrorResponseDTO(
+    `${label} is deactivated`,
+    [
+      `${label} is inactive and cannot be selected or used for new transactions. Reactivate it first if you need to use it.`,
+    ],
+    HttpStatus.BAD_REQUEST,
+  );
+};
+
 export const tooManyRequests = (): ErrorResponseDTO => {
   return new ErrorResponseDTO(
     'Too many requests',

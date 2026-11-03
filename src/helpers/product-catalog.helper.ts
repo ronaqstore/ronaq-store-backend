@@ -1,7 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
-import { resourceNotFound } from '../errors/error.builder.js';
+import { entityInactive, resourceNotFound } from '../errors/error.builder.js';
 
 type DbClient = PrismaService | Prisma.TransactionClient;
 
@@ -10,12 +10,14 @@ export type ShopProductRef = {
   name: string;
   trackingType: string;
   brandName: string;
+  isActive: boolean;
 };
 
 export async function loadShopProductsById(
   client: DbClient,
   productIds: string[],
   shopId: string,
+  options?: { activeOnly?: boolean },
 ): Promise<Map<string, ShopProductRef>> {
   const uniqueIds = [...new Set(productIds)];
   const products = await client.product.findMany({
@@ -24,6 +26,7 @@ export async function loadShopProductsById(
       id: true,
       name: true,
       trackingType: true,
+      isActive: true,
       brand: { select: { name: true } },
     },
   });
@@ -35,6 +38,7 @@ export async function loadShopProductsById(
         name: p.name,
         trackingType: p.trackingType,
         brandName: p.brand.name,
+        isActive: p.isActive ?? true,
       },
     ]),
   );
@@ -42,6 +46,13 @@ export async function loadShopProductsById(
   const missing = uniqueIds.find((id) => !byId.has(id));
   if (missing) {
     throw new NotFoundException(resourceNotFound('Product', missing));
+  }
+
+  if (options?.activeOnly !== false) {
+    const inactive = products.find((p) => p.isActive === false);
+    if (inactive) {
+      throw new BadRequestException(entityInactive('Product', inactive.name));
+    }
   }
 
   return byId;

@@ -274,8 +274,21 @@ describe('ExpensesService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(prismaStub.expenseCategory.findFirst).toHaveBeenCalledWith({
         where: { id: CATEGORY_ID, shopId: SHOP_ID },
-        select: { id: true },
+        select: { id: true, name: true, isActive: true },
       });
+      expect(prismaStub.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expense for an inactive expense category', async () => {
+      prismaStub.expenseCategory.findFirst.mockResolvedValueOnce({
+        id: CATEGORY_ID,
+        name: 'Office Supplies',
+        isActive: false,
+      });
+
+      await expect(
+        service.createExpense(makeExpenseRequest(), SHOP_ID, USER_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(prismaStub.$transaction).not.toHaveBeenCalled();
     });
   });
