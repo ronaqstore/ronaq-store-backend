@@ -37,6 +37,11 @@ import {
   MOVEMENT_INCLUDE,
   UNIT_INCLUDE,
 } from '../helpers/inventory.mapper.js';
+import {
+  PRODUCT_INCLUDE,
+  mapProductToResponse,
+} from '../../products/helpers/product.mapper.js';
+import { ResponseResolveScanDto } from '../dto/resolve-scan.dto.js';
 
 export type { InventoryAdjustmentOutcome } from './inventory.service.types.js';
 
@@ -283,5 +288,110 @@ export class InventoryService {
       page,
       pageSize,
     );
+  }
+
+  async resolveScan(
+    rawCode: string,
+    shopId: string,
+  ): Promise<ResponseResolveScanDto> {
+    const code = rawCode?.trim();
+    if (!code) {
+      return {
+        found: false,
+        reason: 'NOT_FOUND',
+        message: 'Empty barcode or IMEI provided',
+      };
+    }
+
+    // 1. Try to match as an in-stock IMEI phone unit
+    const unit = await this.prisma.inventoryUnit.findFirst({
+      where: {
+        shopId,
+        status: UnitStatus.IN_STOCK,
+        OR: [{ imei1: code }, { imei2: code }],
+      },
+      include: {
+        ...UNIT_INCLUDE,
+        product: {
+          include: PRODUCT_INCLUDE,
+        },
+      },
+    });
+
+    if (unit) {
+      return {
+        found: true,
+        type: 'SERIALIZED',
+        product: mapProductToResponse(unit.product),
+        unit: mapUnitToResponse(unit),
+      };
+    }
+
+    // 1b. Check if unit exists in shop but is already SOLD or not IN_STOCK
+    const existingUnit = await this.prisma.inventoryUnit.findFirst({
+      where: {
+        shopId,
+        OR: [{ imei1: code }, { imei2: code }],
+      },
+      select: {
+        status: true,
+        imei1: true,
+        product: { select: { name: true } },
+      },
+    });
+
+    if (existingUnit) {
+      return {
+        found: false,
+        reason: 'NOT_IN_STOCK',
+        message: `Device (${existingUnit.product.name}) with IMEI ${existingUnit.imei1} is currently ${existingUnit.status}`,
+      };
+    }
+
+    // 2. Try to match as a product barcode or SKU
+    const product = await this.prisma.product.findFirst({
+      where: {
+        shopId,
+        isActive: true,
+        OR: [{ barcode: code }, { sku: code }],
+      },
+      include: PRODUCT_INCLUDE,
+    });
+
+    if (product) {
+      const type =
+        product.trackingType === 'SERIALIZED'
+          ? 'SERIALIZED_PRODUCT'
+          : 'QUANTITY';
+      return {
+        found: true,
+        type,
+        product: mapProductToResponse(product),
+      };
+    }
+
+    // Check if product exists but is deactivated
+    const inactiveProduct = await this.prisma.product.findFirst({
+      where: {
+        shopId,
+        isActive: false,
+        OR: [{ barcode: code }, { sku: code }],
+      },
+      select: { name: true },
+    });
+
+    if (inactiveProduct) {
+      return {
+        found: false,
+        reason: 'INACTIVE',
+        message: `Product "${inactiveProduct.name}" is deactivated`,
+      };
+    }
+
+    return {
+      found: false,
+      reason: 'NOT_FOUND',
+      message: 'No product or phone unit found matching this code',
+    };
   }
 }

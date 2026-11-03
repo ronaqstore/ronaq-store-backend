@@ -835,4 +835,131 @@ describe('InventoryService', () => {
       expect(call.where).toEqual({ shopId: SHOP_ID });
     });
   });
+
+  describe('resolveScan', () => {
+    const mockFullProduct = {
+      id: PRODUCT_ID,
+      shopId: SHOP_ID,
+      categoryId: '01924f0a-0000-7000-8000-000000000001',
+      brandId: '01924f0a-0000-7000-8000-000000000002',
+      name: 'iPhone 13 128GB',
+      trackingType: 'SERIALIZED',
+      model: 'A2633',
+      color: 'Midnight',
+      ram: '4GB',
+      storage: '128GB',
+      sku: 'IPH-13-128',
+      barcode: '8901234567890',
+      description: null,
+      imageUrl: null,
+      defaultPurchasePrice: 12000000n,
+      defaultSellingPrice: 14500000n,
+      lowStockThreshold: 2,
+      isActive: true,
+      isPublished: true,
+      publishedAt: new Date(),
+      publicDescription: null,
+      ptaStatus: 'APPROVED',
+      authenticity: 'ORIGINAL',
+      category: { name: 'Smartphones' },
+      brand: { name: 'Apple' },
+      stockLevel: { quantityOnHand: 5 },
+      images: [],
+      _count: { inventoryUnits: 5 },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const mockUnit = {
+      id: UNIT_ID,
+      shopId: SHOP_ID,
+      productId: PRODUCT_ID,
+      imei1: '354892091234567',
+      imei2: '354892091234568',
+      condition: 'USED',
+      status: 'IN_STOCK',
+      unitCost: 12000000n,
+      batteryHealth: 88,
+      askingPrice: 14500000n,
+      defectNotes: null,
+      createdAt: new Date(),
+      purchaseItem: null,
+      saleItems: [],
+      product: mockFullProduct,
+    };
+
+    it('Happy path 1: resolves in-stock phone unit by IMEI', async () => {
+      prismaStub.inventoryUnit.findFirst.mockResolvedValueOnce(mockUnit);
+
+      const result = await service.resolveScan('354892091234567', SHOP_ID);
+      expect(result.found).toBe(true);
+      expect(result.type).toBe('SERIALIZED');
+      expect(result.product?.id).toBe(PRODUCT_ID);
+      expect(result.unit?.imei1).toBe('354892091234567');
+      expect(result.unit?.batteryHealth).toBe(88);
+    });
+
+    it('Happy path 2: resolves quantity accessory by barcode', async () => {
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
+      const accessory = {
+        ...mockFullProduct,
+        id: 'acc-1',
+        name: '20W Fast Charger',
+        trackingType: 'QUANTITY',
+        barcode: '8901234567890',
+      };
+      prismaStub.product.findFirst.mockResolvedValueOnce(accessory);
+
+      const result = await service.resolveScan('8901234567890', SHOP_ID);
+      expect(result.found).toBe(true);
+      expect(result.type).toBe('QUANTITY');
+      expect(result.product?.name).toBe('20W Fast Charger');
+    });
+
+    it('Negative 1: returns NOT_IN_STOCK when unit exists but is already SOLD', async () => {
+      // First call for in-stock returns null
+      prismaStub.inventoryUnit.findFirst.mockResolvedValueOnce(null);
+      // Second call for existing unit returns SOLD unit
+      prismaStub.inventoryUnit.findFirst.mockResolvedValueOnce({
+        status: 'SOLD',
+        imei1: '354892091234567',
+        product: { name: 'iPhone 13 128GB' },
+      });
+
+      const result = await service.resolveScan('354892091234567', SHOP_ID);
+      expect(result.found).toBe(false);
+      expect(result.reason).toBe('NOT_IN_STOCK');
+      expect(result.message).toContain('currently SOLD');
+    });
+
+    it('Negative 2: returns INACTIVE when product barcode matches a deactivated product', async () => {
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
+      // First product query for active returns null
+      prismaStub.product.findFirst.mockResolvedValueOnce(null);
+      // Second query for inactive returns product
+      prismaStub.product.findFirst.mockResolvedValueOnce({
+        name: 'Discontinued Case',
+      });
+
+      const result = await service.resolveScan('OLD-BARCODE', SHOP_ID);
+      expect(result.found).toBe(false);
+      expect(result.reason).toBe('INACTIVE');
+      expect(result.message).toContain('is deactivated');
+    });
+
+    it('Negative 3: returns NOT_FOUND when code does not match anything in shop', async () => {
+      prismaStub.inventoryUnit.findFirst.mockResolvedValue(null);
+      prismaStub.product.findFirst.mockResolvedValue(null);
+
+      const result = await service.resolveScan('UNKNOWN-CODE-999', SHOP_ID);
+      expect(result.found).toBe(false);
+      expect(result.reason).toBe('NOT_FOUND');
+    });
+
+    it('Negative 4: returns NOT_FOUND for empty or whitespace-only code', async () => {
+      const result = await service.resolveScan('   ', SHOP_ID);
+      expect(result.found).toBe(false);
+      expect(result.reason).toBe('NOT_FOUND');
+    });
+  });
 });

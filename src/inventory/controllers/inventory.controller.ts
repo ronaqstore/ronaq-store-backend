@@ -43,12 +43,54 @@ import {
   PaginatedInventoryMovementDto,
   ResponseInventoryMovementDto,
 } from '../dto/response-inventory-movement.dto.js';
+import {
+  ResolveScanQueryDto,
+  ResponseResolveScanDto,
+} from '../dto/resolve-scan.dto.js';
 @ApiTags('inventory')
 @Controller('inventory')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
+
+  @Get('/resolve-scan')
+  @ApiOperation({
+    summary: 'Resolve scanned barcode or IMEI',
+    description:
+      'Resolves a scanned IMEI or barcode to an in-stock inventory unit and/or active product within the authenticated shop scope.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseResolveScanDto,
+      'Scan result resolved successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async resolveScan(
+    @Query() query: ResolveScanQueryDto,
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<ResponseResolveScanDto>> {
+    try {
+      const result = await this.inventoryService.resolveScan(
+        query.code,
+        req.user.shopId,
+      );
+      return new ApiSuccessResponseDTO(
+        'Scan result resolved successfully',
+        result,
+      );
+    } catch (error) {
+      logError('inventory.controller.ts', 'resolveScan', error, {
+        shopId: req.user?.shopId,
+        code: query?.code,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to resolve scanned item');
+    }
+  }
 
   @Get('/units')
   @ApiOperation({
