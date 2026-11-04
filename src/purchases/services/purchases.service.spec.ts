@@ -495,6 +495,40 @@ describe('PurchasesService', () => {
       condition: 'USED',
     };
 
+    it('creates phone unit with null imei2 when imei2 is omitted', async () => {
+      await service.createPurchase(
+        serialisePurchaseRequest({
+          items: [
+            {
+              productId: SERIAL_PRODUCT_ID,
+              quantity: 1,
+              unitCost: 2000000,
+              phoneUnits: [
+                {
+                  imei1: '111223344556677',
+                  condition: 'NEW',
+                },
+              ],
+              condition: 'NEW',
+            },
+          ],
+        }),
+        SHOP_ID,
+        USER_ID,
+      );
+
+      expect(tx.inventoryUnit.createManyAndReturn).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            imei1: '111223344556677',
+            imei2: null,
+            condition: 'NEW',
+          }),
+        ],
+        select: { id: true },
+      });
+    });
+
     it('creates one inventory unit and one movement per phone unit', async () => {
       await service.createPurchase(
         serialisePurchaseRequest({ items: [phoneLine] }),

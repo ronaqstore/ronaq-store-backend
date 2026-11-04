@@ -91,9 +91,7 @@ export class PurchasesService {
       throw new NotFoundException(resourceNotFound('Supplier', dto.supplierId));
     }
     if (supplier.isActive === false) {
-      throw new BadRequestException(
-        entityInactive('Supplier', supplier.name),
-      );
+      throw new BadRequestException(entityInactive('Supplier', supplier.name));
     }
 
     const items = await this.writeFlow.validateLines(dto, shopId);
@@ -215,7 +213,9 @@ export class PurchasesService {
         const allImeis = [
           ...new Set(
             dto.items.flatMap((line) =>
-              (line.phoneUnits ?? []).flatMap((u) => [u.imei1, u.imei2]),
+              (line.phoneUnits ?? [])
+                .flatMap((u) => [u.imei1, u.imei2])
+                .filter((imei): imei is string => Boolean(imei && imei.trim())),
             ),
           ),
         ];

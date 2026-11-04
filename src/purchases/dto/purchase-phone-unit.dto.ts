@@ -22,14 +22,15 @@ export class PurchasePhoneUnitDto {
   @Matches(IMEI_PATTERN)
   imei1: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
-      'Secondary IMEI (dual-SIM). Required and must differ from imei1.',
+      'Secondary IMEI (dual-SIM). Optional; if provided must differ from imei1.',
     example: '111223344556688',
   })
+  @IsOptional()
   @IsString()
   @Matches(IMEI_PATTERN)
-  imei2: string;
+  imei2?: string;
 
   @ApiPropertyOptional({
     description:

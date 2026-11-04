@@ -61,10 +61,13 @@ export class PurchasesWriteService {
       }
 
       for (const unit of phoneUnits) {
-        if (unit.imei1 === unit.imei2) {
+        if (unit.imei2 && unit.imei1 === unit.imei2) {
           throw new BadRequestException(imeiPairMustDiffer(unit.imei1));
         }
-        for (const imei of [unit.imei1, unit.imei2]) {
+        const unitImeis = [unit.imei1, unit.imei2].filter(
+          (imei): imei is string => Boolean(imei && imei.trim()),
+        );
+        for (const imei of unitImeis) {
           if (seen.has(imei))
             throw new BadRequestException(duplicateImei(imei));
           seen.add(imei);
@@ -155,7 +158,7 @@ export class PurchasesWriteService {
             productId: line.productId,
             purchaseItemId,
             imei1: unit.imei1,
-            imei2: unit.imei2,
+            imei2: unit.imei2?.trim() || null,
             condition: unit.condition ?? line.condition ?? UnitCondition.NEW,
             unitCost: BigInt(line.unitCost),
             batteryHealth: unit.batteryHealth ?? null,
