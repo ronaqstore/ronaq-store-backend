@@ -13,11 +13,15 @@ export type ShopProductRef = {
   isActive: boolean;
 };
 
+export type LoadShopProductsOptions = {
+  activeOnly?: boolean;
+};
+
 export async function loadShopProductsById(
   client: DbClient,
   productIds: string[],
   shopId: string,
-  options?: { activeOnly?: boolean },
+  options?: LoadShopProductsOptions,
 ): Promise<Map<string, ShopProductRef>> {
   const uniqueIds = [...new Set(productIds)];
   const products = await client.product.findMany({

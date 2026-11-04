@@ -303,7 +303,6 @@ export class InventoryService {
       };
     }
 
-    // 1. Try to match as an in-stock IMEI phone unit
     const unit = await this.prisma.inventoryUnit.findFirst({
       where: {
         shopId,
@@ -334,7 +333,6 @@ export class InventoryService {
       };
     }
 
-    // 1b. Check if unit exists in shop but is already SOLD or not IN_STOCK
     const existingUnit = await this.prisma.inventoryUnit.findFirst({
       where: {
         shopId,
@@ -355,7 +353,6 @@ export class InventoryService {
       };
     }
 
-    // 2. Try to match as a product barcode or SKU
     const product = await this.prisma.product.findFirst({
       where: {
         shopId,
@@ -377,7 +374,6 @@ export class InventoryService {
       };
     }
 
-    // Check if product exists but is deactivated
     const inactiveProduct = await this.prisma.product.findFirst({
       where: {
         shopId,
