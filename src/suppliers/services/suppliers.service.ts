@@ -66,7 +66,7 @@ export class SuppliersService {
     await this.assertPhoneAvailable(shopId, phone);
     await this.assertCnicAvailable(shopId, cnic);
 
-    await this.prisma.supplier.create({
+    const created = await this.prisma.supplier.create({
       data: {
         shopId,
         name: dto.name.trim(),
@@ -79,7 +79,11 @@ export class SuppliersService {
       },
     });
 
-    return new StatusBaseResponseDTO(true, 'Supplier created successfully');
+    return new StatusBaseResponseDTO(
+      true,
+      'Supplier created successfully',
+      created.id,
+    );
   }
 
   async getSuppliers(

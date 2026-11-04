@@ -50,7 +50,7 @@ export class CustomersService {
     const phone = dto.phone ? normalizePhoneOrRaw(dto.phone) : null;
     await this.assertPhoneAvailable(shopId, phone);
 
-    await this.prisma.customer.create({
+    const created = await this.prisma.customer.create({
       data: {
         shopId,
         name: dto.name.trim(),
@@ -62,7 +62,11 @@ export class CustomersService {
       },
     });
 
-    return new StatusBaseResponseDTO(true, 'Customer created successfully');
+    return new StatusBaseResponseDTO(
+      true,
+      'Customer created successfully',
+      created.id,
+    );
   }
 
   async getCustomers(

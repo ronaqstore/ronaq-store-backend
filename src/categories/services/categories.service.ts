@@ -38,21 +38,24 @@ export class CategoriesService {
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
     try {
-      await this.prisma.category.create({
+      const created = await this.prisma.category.create({
         data: {
           shopId,
           name,
           isActive: dto.isActive ?? true,
         },
       });
+      return new StatusBaseResponseDTO(
+        true,
+        'Category created successfully',
+        created.id,
+      );
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
         throw new BadRequestException(duplicateName('Category', name));
       }
       throw error;
     }
-
-    return new StatusBaseResponseDTO(true, 'Category created successfully');
   }
 
   async getCategories(

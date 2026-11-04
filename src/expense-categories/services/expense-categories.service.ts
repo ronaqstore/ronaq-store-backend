@@ -38,24 +38,24 @@ export class ExpenseCategoriesService {
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
     try {
-      await this.prisma.expenseCategory.create({
+      const created = await this.prisma.expenseCategory.create({
         data: {
           shopId,
           name,
           isActive: dto.isActive ?? true,
         },
       });
+      return new StatusBaseResponseDTO(
+        true,
+        'Expense category created successfully',
+        created.id,
+      );
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
         throw new BadRequestException(duplicateName('Expense category', name));
       }
       throw error;
     }
-
-    return new StatusBaseResponseDTO(
-      true,
-      'Expense category created successfully',
-    );
   }
 
   async getExpenseCategories(

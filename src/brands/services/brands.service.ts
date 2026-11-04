@@ -37,20 +37,24 @@ export class BrandsService {
   ): Promise<StatusBaseResponseDTO> {
     const name = dto.name.trim();
     try {
-      await this.prisma.brand.create({
+      const created = await this.prisma.brand.create({
         data: {
           shopId,
           name,
           isActive: dto.isActive ?? true,
         },
       });
+      return new StatusBaseResponseDTO(
+        true,
+        'Brand created successfully',
+        created.id,
+      );
     } catch (error) {
       if (isUniqueConstraintViolation(error)) {
         throw new BadRequestException(duplicateName('Brand', name));
       }
       throw error;
     }
-    return new StatusBaseResponseDTO(true, 'Brand created successfully');
   }
 
   async getBrands(
