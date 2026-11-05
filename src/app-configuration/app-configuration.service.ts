@@ -147,6 +147,9 @@ export class AppConfigurationService {
       .map((origin) => origin.trim());
 
     const defaults: (string | RegExp)[] = [
+      'https://admin.ronaqstores.com',
+      'https://www.ronaqstores.com',
+      'https://ronaqstores.com',
       'https://ronaq-store-admin.vercel.app',
       'https://ronaq-store-web.vercel.app',
       /^https:\/\/.*\.vercel\.app$/,
