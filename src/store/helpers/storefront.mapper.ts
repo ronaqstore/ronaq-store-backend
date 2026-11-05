@@ -82,6 +82,9 @@ export function toStorefrontProfile(
     openingHours: settings.openingHours,
     facebookUrl: settings.facebookUrl,
     instagramUrl: settings.instagramUrl,
+    updatedAt: settings.updatedAt
+      ? new Date(settings.updatedAt).toISOString()
+      : undefined,
   };
 }
 
@@ -193,6 +196,7 @@ export function toStorefrontProduct(
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((image) => image.url),
     description: row.publicDescription,
+    updatedAt: row.updatedAt ? row.updatedAt.toISOString() : undefined,
     specs: {
       model: row.model ?? null,
       color: row.color ?? null,

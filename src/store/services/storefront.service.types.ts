@@ -15,6 +15,7 @@ export type StorefrontSettingsProfile = {
   openingHours: string | null;
   facebookUrl: string | null;
   instagramUrl: string | null;
+  updatedAt?: Date | string | null;
 };
 
 export type StorefrontCatalogSettings = {

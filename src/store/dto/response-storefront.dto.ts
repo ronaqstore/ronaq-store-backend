@@ -146,6 +146,12 @@ export class ResponseStoreProductDto {
     type: [ResponseStoreUnitDto],
   })
   units?: ResponseStoreUnitDto[];
+
+  @ApiPropertyOptional({
+    description: 'ISO-8601 timestamp of last update.',
+    example: '2026-11-05T10:00:00.000Z',
+  })
+  updatedAt?: string;
 }
 
 export class ResponseStoreDto extends StorePublicProfileFieldsDto {
@@ -157,6 +163,12 @@ export class ResponseStoreDto extends StorePublicProfileFieldsDto {
 
   @ApiProperty({ description: 'Store name.', example: 'Khalid Mobile Center' })
   displayName: string;
+
+  @ApiPropertyOptional({
+    description: 'ISO-8601 timestamp of last update.',
+    example: '2026-11-05T10:00:00.000Z',
+  })
+  updatedAt?: string;
 }
 
 export class StoreFilterOptionDto {
