@@ -5,6 +5,7 @@ import { AppConfigurationService } from '../app-configuration/app-configuration.
 import { InventoryController } from './controllers/inventory.controller.js';
 import { InventoryService } from './services/inventory.service.js';
 import { InventoryAdjustmentService } from './services/inventory-adjustment.service.js';
+import { ImeiLookupService } from './services/imei-lookup.service.js';
 
 @Module({
   imports: [PrismaModule, StoreModule],
@@ -12,7 +13,9 @@ import { InventoryAdjustmentService } from './services/inventory-adjustment.serv
   providers: [
     InventoryService,
     InventoryAdjustmentService,
+    ImeiLookupService,
     AppConfigurationService,
   ],
+  exports: [InventoryService, ImeiLookupService],
 })
 export class InventoryModule {}

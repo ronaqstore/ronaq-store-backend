@@ -34,6 +34,7 @@ import {
   InventoryService,
   InventoryAdjustmentOutcome,
 } from '../services/inventory.service.js';
+import { ImeiLookupService } from '../services/imei-lookup.service.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { UpdateInventoryUnitDto } from '../dto/update-inventory-unit.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
@@ -47,12 +48,19 @@ import {
   ResolveScanQueryDto,
   ResponseResolveScanDto,
 } from '../dto/resolve-scan.dto.js';
+import {
+  ImeiLookupQueryDto,
+  ResponseImeiLookupDto,
+} from '../dto/imei-lookup.dto.js';
 @ApiTags('inventory')
 @Controller('inventory')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly imeiLookupService: ImeiLookupService,
+  ) {}
 
   @Get('/resolve-scan')
   @ApiOperation({
@@ -89,6 +97,44 @@ export class InventoryController {
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to resolve scanned item');
+    }
+  }
+
+  @Get('/imei-lookup')
+  @ApiOperation({
+    summary: 'Lookup 360-degree lifecycle history of an IMEI',
+    description:
+      'Returns complete phone specifications, intake source, sale history, warranty status, profit margins, and movement timeline for an IMEI.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseImeiLookupDto,
+      'IMEI lookup retrieved successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async lookupImei(
+    @Query() query: ImeiLookupQueryDto,
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<ResponseImeiLookupDto>> {
+    try {
+      const result = await this.imeiLookupService.lookupImei(
+        query.imei,
+        req.user.shopId,
+      );
+      return new ApiSuccessResponseDTO(
+        'IMEI lookup retrieved successfully',
+        result,
+      );
+    } catch (error) {
+      logError('inventory.controller.ts', 'lookupImei', error, {
+        shopId: req.user?.shopId,
+        imei: query?.imei,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to lookup IMEI');
     }
   }
 

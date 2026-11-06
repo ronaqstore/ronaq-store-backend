@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InventoryController } from './inventory.controller.js';
 import { InventoryService } from '../services/inventory.service.js';
 import { InventoryAdjustmentService } from '../services/inventory-adjustment.service.js';
+import { ImeiLookupService } from '../services/imei-lookup.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -20,6 +21,7 @@ function mockRes() {
 describe('InventoryController', () => {
   let controller: InventoryController;
   let inventoryService: InventoryService;
+  let imeiLookupService: ImeiLookupService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -27,6 +29,7 @@ describe('InventoryController', () => {
       providers: [
         InventoryService,
         InventoryAdjustmentService,
+        ImeiLookupService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: StorefrontRevalidateService,
@@ -52,6 +55,7 @@ describe('InventoryController', () => {
 
     controller = module.get<InventoryController>(InventoryController);
     inventoryService = module.get<InventoryService>(InventoryService);
+    imeiLookupService = module.get<ImeiLookupService>(ImeiLookupService);
   });
 
   it('should be defined', () => {
@@ -159,6 +163,51 @@ describe('InventoryController', () => {
     expect(body).toEqual({
       message: 'Inventory unit updated successfully',
       data: mockUnit,
+    });
+  });
+
+  describe('lookupImei', () => {
+    it('returns lookup result wrapped in ApiSuccessResponseDTO', async () => {
+      const mockResult: any = {
+        found: true,
+        device: { imei1: '354892091234567' },
+        salesHistory: [],
+        timeline: [],
+      };
+      jest.spyOn(imeiLookupService, 'lookupImei').mockResolvedValue(mockResult);
+
+      const body = await controller.lookupImei({ imei: '354892091234567' }, {
+        user: { shopId: 'shop-1' },
+      } as any);
+
+      expect(body).toEqual({
+        message: 'IMEI lookup retrieved successfully',
+        data: mockResult,
+      });
+    });
+
+    it('propagates HttpException when thrown', async () => {
+      jest
+        .spyOn(imeiLookupService, 'lookupImei')
+        .mockRejectedValue(new BadRequestException('Invalid query'));
+
+      await expect(
+        controller.lookupImei({ imei: '' }, {
+          user: { shopId: 'shop-1' },
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('returns 500 for unexpected error', async () => {
+      jest
+        .spyOn(imeiLookupService, 'lookupImei')
+        .mockRejectedValue(new Error('crash'));
+
+      await expect(
+        controller.lookupImei({ imei: '354892091234567' }, {
+          user: { shopId: 'shop-1' },
+        } as any),
+      ).rejects.toThrow('Failed to lookup IMEI');
     });
   });
 });
