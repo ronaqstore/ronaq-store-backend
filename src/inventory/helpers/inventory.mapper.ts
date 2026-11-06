@@ -1,4 +1,4 @@
-import { Prisma } from '../../generated/prisma/client.js';
+import { Prisma, UserRole } from '../../generated/prisma/client.js';
 import { ResponseInventoryMovementDto } from '../dto/response-inventory-movement.dto.js';
 import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
 
@@ -67,9 +67,13 @@ export function mapMovementToResponse(
   };
 }
 
-export function mapUnitToResponse(row: UnitWithRefs): ResponseInventoryUnitDto {
+export function mapUnitToResponse(
+  row: UnitWithRefs,
+  role?: UserRole,
+): ResponseInventoryUnitDto {
+  const isSalesman = role === UserRole.SALESMAN;
   const purchase = row.purchaseItem?.purchase;
-  const supplier = purchase?.supplier;
+  const supplier = isSalesman ? null : purchase?.supplier;
   const latestSaleItem = row.saleItems?.[0];
   const sale = latestSaleItem?.sale;
   const customer = sale?.customer;
@@ -83,17 +87,20 @@ export function mapUnitToResponse(row: UnitWithRefs): ResponseInventoryUnitDto {
     imei2: row.imei2,
     condition: row.condition,
     status: row.status,
-    unitCost: Number(row.unitCost),
+    unitCost: isSalesman ? 0 : Number(row.unitCost),
     batteryHealth: row.batteryHealth,
     askingPrice: asking,
     defectNotes: row.defectNotes,
     effectivePrice: asking ?? defaultSell,
     createdAt: row.createdAt,
-    purchaseNo: purchase?.purchaseNo ?? null,
-    purchaseDate: purchase?.purchaseDate
-      ? purchase.purchaseDate.toISOString().slice(0, 10)
-      : null,
-    supplierInvoiceRef: purchase?.supplierInvoiceRef ?? null,
+    purchaseNo: isSalesman ? null : (purchase?.purchaseNo ?? null),
+    purchaseDate:
+      isSalesman || !purchase?.purchaseDate
+        ? null
+        : purchase.purchaseDate.toISOString().slice(0, 10),
+    supplierInvoiceRef: isSalesman
+      ? null
+      : (purchase?.supplierInvoiceRef ?? null),
     supplierName: supplier?.name ?? null,
     supplierPhone: supplier?.phone ?? null,
     saleNo: sale?.saleNo ?? null,

@@ -15,7 +15,8 @@ enum SubscriptionStatus {
 
 enum UserRole {
   OWNER
-  // later: MANAGER, CASHIER
+  MANAGER
+  SALESMAN
 }
 
 enum UserStatus {

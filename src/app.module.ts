@@ -34,6 +34,7 @@ import { ReturnsModule } from './returns/returns.module.js';
 import { CashReconciliationsModule } from './cash-reconciliations/cash-reconciliations.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { ConsignmentsModule } from './consignments/consignments.module.js';
+import { StaffModule } from './staff/staff.module.js';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { ConsignmentsModule } from './consignments/consignments.module.js';
     CashReconciliationsModule,
     ReportsModule,
     ConsignmentsModule,
+    StaffModule,
   ],
   controllers: [AppController],
   providers: [

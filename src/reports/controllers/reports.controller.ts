@@ -26,6 +26,9 @@ import {
   ReportPageResponseDTO,
 } from './reports-controller.imports.js';
 import type { Response, OwnerRequest } from './reports-controller.imports.js';
+import { RolesGuard } from '../../auth-guards/roles.guard.js';
+import { Roles } from '../../auth-guards/roles.decorator.js';
+import { UserRole } from '../../generated/prisma/enums.js';
 import {
   SaleReportRowDTO,
   SalesReportSummaryDTO,
@@ -64,7 +67,8 @@ import {
   ProfitDayRowDTO,
   ProfitReportSummaryDTO,
 )
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(UserRole.OWNER, UserRole.MANAGER)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
