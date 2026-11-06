@@ -35,6 +35,9 @@ import {
   InventoryAdjustmentOutcome,
 } from '../services/inventory.service.js';
 import { ImeiLookupService } from '../services/imei-lookup.service.js';
+import { DeadStockReportService } from '../services/dead-stock-report.service.js';
+import { DeadStockQueryFilterDto } from '../dto/dead-stock-query.filter.js';
+import { ResponseDeadStockReportDto } from '../dto/dead-stock-report.dto.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
 import { UpdateInventoryUnitDto } from '../dto/update-inventory-unit.dto.js';
 import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
@@ -60,13 +63,12 @@ export class InventoryController {
   constructor(
     private readonly inventoryService: InventoryService,
     private readonly imeiLookupService: ImeiLookupService,
+    private readonly deadStockReportService: DeadStockReportService,
   ) {}
 
   @Get('/resolve-scan')
   @ApiOperation({
-    summary: 'Resolve scanned barcode or IMEI',
-    description:
-      'Resolves a scanned IMEI or barcode to an in-stock inventory unit and/or active product within the authenticated shop scope.',
+    summary: 'Resolve scanned barcode or IMEI to in-stock unit or product',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
@@ -104,7 +106,7 @@ export class InventoryController {
   @ApiOperation({
     summary: 'Lookup 360-degree lifecycle history of an IMEI',
     description:
-      'Returns complete phone specifications, intake source, sale history, warranty status, profit margins, and movement timeline for an IMEI.',
+      'Phone specifications, intake source, sale history, warranty status, profit, and movement timeline.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
@@ -135,6 +137,43 @@ export class InventoryController {
       });
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to lookup IMEI');
+    }
+  }
+
+  @Get('/dead-stock')
+  @ApiOperation({
+    summary: 'Dead stock aging report for serialized devices with buckets',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      ResponseDeadStockReportDto,
+      'Dead stock report retrieved successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(UNAUTHORIZED_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async getDeadStockReport(
+    @Query() query: DeadStockQueryFilterDto,
+    @Req() req: OwnerRequest,
+  ): Promise<ApiSuccessResponseDTO<ResponseDeadStockReportDto>> {
+    try {
+      const data = await this.deadStockReportService.getDeadStockReport(
+        query,
+        req.user.shopId,
+      );
+      return new ApiSuccessResponseDTO(
+        'Dead stock report retrieved successfully',
+        data,
+      );
+    } catch (error) {
+      logError('inventory.controller.ts', 'getDeadStockReport', error, {
+        shopId: req.user?.shopId,
+      });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException(
+        'Failed to fetch dead stock report',
+      );
     }
   }
 
@@ -225,12 +264,7 @@ export class InventoryController {
   @ApiOperation({
     summary: 'Record a manual stock change (adjust / damaged / lost)',
     description:
-      'WF8 — one change in ONE transaction: append an inventory_movements row and move the current-value row. ' +
-      'Accessories (QUANTITY): ADJUSTMENT sets the shelf to countedQuantity and stores counted − system ' +
-      '(201 with quantityChange = 0 is impossible — matching count returns 200 nothing-written); ' +
-      'DAMAGED/LOST subtracts atomically and can never drive the count below zero. ' +
-      'Phones (SERIALIZED): DAMAGED/LOST flips one IN_STOCK unit so it can never be sold; ADJUSTMENT is refused. ' +
-      'reason is mandatory for every change.',
+      'WF8: append an inventory_movements row and move current-value row. Phones: DAMAGED/LOST flips one IN_STOCK unit. Reason is mandatory.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
@@ -245,7 +279,6 @@ export class InventoryController {
   async createAdjustment(
     @Body() dto: CreateInventoryAdjustmentDto,
     @Req() req: OwnerRequest,
-
     @Res({ passthrough: true }) res: Response,
   ): Promise<ApiSuccessResponseDTO<InventoryAdjustmentOutcome>> {
     try {
@@ -272,9 +305,7 @@ export class InventoryController {
   @ApiOperation({
     summary: 'List manual stock changes',
     description:
-      'Paginated history of stock adjustments and write-offs, scoped to the shop in the JWT. ' +
-      'Defaults to manual changes (ADJUSTMENT/DAMAGED/LOST) only — purchase and sale movements belong to the ledger, not this screen. ' +
-      'Filter by type, productId, exact quantityChange, reason (any word contains match), a createdAt date range and/or a search term that matches the product name or the reason.',
+      'Paginated history of stock adjustments and write-offs, scoped to the shop in the JWT.',
   })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(

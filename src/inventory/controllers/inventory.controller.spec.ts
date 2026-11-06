@@ -4,6 +4,7 @@ import { InventoryController } from './inventory.controller.js';
 import { InventoryService } from '../services/inventory.service.js';
 import { InventoryAdjustmentService } from '../services/inventory-adjustment.service.js';
 import { ImeiLookupService } from '../services/imei-lookup.service.js';
+import { DeadStockReportService } from '../services/dead-stock-report.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppConfigurationService } from '../../app-configuration/app-configuration.service.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
@@ -22,6 +23,7 @@ describe('InventoryController', () => {
   let controller: InventoryController;
   let inventoryService: InventoryService;
   let imeiLookupService: ImeiLookupService;
+  let deadStockReportService: DeadStockReportService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -30,6 +32,7 @@ describe('InventoryController', () => {
         InventoryService,
         InventoryAdjustmentService,
         ImeiLookupService,
+        DeadStockReportService,
         { provide: PrismaService, useValue: prismaStub },
         {
           provide: StorefrontRevalidateService,
@@ -56,6 +59,9 @@ describe('InventoryController', () => {
     controller = module.get<InventoryController>(InventoryController);
     inventoryService = module.get<InventoryService>(InventoryService);
     imeiLookupService = module.get<ImeiLookupService>(ImeiLookupService);
+    deadStockReportService = module.get<DeadStockReportService>(
+      DeadStockReportService,
+    );
   });
 
   it('should be defined', () => {
@@ -208,6 +214,39 @@ describe('InventoryController', () => {
           user: { shopId: 'shop-1' },
         } as any),
       ).rejects.toThrow('Failed to lookup IMEI');
+    });
+  });
+
+  describe('getDeadStockReport', () => {
+    it('returns dead stock report wrapped in ApiSuccessResponseDTO', async () => {
+      const mockResult: any = {
+        summary: { totalInStockUnits: 1, buckets: [] },
+        pagination: { items: [], total: 0 },
+      };
+      jest
+        .spyOn(deadStockReportService, 'getDeadStockReport')
+        .mockResolvedValue(mockResult);
+
+      const body = await controller.getDeadStockReport({}, {
+        user: { shopId: 'shop-1' },
+      } as any);
+
+      expect(body).toEqual({
+        message: 'Dead stock report retrieved successfully',
+        data: mockResult,
+      });
+    });
+
+    it('returns 500 for unexpected error in dead stock report', async () => {
+      jest
+        .spyOn(deadStockReportService, 'getDeadStockReport')
+        .mockRejectedValue(new Error('crash'));
+
+      await expect(
+        controller.getDeadStockReport({}, {
+          user: { shopId: 'shop-1' },
+        } as any),
+      ).rejects.toThrow('Failed to fetch dead stock report');
     });
   });
 });
