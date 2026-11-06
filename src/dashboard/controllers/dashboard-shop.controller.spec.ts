@@ -77,16 +77,31 @@ describe('DashboardShopController', () => {
     );
   });
 
+  it('allows MANAGER to access KPIs', async () => {
+    shopServiceMock.getKpis.mockResolvedValue({ totals: {} });
+    await controller.getKpis(
+      query7d,
+      ownerReq('shop-from-jwt', UserRole.MANAGER),
+    );
+    expect(shopServiceMock.getKpis).toHaveBeenCalledWith(
+      'shop-from-jwt',
+      expect.anything(),
+    );
+  });
+
   it('forbids non-owner roles from profit/cost KPIs', async () => {
     await expect(
-      controller.getKpis(query7d, ownerReq('shop-a', 'STAFF')),
+      controller.getKpis(query7d, ownerReq('shop-a', UserRole.SALESMAN)),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(shopServiceMock.getKpis).not.toHaveBeenCalled();
   });
 
   it('forbids non-owners from waterfall (cost data)', async () => {
     await expect(
-      controller.getProfitWaterfall(query7d, ownerReq('shop-a', 'STAFF')),
+      controller.getProfitWaterfall(
+        query7d,
+        ownerReq('shop-a', UserRole.SALESMAN),
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

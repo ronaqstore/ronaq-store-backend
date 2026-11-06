@@ -55,9 +55,12 @@ export class DashboardShopController {
   ) {}
 
   private checkOwner(req: OwnerRequest): void {
-    if (req.user?.role !== UserRole.OWNER) {
+    if (
+      req.user?.role !== UserRole.OWNER &&
+      req.user?.role !== UserRole.MANAGER
+    ) {
       throw new ForbiddenException(
-        'Only shop owners can access financial dashboard metrics',
+        'Only shop owners and managers can access financial dashboard metrics',
       );
     }
   }
