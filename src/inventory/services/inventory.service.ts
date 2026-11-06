@@ -9,6 +9,7 @@ import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.j
 import {
   InventoryMovementType,
   UnitStatus,
+  UserRole,
 } from '../../generated/prisma/enums.js';
 import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
 import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
@@ -62,6 +63,7 @@ export class InventoryService {
   async listUnits(
     query: InventoryUnitQueryFilterDto,
     shopId: string,
+    role?: UserRole,
   ): Promise<PaginatedResponseDTO<ResponseInventoryUnitDto>> {
     const product = await this.prisma.product.findFirst({
       where: { id: query.productId, shopId },
@@ -122,7 +124,7 @@ export class InventoryService {
       this.prisma.inventoryUnit.count({ where }),
     ]);
 
-    const items = rows.map((row) => mapUnitToResponse(row));
+    const items = rows.map((row) => mapUnitToResponse(row, role));
 
     return new PaginatedResponseDTO(items, total, page, pageSize);
   }

@@ -28,6 +28,9 @@ import {
   UNAUTHORIZED_REQUEST_RESPONSE,
 } from '../../constants/error-response.constant.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
+import { RolesGuard } from '../../auth-guards/roles.guard.js';
+import { Roles } from '../../auth-guards/roles.decorator.js';
+import { UserRole } from '../../generated/prisma/enums.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
@@ -93,6 +96,8 @@ export class SalesController {
   }
 
   @Post('/:id/cancel')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Cancel a sale with a reason',
     description:
@@ -135,6 +140,8 @@ export class SalesController {
   }
 
   @Get('/:id/cancel-impact')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Preview what cancelling this sale would change',
     description:

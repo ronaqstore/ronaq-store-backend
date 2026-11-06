@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ImeiLookupService } from './imei-lookup.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { UserRole } from '../../generated/prisma/enums.js';
 
 const SHOP_ID = '01924f0a-0000-7000-8000-000000000001';
 const PRODUCT_ID = '01924f0a-0000-7000-8000-000000000002';
@@ -193,5 +194,21 @@ describe('ImeiLookupService', () => {
     expect(result.intake?.consignorName).toBe('Bilal Ahmed');
     expect(result.latestSale?.saleStatus).toBe('CANCELLED');
     expect(result.latestSale?.isWarrantyActive).toBe(false);
+  });
+
+  it('masks unitCost and profit calculations when accessed by SALESMAN', async () => {
+    prismaStub.inventoryUnit.findFirst.mockResolvedValueOnce(mockLookupUnit);
+
+    const result = await service.lookupImei(
+      '354892091234567',
+      SHOP_ID,
+      UserRole.SALESMAN,
+    );
+    expect(result.found).toBe(true);
+    expect(result.device?.unitCost).toBe(0);
+    expect(result.latestSale?.profitAmount).toBe(0);
+    expect(result.latestSale?.profitMarginPercent).toBe(0);
+    expect(result.salesHistory[0]?.profitAmount).toBe(0);
+    expect(result.salesHistory[0]?.profitMarginPercent).toBe(0);
   });
 });

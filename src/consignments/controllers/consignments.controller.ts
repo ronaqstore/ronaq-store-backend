@@ -26,6 +26,9 @@ import {
   UNAUTHORIZED_REQUEST_RESPONSE,
 } from '../../constants/error-response.constant.js';
 import { AuthGuard } from '../../auth-guards/auth-guard.js';
+import { RolesGuard } from '../../auth-guards/roles.guard.js';
+import { Roles } from '../../auth-guards/roles.decorator.js';
+import { UserRole } from '../../generated/prisma/enums.js';
 import { ApiSuccessResponseDTO } from '../../common-dto/response/api-success-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
 import { PaginatedResponseDTO } from '../../common-dto/response/paginated-response.dto.js';
@@ -245,6 +248,8 @@ export class ConsignmentsController {
   }
 
   @Post(':id/cancel')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Cancel / void an active consignment intake' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(

@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { InventoryMovementType } from '../../generated/prisma/enums.js';
+import {
+  InventoryMovementType,
+  UserRole,
+} from '../../generated/prisma/enums.js';
 import { businessToday, shiftDays } from '../../helpers/date.helper.js';
 import { daysBetween } from '../../dashboard/helpers/dashboard-date.helper.js';
 import {
@@ -60,6 +63,7 @@ export class ImeiLookupService {
   async lookupImei(
     rawImei: string,
     shopId: string,
+    role?: UserRole,
   ): Promise<ResponseImeiLookupDto> {
     const trimmed = rawImei?.trim() ?? '';
     if (!trimmed) {
@@ -312,6 +316,23 @@ export class ImeiLookupService {
     timeline.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
+
+    if (role === UserRole.SALESMAN) {
+      device.unitCost = 0;
+      if (intake) {
+        intake.agreedPayout = null;
+        intake.supplierInvoiceRef = null;
+        intake.supplierPhone = null;
+      }
+      if (latestSale) {
+        latestSale.profitAmount = 0;
+        latestSale.profitMarginPercent = 0;
+      }
+      for (const sh of salesHistory) {
+        sh.profitAmount = 0;
+        sh.profitMarginPercent = 0;
+      }
+    }
 
     return {
       found: true,

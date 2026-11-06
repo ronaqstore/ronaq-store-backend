@@ -27,6 +27,9 @@ import {
   PaginatedResponseDTO,
   logError,
 } from '../../helpers/document-controller.imports.js';
+import { RolesGuard } from '../../auth-guards/roles.guard.js';
+import { Roles } from '../../auth-guards/roles.decorator.js';
+import { UserRole } from '../../generated/prisma/enums.js';
 import { ParseUUIDPipe } from '@nestjs/common';
 import type { Response } from 'express';
 import type { OwnerRequest } from '../../auth-guards/authenticated-request.js';
@@ -36,25 +39,21 @@ import {
 } from '../services/inventory.service.js';
 import { ImeiLookupService } from '../services/imei-lookup.service.js';
 import { DeadStockReportService } from '../services/dead-stock-report.service.js';
-import { DeadStockQueryFilterDto } from '../dto/dead-stock-query.filter.js';
-import { ResponseDeadStockReportDto } from '../dto/dead-stock-report.dto.js';
-import { CreateInventoryAdjustmentDto } from '../dto/create-inventory-adjustment.dto.js';
-import { UpdateInventoryUnitDto } from '../dto/update-inventory-unit.dto.js';
-import { InventoryAdjustmentQueryFilterDto } from '../dto/inventory-adjustment-query.filter.js';
-import { InventoryUnitQueryFilterDto } from '../dto/inventory-unit-query.filter.js';
-import { ResponseInventoryUnitDto } from '../dto/response-inventory-unit.dto.js';
 import {
+  DeadStockQueryFilterDto,
+  ResponseDeadStockReportDto,
+  CreateInventoryAdjustmentDto,
+  UpdateInventoryUnitDto,
+  InventoryAdjustmentQueryFilterDto,
+  InventoryUnitQueryFilterDto,
+  ResponseInventoryUnitDto,
   PaginatedInventoryMovementDto,
   ResponseInventoryMovementDto,
-} from '../dto/response-inventory-movement.dto.js';
-import {
   ResolveScanQueryDto,
   ResponseResolveScanDto,
-} from '../dto/resolve-scan.dto.js';
-import {
   ImeiLookupQueryDto,
   ResponseImeiLookupDto,
-} from '../dto/imei-lookup.dto.js';
+} from '../dto/inventory-dtos.js';
 @ApiTags('inventory')
 @Controller('inventory')
 @ApiBearerAuth()
@@ -67,9 +66,7 @@ export class InventoryController {
   ) {}
 
   @Get('/resolve-scan')
-  @ApiOperation({
-    summary: 'Resolve scanned barcode or IMEI to in-stock unit or product',
-  })
+  @ApiOperation({ summary: 'Resolve scan to in-stock unit or product' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       ResponseResolveScanDto,
@@ -125,6 +122,7 @@ export class InventoryController {
       const result = await this.imeiLookupService.lookupImei(
         query.imei,
         req.user.shopId,
+        req.user.role,
       );
       return new ApiSuccessResponseDTO(
         'IMEI lookup retrieved successfully',
@@ -141,9 +139,9 @@ export class InventoryController {
   }
 
   @Get('/dead-stock')
-  @ApiOperation({
-    summary: 'Dead stock aging report for serialized devices with buckets',
-  })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Dead stock aging report for serialized devices' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       ResponseDeadStockReportDto,
@@ -178,11 +176,7 @@ export class InventoryController {
   }
 
   @Get('/units')
-  @ApiOperation({
-    summary: 'List phone units for a product',
-    description:
-      'Returns inventory units (id, IMEI, cost, status, condition, supplier/purchase/sale info) for the given product.',
-  })
+  @ApiOperation({ summary: 'List phone units for a product' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       PaginatedResponseDTO,
@@ -203,6 +197,7 @@ export class InventoryController {
       const units = await this.inventoryService.listUnits(
         query,
         req.user.shopId,
+        req.user.role,
       );
       return new ApiSuccessResponseDTO(
         'Inventory units fetched successfully',
@@ -219,11 +214,7 @@ export class InventoryController {
   }
 
   @Patch('/units/:id')
-  @ApiOperation({
-    summary: 'Update inventory unit metadata',
-    description:
-      'Update asking price, defect notes, condition, or battery health (Apple only) for a phone unit belonging to this shop.',
-  })
+  @ApiOperation({ summary: 'Update inventory unit metadata' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       ResponseInventoryUnitDto,
@@ -261,11 +252,9 @@ export class InventoryController {
   }
 
   @Post('/adjustments')
-  @ApiOperation({
-    summary: 'Record a manual stock change (adjust / damaged / lost)',
-    description:
-      'WF8: append an inventory_movements row and move current-value row. Phones: DAMAGED/LOST flips one IN_STOCK unit. Reason is mandatory.',
-  })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Record a manual stock change' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       StatusBaseResponseDTO,
@@ -302,11 +291,7 @@ export class InventoryController {
   }
 
   @Get('/adjustments')
-  @ApiOperation({
-    summary: 'List manual stock changes',
-    description:
-      'Paginated history of stock adjustments and write-offs, scoped to the shop in the JWT.',
-  })
+  @ApiOperation({ summary: 'List manual stock changes' })
   @ApiSuccessResponseDecorator(
     OK_RESPONSE_STATUS(
       PaginatedInventoryMovementDto,
