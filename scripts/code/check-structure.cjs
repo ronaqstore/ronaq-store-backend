@@ -35,6 +35,7 @@ const ALLOWED_TOP_LEVEL_DIRS = new Set([
   'reports',
   'returns',
   'sales',
+  'staff',
   'store',
   'supplier-payments',
   'suppliers',

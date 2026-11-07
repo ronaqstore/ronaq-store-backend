@@ -5,6 +5,7 @@ import { InventoryAdjustmentService } from './inventory-adjustment.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { StorefrontRevalidateService } from '../../store/services/storefront-revalidate.service.js';
 import { storefrontRevalidateStub } from '../../../test/stubs/storefront-revalidate.stub.js';
+import { UserRole } from '../../generated/prisma/enums.js';
 
 const SHOP_ID = 'shop-1';
 const PRODUCT_ID = 'prod-1';
@@ -976,6 +977,87 @@ describe('InventoryService', () => {
       expect(result.found).toBe(false);
       expect(result.reason).toBe('INACTIVE');
       expect(result.message).toContain('is deactivated');
+    });
+  });
+
+  describe('listUnits with role-based cost hiding', () => {
+    it('returns unitCost and supplier info for OWNER', async () => {
+      prismaStub.product.findFirst.mockResolvedValueOnce({ id: PRODUCT_ID });
+      prismaStub.inventoryUnit.findMany.mockResolvedValueOnce([
+        {
+          id: UNIT_ID,
+          productId: PRODUCT_ID,
+          imei1: '123456789012345',
+          imei2: null,
+          condition: 'NEW',
+          status: 'IN_STOCK',
+          unitCost: 10000000n,
+          askingPrice: 12000000n,
+          batteryHealth: null,
+          defectNotes: null,
+          createdAt: new Date(),
+          product: { defaultSellingPrice: 12000000n, brand: null },
+          purchaseItem: {
+            purchase: {
+              purchaseNo: 'PUR-0001',
+              purchaseDate: new Date('2026-10-01'),
+              supplierInvoiceRef: 'INV-99',
+              supplier: { name: 'Irfan Wholesale', phone: '03001234567' },
+            },
+          },
+          saleItems: [],
+        },
+      ]);
+      prismaStub.inventoryUnit.count.mockResolvedValueOnce(1);
+
+      const res = await service.listUnits(
+        { productId: PRODUCT_ID, page: 1, pageSize: 20 },
+        SHOP_ID,
+        UserRole.OWNER,
+      );
+      expect(res.items[0].unitCost).toBe(10000000);
+      expect(res.items[0].supplierName).toBe('Irfan Wholesale');
+      expect(res.items[0].purchaseNo).toBe('PUR-0001');
+    });
+
+    it('masks unitCost and hides supplier info for SALESMAN', async () => {
+      prismaStub.product.findFirst.mockResolvedValueOnce({ id: PRODUCT_ID });
+      prismaStub.inventoryUnit.findMany.mockResolvedValueOnce([
+        {
+          id: UNIT_ID,
+          productId: PRODUCT_ID,
+          imei1: '123456789012345',
+          imei2: null,
+          condition: 'NEW',
+          status: 'IN_STOCK',
+          unitCost: 10000000n,
+          askingPrice: 12000000n,
+          batteryHealth: null,
+          defectNotes: null,
+          createdAt: new Date(),
+          product: { defaultSellingPrice: 12000000n, brand: null },
+          purchaseItem: {
+            purchase: {
+              purchaseNo: 'PUR-0001',
+              purchaseDate: new Date('2026-10-01'),
+              supplierInvoiceRef: 'INV-99',
+              supplier: { name: 'Irfan Wholesale', phone: '03001234567' },
+            },
+          },
+          saleItems: [],
+        },
+      ]);
+      prismaStub.inventoryUnit.count.mockResolvedValueOnce(1);
+
+      const res = await service.listUnits(
+        { productId: PRODUCT_ID, page: 1, pageSize: 20 },
+        SHOP_ID,
+        UserRole.SALESMAN,
+      );
+      expect(res.items[0].unitCost).toBe(0);
+      expect(res.items[0].supplierName).toBeNull();
+      expect(res.items[0].purchaseNo).toBeNull();
+      expect(res.items[0].supplierInvoiceRef).toBeNull();
     });
   });
 });
