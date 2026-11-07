@@ -802,6 +802,23 @@ describe('ProductsService', () => {
       });
     });
 
+    it('falls back to 0 when the low-stock threshold is cleared on update', async () => {
+      mockProductFoundForUpdate(baseProductRow({ trackingType: 'QUANTITY' }));
+      prismaStub.product.update.mockResolvedValue({});
+
+      await service.updateProduct(
+        'prod-1',
+        { name: 'Galaxy A15 v2', lowStockThreshold: null },
+        SHOP_ID,
+        'user-1',
+      );
+
+      expect(prismaStub.product.update).toHaveBeenCalledWith({
+        where: { id: 'prod-1' },
+        data: { name: 'Galaxy A15 v2', lowStockThreshold: 0 },
+      });
+    });
+
     it('rejects an exact name + variant duplicate on update', async () => {
       prismaStub.product.findFirst.mockImplementation((args?: any) => {
         const idFilter = args?.where?.id;

@@ -73,15 +73,16 @@ export class CreateProductDto extends ProductOptionalSpecFieldsDto {
 
   @ApiPropertyOptional({
     description:
-      'Show a low-stock warning when on-hand quantity reaches this number. For SERIALIZED products it applies to the count of IN_STOCK units.',
+      'Optional. Show a low-stock warning when on-hand quantity reaches this number. For SERIALIZED products it applies to the count of IN_STOCK units. Omit or send null to use the default of 0.',
     example: 3,
     default: 0,
+    nullable: true,
   })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(1_000_000)
-  lowStockThreshold?: number;
+  lowStockThreshold?: number | null;
 
   @ApiPropertyOptional({
     description:

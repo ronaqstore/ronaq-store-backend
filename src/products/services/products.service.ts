@@ -390,7 +390,7 @@ export class ProductsService {
       data.defaultSellingPrice = dto.defaultSellingPrice;
     }
     if (dto.lowStockThreshold !== undefined) {
-      data.lowStockThreshold = dto.lowStockThreshold;
+      data.lowStockThreshold = dto.lowStockThreshold ?? 0;
     }
     if (dto.isActive !== undefined) {
       data.isActive = dto.isActive;

@@ -143,6 +143,17 @@ describe('Product DTO validation', () => {
     await expect(validate(dto)).resolves.toEqual([]);
   });
 
+  it('accepts an omitted or null lowStockThreshold', async () => {
+    const omitted = plainToInstance(CreateProductDto, { ...validCreate });
+    const cleared = plainToInstance(CreateProductDto, {
+      ...validCreate,
+      lowStockThreshold: null,
+    });
+
+    await expect(validate(omitted)).resolves.toEqual([]);
+    await expect(validate(cleared)).resolves.toEqual([]);
+  });
+
   it('rejects a negative lowStockThreshold on update', async () => {
     const dto = plainToInstance(UpdateProductDto, { lowStockThreshold: -2 });
 

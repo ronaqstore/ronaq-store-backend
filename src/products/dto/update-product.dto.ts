@@ -70,12 +70,17 @@ export class UpdateProductDto extends ProductOptionalSpecFieldsDto {
   @Min(0)
   defaultSellingPrice?: number;
 
-  @ApiPropertyOptional({ example: 3 })
+  @ApiPropertyOptional({
+    description:
+      'Optional. Send null to reset the low-stock warning back to its default of 0.',
+    example: 3,
+    nullable: true,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(1_000_000)
-  lowStockThreshold?: number;
+  lowStockThreshold?: number | null;
 
   @ApiPropertyOptional({
     description:
