@@ -4,6 +4,7 @@ import type { UploadedImageFile } from '../dto/uploaded-image-file.type.js';
 import { unsupportedImageType } from '../../errors/error.builder.js';
 import type {
   ProcessImageOptions,
+  ProcessedProductImageVariants,
   ProcessedImageResult,
 } from '../services/store.service.types.js';
 
@@ -55,4 +56,39 @@ export async function processStoreImage(
     return { buffer, ext: 'png', contentType: 'image/png' };
   }
   return { buffer, ext: 'webp', contentType: 'image/webp' };
+}
+
+export async function processProductImageVariants(
+  file: UploadedImageFile,
+): Promise<ProcessedProductImageVariants> {
+  const sharpOptions = { limitInputPixels: 50_000_000 };
+  let format: string | undefined;
+  try {
+    format = (await sharp(file.buffer, sharpOptions).metadata()).format;
+  } catch {
+    throw new BadRequestException(unsupportedImageType());
+  }
+  if (!format || !SUPPORTED_IMAGE_FORMATS.has(format)) {
+    throw new BadRequestException(unsupportedImageType());
+  }
+
+  try {
+    const [thumbnail, display] = await Promise.all(
+      [400, 800].map((edge) =>
+        sharp(file.buffer, sharpOptions)
+          .rotate()
+          .resize({
+            width: edge,
+            height: edge,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .webp({ quality: 80, effort: 4 })
+          .toBuffer(),
+      ),
+    );
+    return { thumbnail, display };
+  } catch {
+    throw new BadRequestException(unsupportedImageType());
+  }
 }

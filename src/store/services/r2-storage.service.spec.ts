@@ -74,6 +74,7 @@ describe('R2StorageService', () => {
         Bucket: 'dukan-pro-product-images',
         Key: 'shops/shop-1/products/p/a.jpg',
         ContentType: 'image/jpeg',
+        CacheControl: 'public, max-age=31536000, immutable',
       });
     });
 

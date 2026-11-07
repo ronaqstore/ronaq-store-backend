@@ -48,6 +48,7 @@ export class R2StorageService {
           Key: key,
           Body: body,
           ContentType: contentType,
+          CacheControl: 'public, max-age=31536000, immutable',
         }),
       );
     } catch (error) {

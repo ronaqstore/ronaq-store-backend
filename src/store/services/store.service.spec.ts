@@ -494,24 +494,37 @@ describe('StoreService (owner surface)', () => {
         });
       prisma.productImage.create.mockResolvedValue({});
       prisma.product.update.mockResolvedValue({});
-      r2.put.mockResolvedValue(
-        'https://pub-test.r2.dev/shops/shop-1/products/prod-1/abc.jpg',
-      );
+      r2.put
+        .mockResolvedValueOnce(
+          'https://pub-test.r2.dev/products-images/shop-1/prod-1/abc-400.webp',
+        )
+        .mockResolvedValueOnce(
+          'https://pub-test.r2.dev/products-images/shop-1/prod-1/abc-800.webp',
+        );
 
       await service.addProductImage('prod-1', file, 'shop-1');
 
-      expect(r2.put).toHaveBeenCalledWith(
+      expect(r2.put).toHaveBeenNthCalledWith(
+        1,
         expect.stringMatching(
-          /^products-images\/shop-1\/prod-1\/[0-9a-f-]+\.jpg$/,
+          /^products-images\/shop-1\/prod-1\/[0-9a-f-]+-400\.webp$/,
         ),
         expect.any(Buffer),
-        'image/jpeg',
+        'image/webp',
+      );
+      expect(r2.put).toHaveBeenNthCalledWith(
+        2,
+        expect.stringMatching(
+          /^products-images\/shop-1\/prod-1\/[0-9a-f-]+-800\.webp$/,
+        ),
+        expect.any(Buffer),
+        'image/webp',
       );
       expect(prisma.productImage.create).toHaveBeenCalledWith({
         data: {
           shopId: 'shop-1',
           productId: 'prod-1',
-          url: 'https://pub-test.r2.dev/shops/shop-1/products/prod-1/abc.jpg',
+          url: 'https://pub-test.r2.dev/products-images/shop-1/prod-1/abc-800.webp',
           sortOrder: 2,
         },
       });
@@ -533,9 +546,20 @@ describe('StoreService (owner surface)', () => {
 
       await service.addProductImage('prod-1', file, 'shop-1');
 
-      const uploaded = r2.put.mock.calls[0][1] as Buffer;
-      const processed = await sharp(uploaded).metadata();
-      expect(processed.exif).toBeUndefined();
+      const processedVariants = await Promise.all(
+        r2.put.mock.calls.map(async (call) =>
+          sharp(call[1] as Buffer).metadata(),
+        ),
+      );
+      expect(processedVariants.map((image) => image.format)).toEqual([
+        'webp',
+        'webp',
+      ]);
+      expect(processedVariants.every((image) => image.exif === undefined)).toBe(
+        true,
+      );
+      expect(processedVariants[0]?.width).toBeLessThanOrEqual(400);
+      expect(processedVariants[1]?.width).toBeLessThanOrEqual(800);
     });
 
     it('refuses a file that is not a real image', async () => {

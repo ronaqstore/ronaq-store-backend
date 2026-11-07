@@ -16,3 +16,8 @@ export type ProcessedImageResult = {
   ext: string;
   contentType: string;
 };
+
+export type ProcessedProductImageVariants = {
+  thumbnail: Buffer;
+  display: Buffer;
+};

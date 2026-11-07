@@ -10,6 +10,7 @@ import type { StorefrontSettingsProfile } from '../services/storefront.service.t
 import { toLocalPkPhone } from '../../helpers/phone.helper.js';
 import { toModelKey } from '../../helpers/slug.helper.js';
 import { buildTokenizedSearchAnd } from '../../helpers/tokenized-search.helper.js';
+import { productThumbnailUrl } from './product-image-variants.helper.js';
 
 export const STOREFRONT_SELLABLE_STATUS = 'IN_STOCK';
 
@@ -177,6 +178,7 @@ export function toStorefrontProduct(
       : row._count.inventoryUnits;
 
   const modelLabel = (row.model?.trim() || row.name).trim();
+  const images = [...row.images].sort((a, b) => a.sortOrder - b.sortOrder);
   return {
     id: row.id,
     name: row.name,
@@ -192,9 +194,8 @@ export function toStorefrontProduct(
     stockCount: showExactStock ? quantityOnHand : null,
     ptaStatus: row.ptaStatus,
     authenticity: row.authenticity,
-    images: [...row.images]
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((image) => image.url),
+    images: images.map((image) => image.url),
+    thumbnailImages: images.map((image) => productThumbnailUrl(image.url)),
     description: row.publicDescription,
     updatedAt: row.updatedAt ? row.updatedAt.toISOString() : undefined,
     specs: {

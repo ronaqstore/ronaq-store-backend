@@ -1,6 +1,7 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import { toLocalPkPhone } from '../../helpers/phone.helper.js';
 import { toModelKey } from '../../helpers/slug.helper.js';
+import { productThumbnailUrl } from './product-image-variants.helper.js';
 import {
   STOREFRONT_PRODUCT_INCLUDE,
   storefrontAvailability,
@@ -89,6 +90,7 @@ export function toLeanMarketplaceProduct(
     authenticity:
       row.authenticity as ResponseMarketplaceProductDto['authenticity'],
     images: row.image_url ? [row.image_url] : [],
+    thumbnailImages: row.image_url ? [productThumbnailUrl(row.image_url)] : [],
     description: row.public_description,
     specs: {
       model: row.model ?? null,

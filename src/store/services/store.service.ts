@@ -39,11 +39,11 @@ import {
 import { normalizeAndAssertContactPhone } from '../helpers/store-contact-phone.helper.js';
 import { normalizeLocationCoords } from '../helpers/store-location.helper.js';
 import { buildStoreSettingsUpdate } from '../helpers/store-settings-update.helper.js';
-import { processStoreImage } from '../helpers/store-image-process.helper.js';
+import { processProductImageVariants } from '../helpers/store-image-process.helper.js';
+import { productThumbnailUrl } from '../helpers/product-image-variants.helper.js';
 import { resolveMarketplaceCityName } from '../helpers/marketplace-hub.helper.js';
 
 const MAX_PRODUCT_IMAGES = 5;
-const MAX_IMAGE_EDGE = 1600;
 
 @Injectable()
 export class StoreService {
@@ -329,12 +329,37 @@ export class StoreService {
       );
     }
 
-    const processed = await processStoreImage(file, {
-      maxEdge: MAX_IMAGE_EDGE,
-      fit: 'inside',
-    });
-    const key = `products-images/${shopId}/${productId}/${randomUUID()}.${processed.ext}`;
-    const url = await this.r2.put(key, processed.buffer, processed.contentType);
+    const variants = await processProductImageVariants(file);
+    const keyBase = `products-images/${shopId}/${productId}/${randomUUID()}`;
+    const uploadedUrls: string[] = [];
+    try {
+      uploadedUrls.push(
+        await this.r2.put(
+          `${keyBase}-400.webp`,
+          variants.thumbnail,
+          'image/webp',
+        ),
+      );
+      uploadedUrls.push(
+        await this.r2.put(
+          `${keyBase}-800.webp`,
+          variants.display,
+          'image/webp',
+        ),
+      );
+    } catch (error) {
+      await Promise.all(uploadedUrls.map((url) => this.r2.deleteByUrl(url)));
+      throw error;
+    }
+
+    const thumbnailUrl = uploadedUrls[0];
+    const url = uploadedUrls[1];
+    if (!thumbnailUrl || !url) {
+      await Promise.all(
+        uploadedUrls.map((uploadedUrl) => this.r2.deleteByUrl(uploadedUrl)),
+      );
+      throw new Error('Product image variants were not uploaded');
+    }
 
     try {
       const last = await this.prisma.productImage.findFirst({
@@ -349,7 +374,9 @@ export class StoreService {
       });
       await this.syncProductCoverImage(productId, shopId);
     } catch (error) {
-      await this.r2.deleteByUrl(url);
+      await Promise.all(
+        uploadedUrls.map((uploadedUrl) => this.r2.deleteByUrl(uploadedUrl)),
+      );
       throw error;
     }
     return new StatusBaseResponseDTO(true, 'Product image added successfully');
@@ -366,7 +393,7 @@ export class StoreService {
     if (!product) {
       throw new NotFoundException(resourceNotFound('Product', productId));
     }
-    return this.prisma.productImage.findMany({
+    const images = await this.prisma.productImage.findMany({
       where: { productId, shopId },
       orderBy: { sortOrder: 'asc' },
       select: {
@@ -374,6 +401,10 @@ export class StoreService {
         url: true,
         sortOrder: true,
       },
+    });
+    return images.map((image) => {
+      const thumbnailUrl = productThumbnailUrl(image.url);
+      return thumbnailUrl === image.url ? image : { ...image, thumbnailUrl };
     });
   }
 
@@ -447,6 +478,10 @@ export class StoreService {
     await this.syncProductCoverImage(productId, shopId);
 
     await this.r2.deleteByUrl(image.url);
+    const thumbnailUrl = productThumbnailUrl(image.url);
+    if (thumbnailUrl !== image.url) {
+      await this.r2.deleteByUrl(thumbnailUrl);
+    }
     return new StatusBaseResponseDTO(
       true,
       'Product image removed successfully',

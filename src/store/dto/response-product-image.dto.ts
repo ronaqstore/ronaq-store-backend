@@ -14,6 +14,13 @@ export class ResponseProductImageDto {
   url: string;
 
   @ApiProperty({
+    description: '400px WebP thumbnail URL when available.',
+    example: 'https://example.com/products-images/a15-front-400.webp',
+    required: false,
+  })
+  thumbnailUrl?: string;
+
+  @ApiProperty({
     description: 'Position on the store. 0 is the cover photo.',
     example: 0,
   })

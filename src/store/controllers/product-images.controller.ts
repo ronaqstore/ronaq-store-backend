@@ -85,7 +85,7 @@ export class ProductImagesController {
   @ApiOperation({
     summary: 'Upload a product image',
     description:
-      'Multipart upload (field "image"). The app validates it as a real JPEG/PNG/WebP by content, strips GPS/metadata, caps it at ~1600px, stores it in Cloudflare R2 and appends one product_images row (max 5).',
+      'Multipart upload (field "image"). The app validates it as a real JPEG/PNG/WebP by content, strips GPS/metadata, stores 400px and 800px WebP variants with immutable cache headers in Cloudflare R2, and appends one product_images row (max 5).',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

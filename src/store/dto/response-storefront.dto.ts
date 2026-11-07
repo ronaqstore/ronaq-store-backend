@@ -130,6 +130,9 @@ export class ResponseStoreProductDto {
   })
   images: string[];
 
+  @ApiPropertyOptional({ type: [String] })
+  thumbnailImages?: string[];
+
   @ApiPropertyOptional({
     description:
       'The PUBLIC description. The private product description is never returned.',
