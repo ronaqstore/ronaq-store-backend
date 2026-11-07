@@ -474,14 +474,14 @@ export class StoreService {
       );
     }
 
+    const thumbnailUrl = productThumbnailUrl(image.url);
+    const imageUrls =
+      thumbnailUrl === image.url ? [image.url] : [image.url, thumbnailUrl];
+    await Promise.all(imageUrls.map((url) => this.r2.deleteByUrlOrThrow(url)));
+
     await this.prisma.productImage.delete({ where: { id: imageId } });
     await this.syncProductCoverImage(productId, shopId);
 
-    await this.r2.deleteByUrl(image.url);
-    const thumbnailUrl = productThumbnailUrl(image.url);
-    if (thumbnailUrl !== image.url) {
-      await this.r2.deleteByUrl(thumbnailUrl);
-    }
     return new StatusBaseResponseDTO(
       true,
       'Product image removed successfully',

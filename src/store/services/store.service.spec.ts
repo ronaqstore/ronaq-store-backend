@@ -71,7 +71,12 @@ describe('StoreService (owner surface)', () => {
   let service: StoreService;
   let prisma: any;
   let cache: StoreCacheService;
-  let r2: { put: jest.Mock; deleteByUrl: jest.Mock; buildPublicUrl: jest.Mock };
+  let r2: {
+    put: jest.Mock;
+    deleteByUrl: jest.Mock;
+    deleteByUrlOrThrow: jest.Mock;
+    buildPublicUrl: jest.Mock;
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -89,6 +94,7 @@ describe('StoreService (owner surface)', () => {
           useValue: {
             put: jest.fn(),
             deleteByUrl: jest.fn(),
+            deleteByUrlOrThrow: jest.fn(),
             buildPublicUrl: jest.fn(),
           },
         },
@@ -679,9 +685,43 @@ describe('StoreService (owner surface)', () => {
         where: { id: 'prod-1' },
         data: { imageUrl: null },
       });
-      expect(r2.deleteByUrl).toHaveBeenCalledWith(
+      expect(r2.deleteByUrlOrThrow).toHaveBeenCalledWith(
         'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x.jpg',
       );
+    });
+
+    it('deletes both R2 variants before removing the image record', async () => {
+      const imageUrl =
+        'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x-800.webp';
+      prisma.productImage.findFirst
+        .mockResolvedValueOnce({ id: 'img-1', url: imageUrl })
+        .mockResolvedValueOnce(null);
+      prisma.productImage.delete.mockResolvedValue({});
+      prisma.product.update.mockResolvedValue({});
+
+      await service.removeProductImage('prod-1', 'img-1', 'shop-1');
+
+      expect(r2.deleteByUrlOrThrow).toHaveBeenNthCalledWith(1, imageUrl);
+      expect(r2.deleteByUrlOrThrow).toHaveBeenNthCalledWith(
+        2,
+        'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x-400.webp',
+      );
+      expect(r2.deleteByUrlOrThrow.mock.invocationCallOrder[1]).toBeLessThan(
+        prisma.productImage.delete.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('keeps the image record when R2 deletion fails', async () => {
+      prisma.productImage.findFirst.mockResolvedValue({
+        id: 'img-1',
+        url: 'https://pub-test.r2.dev/shops/shop-1/products/prod-1/x-800.webp',
+      });
+      r2.deleteByUrlOrThrow.mockRejectedValue(new Error('R2 unavailable'));
+
+      await expect(
+        service.removeProductImage('prod-1', 'img-1', 'shop-1'),
+      ).rejects.toThrow('R2 unavailable');
+      expect(prisma.productImage.delete).not.toHaveBeenCalled();
     });
 
     it('blocks deleting the last photo of a published product', async () => {
@@ -699,7 +739,7 @@ describe('StoreService (owner surface)', () => {
         service.removeProductImage('prod-1', 'img-1', 'shop-1'),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.productImage.delete).not.toHaveBeenCalled();
-      expect(r2.deleteByUrl).not.toHaveBeenCalled();
+      expect(r2.deleteByUrlOrThrow).not.toHaveBeenCalled();
     });
 
     it('404s removing a foreign image', async () => {

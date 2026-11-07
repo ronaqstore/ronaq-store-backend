@@ -116,5 +116,16 @@ describe('R2StorageService', () => {
         service.deleteByUrl('https://pub-test.r2.dev/shops/shop-1/p/a.jpg'),
       ).resolves.toBeUndefined();
     });
+
+    it('surfaces failed permanent deletes so the image record can be retained', async () => {
+      const service = new R2StorageService(makeConfig(true));
+      sendMock.mockRejectedValueOnce(new Error('R2 down'));
+
+      await expect(
+        service.deleteByUrlOrThrow(
+          'https://pub-test.r2.dev/shops/shop-1/p/a.jpg',
+        ),
+      ).rejects.toThrow(/temporarily unavailable/);
+    });
   });
 });

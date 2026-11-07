@@ -90,4 +90,22 @@ export class R2StorageService {
       logError('r2-storage.service.ts', 'deleteByUrl', error, { url });
     }
   }
+
+  async deleteByUrlOrThrow(url: string): Promise<void> {
+    if (!this.enabled || !this.client || !this.publicUrlBase) return;
+    const prefix = `${this.publicUrlBase}/`;
+    if (!url.startsWith(prefix)) return;
+    const key = url.slice(prefix.length);
+    if (!key) return;
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+    } catch (error) {
+      logError('r2-storage.service.ts', 'deleteByUrlOrThrow', error, { url });
+      throw new ServiceUnavailableException(
+        'Image storage is temporarily unavailable. Try deleting the photo again.',
+      );
+    }
+  }
 }
